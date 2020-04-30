@@ -1,0 +1,31 @@
+!import "loveRevised/event"
+
+local main :: () {
+	setConfigHandler((using conf:Config) {
+		identity         = "Hot Particles"
+
+		window.title     = "Hot Particles"
+		window.width     = 1200
+		window.height    = 800
+		window.resizable = true
+
+		modules.audio    = false
+		modules.data     = true
+		modules.event    = true
+		modules.font     = true
+		modules.graphics = true
+		modules.image    = true
+		modules.joystick = false
+		modules.keyboard = true
+		modules.math     = false
+		modules.mouse    = true
+		modules.physics  = false
+		modules.sound    = false
+		modules.system   = true
+		modules.thread   = false
+		modules.timer    = true
+		modules.touch    = false
+		modules.video    = false
+		modules.window   = true
+	})
+}

@@ -1,0 +1,6 @@
+*.lnk
+*.sublime-*
+.gloa.*
+
+/*.lua
+/local

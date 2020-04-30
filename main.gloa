@@ -1,0 +1,761 @@
+--[[============================================================
+--=
+--=  Hot Particles - a particle editor for LÖVE
+--=  by Marcus 'ReFreezed' Thunström
+--=
+--============================================================]]
+
+export PANEL_WIDTH   :: 400
+export PANEL_SPACING :: 5
+export LABEL_WIDTH   :: 100
+
+export !import "basic"
+export !import "string"
+export io   :: !import "io"
+export math :: !import "math"
+
+export love :: !import "love"
+export LD :: love.data
+export LE :: love.event
+export LF :: love.filesystem
+export LG :: love.graphics
+export LK :: love.keyboard
+export LT :: love.timer
+
+export !self
+export !load "workspace"
+
+!run {
+	!import "compiler"
+	compile("conf.gloa")
+}
+
+
+
+export System :: struct {
+	colors: []float,
+	blendMode       = LG.BlendMode.ALPHA,
+	useCustomOffset = false,
+	particles: LG.ParticleSystem = NULL,
+
+	!call :: () -> System {
+		local system: System
+
+		local ps = LG.newParticleSystem(imageLight)
+		ps.start!()
+		system.particles = ps
+
+		return system
+	},
+}
+
+export Project :: struct {
+	systemIndex = 1,
+	systems: []System,
+}
+
+
+
+export fontSmall:  LG.Font  = NULL
+export fontNormal: LG.Font  = NULL
+
+export imageChecker:  LG.Image = NULL
+export imageGradient: LG.Image = NULL
+export imageLight:    LG.Image = NULL
+export imageRainbow:  LG.Image = NULL
+
+export openProjects: []Project
+
+export currentProjectIndex = 1
+
+export bgColorR = .05
+export bgColorG = .05
+export bgColorB = .05
+
+export zoomLevel = 0
+export zoom      = 1.0
+
+export actionText     = ""
+export actionTextTime = -9999.00
+
+export isPositioningParticles = false
+
+export panelHeight           = 0
+export pressedPanelThisFrame = false
+export draggedPanelItem      = 0
+export draggedPanelSubItem   = 0
+
+export scheduleSaveWorkspace = false
+
+
+
+export addNewSystem :: (project:Project) {
+	local system = System()
+	system.colors    = {1,1,1,0, 1,1,1,1, 1,1,1,.5, 1,1,1,0}
+	system.blendMode = LG.BlendMode.ADD
+	insert(project.systems, system)
+
+	local ps = system.particles
+	ps.setEmissionRate!(20)
+	ps.setColors!(system.colors)
+	ps.setDirection!(-math.TAU/4)
+	ps.setSpread!(.05*math.TAU)
+	ps.setParticleLifetime!(1.8, 2.2)
+	ps.setSpeed!(90, 100)
+
+	if project.systems[2] ~= NULL {
+		local x, y = project.systems[1].particles.getPosition!()
+		ps.setPosition!(x, y)
+	}
+}
+
+export addNewProject :: () {
+	local project: Project
+	insert(openProjects, project)
+
+	addNewSystem(project)
+
+	currentProjectIndex = #openProjects
+}
+
+export onLoad :: (args:[]string, argsRaw:[]string) {
+	io.disableBuffering(io.STDOUT)
+	io.disableBuffering(io.STDERR)
+
+	LF.setIdentity("Hot Particles")
+
+	fontSmall  = LG.newFont(10)
+	fontNormal = LG.newFont(12)
+
+	imageChecker  = LG.newImage("gfx/checker.png") ; imageChecker.setWrap!(LG.WrapMode.REPEAT, LG.WrapMode.REPEAT)
+	imageGradient = LG.newImage("gfx/gradient.png")
+	imageLight    = LG.newImage("gfx/light.png")
+	imageRainbow  = LG.newImage("gfx/rainbow.png")
+
+	local ok, projects = loadWorkspace()
+	if ok {
+		openProjects        = projects
+		currentProjectIndex = 1
+	} else {
+		addNewProject()
+	}
+}
+
+
+
+export onKeyPressed :: (key:string, scancode:string, isRepeat:bool) {
+	if love.mouse.isGrabbed()  return
+	if key == {
+		case "escape": LE.quit(0)
+	}
+}
+
+export onMousePressed :: (mx,my:int, mbutton:int, isTouch:bool, presses:int) {
+	if mbutton == 1 {
+		if mx < PANEL_WIDTH and my < panelHeight {
+			pressedPanelThisFrame = true
+		} else {
+			isPositioningParticles = true
+			onMouseMoved(mx,my, 0,0, isTouch)
+		}
+		love.mouse.setGrabbed(true)
+	}
+}
+export onMouseMoved :: (mx,my:int, dx,dy:int, isTouch:bool) {
+	if isPositioningParticles {
+		local project = openProjects[currentProjectIndex]
+
+		local x = (mx - LG.getWidth()/2)  / zoom
+		local y = (my - LG.getHeight()/2) / zoom
+
+		for system: project.systems {
+			system.particles.setPosition!(x, y)
+		}
+	}
+}
+export onMouseReleased :: (mx,my:int, mbutton:int, isTouch:bool, presses:int) {
+	if mbutton == 1 {
+		if draggedPanelItem {
+			draggedPanelItem       = 0
+			draggedPanelSubItem    = 0
+			saveWorkspace()
+		}
+		isPositioningParticles = false
+		love.mouse.setGrabbed(false)
+	}
+}
+export onMouseWheel :: (dx,dy:int) {
+	zoomLevel    = math.clamp(zoomLevel+dy, -4, 6)
+	zoom         = 2^zoomLevel
+
+	actionText     = format("Zoom: %d%%", zoom*100)
+	actionTextTime = LT.getTime()
+}
+
+
+
+export onUpdate :: (dt:float) {
+	local project = openProjects[currentProjectIndex]
+
+	for system: project.systems {
+		local ps = system.particles
+
+		ps.update!(dt)
+		if not ps.isActive!() and ps.getCount!() == 0 {
+			ps.start!()
+		}
+	}
+
+	if scheduleSaveWorkspace  saveWorkspace() -- @UX: Maybe wait a little while before saving?
+}
+
+
+
+export onDraw :: () {
+	local drawChecker :: (x,y,w,h:float, scale=1.0) {
+		static quad: LG.Quad = NULL
+
+		if quad == NULL {
+			local iw, ih = imageChecker.getDimensions!()
+			quad         = LG.newQuad(0, 0, 1, 1, iw, ih)
+		}
+
+		quad.setViewport!(0, 0, w/scale, h/scale)
+		LG.draw(imageChecker, quad, x, y, 0, scale)
+	}
+
+	local ww, wh  = LG.getDimensions()
+	local project = openProjects[currentProjectIndex]
+
+	-- bgColorR = math.sin01(LT.getTime())
+	-- bgColorG = math.sin01(1.3*LT.getTime())
+	-- bgColorB = math.sin01(1.8*LT.getTime())
+
+	LG.reset()
+	LG.clear(bgColorR, bgColorG, bgColorB)
+
+	-- Particles.
+	LG.translate(ww/2, wh/2)
+	LG.scale(zoom)
+
+	for system: project.systems {
+		LG.setBlendMode(system.blendMode)
+		LG.draw(system.particles)
+	}
+	LG.setBlendMode(LG.BlendMode.ALPHA)
+
+	if isPositioningParticles {
+		local mx, my = love.mouse.getPosition()
+		local x,  y  = LG.inverseTransformPoint(mx, my)
+		LG.setColor(1, 0, 0)
+		LG.line(x-50, y, x+50, y)
+		LG.line(x, y-50, x, y+50)
+	}
+
+	LG.reset()
+	LG.setFont(fontNormal)
+
+	-- Stats.
+	local fontH = LG.getFont().getHeight!()
+
+	do {
+		local x = PANEL_WIDTH+5
+		local y = 5
+
+		local particleCountTotal = 0
+
+		if .35*bgColorR+.5*bgColorG+.15*bgColorB < .4
+			LG.setColor(1, 1, 1, .7)
+		else
+			LG.setColor(0, 0, 0, .7)
+
+		for system: project.systems {
+			local count         = system.particles.getCount!()
+			particleCountTotal += count
+
+			local text = format("%d_ParticleCount: %d", itIndex, count)
+			LG.print(text, x, y)
+			y += fontH
+		}
+
+		local text = format("ParticleCountTotal: %d", particleCountTotal)
+		LG.print(text, x, y)
+		y += fontH
+	}
+
+	-- Panel.
+	do {
+		local panelY = PANEL_SPACING
+		local mx, my = love.mouse.getPosition()
+
+		local panelItem = 0
+
+		-- Note: panelHeight and other things may be incorrect for one frame if the
+		-- user does something because we handle mouse input here while rendering.
+		LG.setColor(.2, .2, .2)
+		LG.rectangle(LG.DrawMode.FILL, 0, 0, PANEL_WIDTH, panelHeight)
+
+		local mayPress :: (panelItem:int) -> bool {
+			return draggedPanelItem == 0 and pressedPanelThisFrame
+		}
+
+		local drawSeparator = [panelY] () {
+			LG.setColor(0, 0, 0, .5)
+			LG.rectangle(LG.DrawMode.FILL, 0, panelY, PANEL_WIDTH, 2)
+			panelY += 2+PANEL_SPACING
+		}
+
+		local drawLabel = [fontH,panelItem,panelY,mx,my] (label:string) {
+			panelItem += 1
+
+			LG.setColor(1, 1, 1)
+			LG.print(label, PANEL_SPACING, panelY)
+			panelY += fontH + PANEL_SPACING
+		}
+
+		local drawDirection = [fontH,panelItem,panelY,mx,my] (label:string, angle:float) -> (pressed:bool, angle:float) {
+			panelItem += 1
+
+			local RADIUS :: 30
+
+			local x = LABEL_WIDTH+2*PANEL_SPACING + RADIUS
+			local y = panelY + RADIUS
+
+			local pressed = panelItem == draggedPanelItem or mayPress(panelItem) and math.distance(mx,my, x,y) <= RADIUS
+			if pressed {
+				draggedPanelItem = panelItem
+				angle            = math.atan(my-y, mx-x)
+
+				if LK.isDown("lctrl","rctrl")  angle = math.round(angle*8/math.TAU)/8*math.TAU
+			}
+
+			LG.setColor(1, 1, 1)
+			LG.print(label, PANEL_SPACING, math.round(y-fontH/2))
+
+			LG.setColor(0, 0, 0)
+			LG.circle(LG.DrawMode.FILL, x, y, RADIUS)
+			LG.setColor(1, 1, 1, .15)
+			LG.line(x-RADIUS+1, y, x+RADIUS-1, y)
+			LG.line(x, y-RADIUS+1, x, y+RADIUS-1)
+			LG.setColor(1, 1, 1)
+			LG.line(x, y, x+RADIUS*math.cos(angle), y+RADIUS*math.sin(angle))
+
+			panelY += 2*RADIUS + PANEL_SPACING
+			return pressed, angle
+		}
+
+		local drawSliderValue :: (sliderX,sliderY:float, sliderW,sliderH:float, value:float, readout:float, readoutFormat:string) {
+			if readoutFormat {
+				local text = format(readoutFormat, readout)
+				local x    = math.round(sliderX+(sliderW-fontSmall.getWidth!(text))/2)
+				local y    = math.round(sliderY+(sliderH-fontSmall.getHeight!())/2)
+				LG.setFont(fontSmall)
+				LG.setColor(0, 0, 0)
+				LG.print(text, x+1, y+1)
+				LG.setColor(1, 1, 1)
+				LG.print(text, x, y)
+				LG.setFont(fontNormal)
+			}
+			do {
+				local x = sliderX + 1+value*(sliderW-2)
+				LG.setColor(0, 0, 0)
+				LG.rectangle(LG.DrawMode.FILL, x-1, sliderY, 3, sliderH)
+				LG.setColor(1, 1, 1)
+				LG.rectangle(LG.DrawMode.FILL, x, sliderY, 1, sliderH)
+			}
+		}
+
+		local drawSlider = [fontH,panelItem,panelY,mx,my] (label:string, valueMin,valueMax:float, value:float, readoutMultiplier:float, readoutFormat:string) -> (pressed:bool, value:float) {
+			panelItem += 1
+
+			local w = PANEL_WIDTH-LABEL_WIDTH-3*PANEL_SPACING
+			local h = fontH
+			local x = LABEL_WIDTH+2*PANEL_SPACING
+			local y = panelY
+
+			local pressed = panelItem == draggedPanelItem or mayPress(panelItem) and mx >= x and mx < x+w and my >= y and my < y+h
+			if pressed {
+				draggedPanelItem = panelItem
+				value            = math.lerp(valueMin, valueMax, math.clamp01((mx-x)/w))
+
+				if LK.isDown("lctrl","rctrl")  value = math.lerp(valueMin, valueMax, math.round(math.clamp01((mx-x)/w)*16)/16)
+			}
+
+			LG.setColor(1, 1, 1)
+			LG.print(label, PANEL_SPACING, panelY)
+
+			LG.setColor(0, 0, 0)
+			LG.rectangle(LG.DrawMode.FILL, x, y, w, h)
+			LG.setColor(1, 1, 1, .15)
+			LG.rectangle(LG.DrawMode.FILL, x+.25*w, y, 1, h)
+			LG.rectangle(LG.DrawMode.FILL, x+.50*w, y, 1, h)
+			LG.rectangle(LG.DrawMode.FILL, x+.75*w, y, 1, h)
+			drawSliderValue(x, y, w, h, (value-valueMin)/(valueMax-valueMin), value*readoutMultiplier, readoutFormat)
+
+			panelY += h + PANEL_SPACING
+			return pressed, value
+		}
+
+		local drawColor = [fontH,panelItem,panelY,mx,my] (label:string, r,g,b,a:float) -> (pressed:bool, r,g,b,a:float) {
+			panelItem += 1
+
+			local SLIDER_HEIGHT :: 12
+
+			local w = PANEL_WIDTH-LABEL_WIDTH-3*PANEL_SPACING
+			local h = 4*SLIDER_HEIGHT
+			local x = LABEL_WIDTH+2*PANEL_SPACING
+			local y = panelY
+
+			!import "color"
+			local hue, saturation, value = rgbToHsv(r, g, b)
+
+			local pressed = panelItem == draggedPanelItem or mayPress(panelItem) and mx >= x and mx < x+w and my >= y and my < y+h
+			if pressed {
+				draggedPanelItem = panelItem
+
+				if not draggedPanelSubItem {
+					draggedPanelSubItem = math.clamp(math.floor(1+(my-y)/SLIDER_HEIGHT), 1, 4)
+				}
+
+				if draggedPanelSubItem == {
+					case 1: hue        = math.clamp01((mx-x)/w) ; r, g, b = hsvToRgb(hue, saturation, value)
+					case 2: saturation = math.clamp01((mx-x)/w) ; r, g, b = hsvToRgb(hue, saturation, value)
+					case 3: value      = math.clamp01((mx-x)/w) ; r, g, b = hsvToRgb(hue, saturation, value)
+					case 4: a          = math.clamp01((mx-x)/w)
+				}
+			}
+
+			LG.setColor(1, 1, 1)
+			LG.print(label, PANEL_SPACING, panelY)
+			-- LG.print(label, PANEL_SPACING, math.round(panelY+(h-fontH)/2))
+
+			do {
+				local iw, ih     = imageGradient.getDimensions!()
+				local gradientSx = w/iw
+				local gradientSy = SLIDER_HEIGHT/ih
+
+				iw, ih           = imageRainbow.getDimensions!()
+				local rainbowSx  = w/iw
+				local rainbowSy  = SLIDER_HEIGHT/ih
+
+				local sliderY    = y
+
+				LG.setColor(1, 1, 1)
+				LG.draw(imageRainbow, x, sliderY, 0, rainbowSx, rainbowSy)
+				drawSliderValue(x, sliderY, w, SLIDER_HEIGHT, hue, 360, "%d°")
+				sliderY += SLIDER_HEIGHT
+
+				local r2, g2, b2 = hsvToRgb(hue, 1, 1)
+				LG.setColor(.5, .5, .5)
+				LG.rectangle(LG.DrawMode.FILL, x, sliderY, w, SLIDER_HEIGHT)
+				LG.setColor(r2, g2, b2)
+				LG.draw(imageGradient, x, sliderY, 0, gradientSx, gradientSy)
+				drawSliderValue(x, sliderY, w, SLIDER_HEIGHT, saturation, 100, "%d%%")
+				sliderY += SLIDER_HEIGHT
+
+				r2, g2, b2 = hsvToRgb(hue, saturation, 1)
+				LG.setColor(0, 0, 0)
+				LG.rectangle(LG.DrawMode.FILL, x, sliderY, w, SLIDER_HEIGHT)
+				LG.setColor(r2, g2, b2)
+				LG.draw(imageGradient, x, sliderY, 0, gradientSx, gradientSy)
+				drawSliderValue(x, sliderY, w, SLIDER_HEIGHT, value, 100, "%d%%")
+				sliderY += SLIDER_HEIGHT
+
+				LG.setColor(.1, .1, .1)
+				LG.rectangle(LG.DrawMode.FILL, x, sliderY, w, SLIDER_HEIGHT)
+				LG.setColor(.3, .3, .3)
+				drawChecker(x, sliderY, w, SLIDER_HEIGHT)
+				LG.setColor(r, g, b)
+				LG.draw(imageGradient, x, sliderY, 0, gradientSx, gradientSy)
+				drawSliderValue(x, sliderY, w, SLIDER_HEIGHT, a, 100, "%d%%")
+			}
+
+			panelY += h + PANEL_SPACING
+			return pressed, r,g,b,a
+		}
+
+		local drawButtons = [fontH,panelItem,panelY,mx,my] (label:string, buttonLabels:[]string, selected:int) -> (pressed:bool, pressedIndex:int) {
+			panelItem += 1
+
+			local highlightAll = (selected == 0)
+
+			local x = label ? LABEL_WIDTH+2*PANEL_SPACING : PANEL_SPACING
+			local y = panelY
+			local w = PANEL_WIDTH - x-PANEL_SPACING
+			local h = fontH
+
+			local buttonW = w / #buttonLabels
+
+			local pressed = panelItem == draggedPanelItem or mayPress(panelItem) and mx >= x and mx < x+w and my >= y and my < y+h
+			if pressed {
+				selected              = math.clamp(math.floor(1+(mx-x)/buttonW), 1, #buttonLabels)
+				scheduleSaveWorkspace = true
+			}
+
+			if label {
+				LG.setColor(1, 1, 1)
+				LG.print(label, PANEL_SPACING, panelY)
+			}
+
+			LG.setColor(0, 0, 0)
+			LG.rectangle(LG.DrawMode.FILL, x, y, w, h)
+
+			for buttonLabels {
+				local buttonX1 = math.round(x + (itIndex-1)*buttonW)
+				local buttonX2 = math.round(x + (itIndex  )*buttonW)
+				local textX    = math.round(buttonX1+(buttonW-fontNormal.getWidth!(it))/2)
+				LG.setColor(.35, .35, .35)
+				LG.rectangle(LG.DrawMode.FILL, buttonX1+1, y+1, buttonX2-buttonX1-2, h-2)
+				LG.setColor(1, 1, 1, (highlightAll or itIndex == selected ? 1.0 : .5))
+				LG.print(it, textX, y)
+			}
+
+			panelY += h + PANEL_SPACING
+			return pressed, selected
+		}
+
+		-- Project.
+		do {
+			local close = LK.isDown("lalt","ralt")
+
+			local buttonLabels: []string
+			for openProjects  buttonLabels[itIndex] = "(unnamed)" -- Use filenames on tabs.
+
+			insert(buttonLabels, close?"CLOSE":"NEW")
+
+			local pressed, i = drawButtons("", buttonLabels, currentProjectIndex)
+			if not pressed {
+				-- void
+
+			} elseif i < #buttonLabels {
+				currentProjectIndex = i
+
+			} elseif close {
+				remove(openProjects, currentProjectIndex)
+				if openProjects[1] == NULL
+					addNewProject()
+				else
+					currentProjectIndex = math.min(currentProjectIndex, #openProjects)
+
+			} else {
+				addNewProject()
+				currentProjectIndex = #openProjects
+			}
+		}
+
+		-- System.
+		local system = project.systems[project.systemIndex]
+		drawSeparator()
+		do {
+			local doRemove = LK.isDown("lalt","ralt")
+
+			local buttonLabels: []string
+			for project.systems  buttonLabels[itIndex] = format("%d", itIndex)
+
+			insert(buttonLabels, doRemove?"DEL":"+")
+
+			local pressed, i = drawButtons("System", buttonLabels, project.systemIndex)
+			if not pressed {
+				-- void
+
+			} elseif i < #buttonLabels {
+				project.systemIndex = i
+
+			} elseif doRemove {
+				remove(project.systems, project.systemIndex)
+				if project.systems[1] == NULL
+					addNewSystem(project)
+				else
+					project.systemIndex = math.min(project.systemIndex, #project.systems)
+				system = project.systems[project.systemIndex]
+
+			} else {
+				addNewSystem(project)
+				project.systemIndex = #project.systems
+			}
+		}
+
+		-- Misc params.
+		local ps = system.particles
+		drawSeparator()
+		do {
+			local lifetime = math.max(ps.getEmitterLifetime!(), 0)
+			local pressed, ^lifetime = drawSlider("EmitterLifetime", 0, 20, lifetime, 1, (lifetime ? "%.2fs" : "∞"))
+			if pressed {
+				ps.setEmitterLifetime!(lifetime ?: -1.0)
+				if not lifetime  ps.start!()
+			}
+		}
+		do {
+			local BUTTON_LABELS :: {"top", "bottom", "random"}
+			local INSERT_MODE_TO_INDEX: struct { !key:LG.ParticleInsertMode, !value:int } = {
+				[LG.ParticleInsertMode.TOP]    = 1,
+				[LG.ParticleInsertMode.BOTTOM] = 2,
+				[LG.ParticleInsertMode.RANDOM] = 3,
+			}
+			local pressed, i = drawButtons("Insert", BUTTON_LABELS, INSERT_MODE_TO_INDEX[ps.getInsertMode!()])
+			if pressed  if i == {
+				case 1: ps.setInsertMode!(LG.ParticleInsertMode.TOP)
+				case 2: ps.setInsertMode!(LG.ParticleInsertMode.BOTTOM)
+				case 3: ps.setInsertMode!(LG.ParticleInsertMode.RANDOM)
+			}
+		}
+		drawSeparator()
+		do {
+			local pressed, rate = drawSlider("SpawnRate", .1, 1000, ps.getEmissionRate!(), 1, "%.1f / sec")
+			if pressed  ps.setEmissionRate!(rate)
+		}
+		-- ps.setEmissionArea!(AreaSpreadDistribution, dx,dy, angle=0, directionRelativeToCenter=false)
+		drawSeparator()
+		do {
+			local min, max = ps.getParticleLifetime!()
+			local pressedMin, ^min = drawSlider("LifetimeMin", 0, 20, min, 1, "%.2f sec")
+			local pressedMax, ^max = drawSlider("LifetimeMax", 0, 20, max, 1, "%.2f sec")
+			if pressedMin  max = math.max(min, max)
+			if pressedMax  min = math.min(min, max)
+			if pressedMin or pressedMax  ps.setParticleLifetime!(min, max)
+		}
+		drawSeparator()
+		do {
+			local pressed, angle = drawDirection("Direction", ps.getDirection!())
+			if pressed  ps.setDirection!(angle)
+		}
+		do {
+			local pressed, angle = drawSlider("Spread", 0, math.TAU, ps.getSpread!(), 360/math.TAU, "%d°")
+			if pressed  ps.setSpread!(angle)
+		}
+		drawSeparator()
+		do {
+			local min, max = ps.getSpeed!()
+			local pressedMin, ^min = drawSlider("SpeedMin", -1000, 1000, min, 1, "%d / sec")
+			local pressedMax, ^max = drawSlider("SpeedMax", -1000, 1000, max, 1, "%d / sec")
+			if pressedMin  max = math.max(min, max)
+			if pressedMax  min = math.min(min, max)
+			if pressedMin or pressedMax  ps.setSpeed!(min, max)
+		}
+		--[[
+		ps.setLinearAcceleration!(xmin,ymin, xmax=xmin, ymax=ymin)
+		ps.setLinearDamping!(min, max=min)
+		ps.setPosition!(x,y)
+		ps.setRadialAcceleration!(min, max=min)
+		ps.setRelativeRotation!(enable)
+		ps.setRotation!(min, max=min)
+		ps.setSizes!(size1,...)
+		ps.setSizeVariation!(variation)
+		ps.setSpin!(min, max=min)
+		ps.setSpinVariation!(variation)
+		ps.setTangentialAcceleration!(min, max=min)
+
+		ps.setQuads!(quad1,quad2)
+		ps.setTexture!(texture)
+		ps.setOffset!(x,y)
+		ps.setBufferSize!(size)
+		]]
+
+		-- Colors + blend mode.
+		drawSeparator()
+		do {
+			local colors   = system.colors
+			local doRemove = LK.isDown("lalt","ralt")
+			local buttonLabels: []string
+
+			if doRemove {
+				for i = 1, #system.colors//4  insert(buttonLabels, format("%d", i))
+			} else {
+				insert(buttonLabels, "+")
+			}
+
+			local pressed, i = drawButtons((doRemove ? "DEL" : "Colors"), buttonLabels, 0)
+
+			if not pressed {
+				-- void
+			} elseif doRemove {
+				local colorIndex = i*4-3
+				for 1, 4  remove(colors, colorIndex)
+
+				if colors[1] == NULL {
+					for 1, 4  insert(colors, 1)
+				}
+
+				ps.setColors!(colors)
+
+			} elseif colors[8*4] == NULL {
+				local lastColorIndex = (#colors//4)*4-3
+				for 1, 4  insert(colors, colors[lastColorIndex+it-1])
+				ps.setColors!(colors)
+			}
+		}
+		do {
+			local colors     = system.colors
+			local anyPressed = false
+			local moveAll    = LK.isDown("lctrl","rctrl")
+
+			for i = 1, #colors, 4 {
+				local pressed, r,g,b,a = drawColor(format("%d.", (i+3)//4), colors[i], colors[i+1], colors[i+2], colors[i+3])
+				anyPressed             = anyPressed or pressed
+
+				if not pressed {
+					-- void
+				} elseif not moveAll {
+					colors[i], colors[i+1], colors[i+2], colors[i+3] = r,g,b,a
+				} elseif draggedPanelSubItem < 4 {
+					for j = 1, #colors, 4  colors[j], colors[j+1], colors[j+2] = r,g,b
+				} else {
+					for j = 4, #colors, 4  colors[j] = a
+				}
+			}
+			if anyPressed  ps.setColors!(colors)
+		}
+		do {
+			local BUTTON_LABELS :: {"alpha", "add", "screen", "subtract"}
+			local BLEND_MODE_TO_INDEX: struct { !key:LG.BlendMode, !value:int } = {
+				[LG.BlendMode.ALPHA]    = 1,
+				[LG.BlendMode.ADD]      = 2,
+				[LG.BlendMode.SCREEN]   = 3,
+				[LG.BlendMode.SUBTRACT] = 4,
+			}
+			local pressed, i = drawButtons("BlendMode", BUTTON_LABELS, BLEND_MODE_TO_INDEX[system.blendMode])
+			if pressed  if i == {
+				case 1: system.blendMode = LG.BlendMode.ALPHA
+				case 2: system.blendMode = LG.BlendMode.ADD
+				case 3: system.blendMode = LG.BlendMode.SCREEN
+				case 4: system.blendMode = LG.BlendMode.SUBTRACT
+			}
+		}
+
+		panelHeight           = panelY
+		pressedPanelThisFrame = false
+	}
+
+	-- Action text.
+	local visibility = 1 - (LT.getTime() - actionTextTime) / 0.60
+	if visibility > 0 {
+		local x = math.round(ww/2)
+		local y = math.round(wh/2)
+		local a = visibility^.5
+		LG.setColor(0, 0, 0, a)
+		LG.print(actionText, x+1, y+1)
+		LG.setColor(1, 1, 1, a)
+		LG.print(actionText, x, y)
+	}
+}
+
+
+
+export main :: () {
+	!import "utils"
+	local loveTable: table = !foreign lua "love"
+
+	loveTable.load          = wrapFunctionInGloaErrorHandler(onLoad)
+	loveTable.keypressed    = wrapFunctionInGloaErrorHandler(onKeyPressed)
+	loveTable.mousepressed  = wrapFunctionInGloaErrorHandler(onMousePressed)
+	loveTable.mousemoved    = wrapFunctionInGloaErrorHandler(onMouseMoved)
+	loveTable.mousereleased = wrapFunctionInGloaErrorHandler(onMouseReleased)
+	loveTable.wheelmoved    = wrapFunctionInGloaErrorHandler(onMouseWheel)
+	loveTable.update        = wrapFunctionInGloaErrorHandler(onUpdate)
+	loveTable.draw          = wrapFunctionInGloaErrorHandler(onDraw)
+	loveTable.errhand       = nil
+	loveTable.errorhandler  = nil
+}
+
+
