@@ -31,10 +31,12 @@ export !load "workspace"
 
 export fontSmall:  LG.Font  = NULL
 export fontNormal: LG.Font  = NULL
+export fontLarge:  LG.Font  = NULL
 
 export imageChecker:  LG.Image = NULL
 export imageGradient: LG.Image = NULL
 export imageLight:    LG.Image = NULL
+export imageMoon:     LG.Image = NULL
 export imageRainbow:  LG.Image = NULL
 
 export openProjects: []Project
@@ -48,8 +50,10 @@ export messageTextTime = -9999.00
 export isPositioningParticles = false
 export scheduleSaveWorkspace  = false
 
-export zoomLevel = 0
-export zoom      = 1.0
+export zoomLevel  = 0
+export zoom       = 1.0
+export zoomSource = 1.0
+export zoomTarget = 1.0
 
 -- Saved settings.
 export showStats = true
@@ -65,7 +69,7 @@ export System :: struct {
 	!call :: () -> System {
 		local system: System
 
-		local ps = LG.newParticleSystem(imageLight)
+		local ps = LG.newParticleSystem(imageMoon)
 		ps.start!()
 		system.particles = ps
 
@@ -121,10 +125,12 @@ export onLoad :: (args:[]string, argsRaw:[]string) {
 
 	fontSmall  = LG.newFont(10)
 	fontNormal = LG.newFont(12)
+	fontLarge  = LG.newFont(20)
 
 	imageChecker  = LG.newImage("gfx/checker.png") ; imageChecker.setWrap!(LG.WrapMode.REPEAT, LG.WrapMode.REPEAT)
 	imageGradient = LG.newImage("gfx/gradient.png")
 	imageLight    = LG.newImage("gfx/light.png")
+	imageMoon     = LG.newImage("gfx/moon.png")
 	imageRainbow  = LG.newImage("gfx/rainbow.png")
 
 	local ok, gotError, projects = loadWorkspace()
@@ -145,6 +151,7 @@ export onLoad :: (args:[]string, argsRaw:[]string) {
 export onKeyPressed :: (key:string, scancode:string, isRepeat:bool) {
 	if love.mouse.isGrabbed()  return
 	if key == {
+		case "r":      for openProjects[currentProjectIndex].systems { it.particles.reset!() ; it.particles.start!() }
 		case "escape": LE.quit(0)
 		case "f1":     showStats = not showStats ; scheduleSaveWorkspace = true
 		case "f10":    if LK.isDown("lctrl","rctrl")  LE.restart()
@@ -186,11 +193,20 @@ export onMouseReleased :: (mx,my:int, mbutton:int, isTouch:bool, presses:int) {
 	}
 }
 export onMouseWheel :: (dx,dy:int) {
-	zoomLevel    = math.clamp(zoomLevel+dy, -4, 6)
-	zoom         = 2^zoomLevel
+	if love.mouse.isGrabbed()  return
 
-	actionText     = format("Zoom: %d%%", zoom*100)
-	actionTextTime = LT.getTime()
+	if love.mouse.getX() < PANEL_WIDTH {
+		panelScrollSource = panelScroll
+		panelScrollTarget = math.min(panelScrollTarget+50*dy, 0)
+
+	} else {
+		zoomLevel  = math.clamp(zoomLevel+dy, -4, 6)
+		zoomSource = zoom
+		zoomTarget = 2^zoomLevel
+
+		actionText     = format("Zoom: %d%%", zoomTarget*100)
+		actionTextTime = LT.getTime()
+	}
 }
 
 
@@ -212,6 +228,17 @@ export onUpdate :: (dt:float) {
 	}
 
 	if scheduleSaveWorkspace  saveWorkspace() -- @UX: Maybe wait a little while before saving?
+
+	zoom = math.moveTowards(
+		zoom,
+		zoomTarget,
+		math.abs(zoomTarget - zoomSource) * dt / 0.05
+	)
+	panelScroll = math.moveTowards(
+		panelScroll,
+		panelScrollTarget,
+		math.abs(panelScrollTarget - panelScrollSource) * dt / 0.05
+	)
 }
 
 
@@ -275,12 +302,15 @@ export onDraw :: () {
 
 	-- Panel.
 	drawPanel()
+	LG.reset()
 
 	-- HUD texts.
+	LG.setFont(fontLarge)
+
 	local visibility = 1 - (LT.getTime() - messageTextTime) / 8.00
 	if visibility > 0 {
-		local x = math.round((ww-fontNormal.getWidth!(messageText))/2)
-		local y = math.round(wh/2-fontNormal.getHeight!())
+		local x = math.round((ww+PANEL_WIDTH-fontLarge.getWidth!(messageText))/2)
+		local y = math.round(.1*wh)
 		local a = visibility^.5
 		LG.setColor(0, 0, 0, a)
 		LG.print(messageText, x+1, y+1)
@@ -290,8 +320,8 @@ export onDraw :: () {
 
 	visibility = 1 - (LT.getTime() - actionTextTime) / 0.60
 	if visibility > 0 {
-		local x = math.round((ww-fontNormal.getWidth!(actionText))/2)
-		local y = math.round(wh/2)
+		local x = math.round((ww+PANEL_WIDTH-fontLarge.getWidth!(actionText))/2)
+		local y = math.round(.1*wh+fontLarge.getHeight!())
 		local a = visibility^.5
 		LG.setColor(0, 0, 0, a)
 		LG.print(actionText, x+1, y+1)
