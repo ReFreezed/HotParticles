@@ -11,44 +11,49 @@
 
 local LAST_FILE_VERSION :: 1
 
+
+
+local writeValue :: (buffer:[]string, v:int, eol=false) {
+	insert(buffer, format(" %d", v))
+	if eol  insert(buffer, "\n")
+}
+local writeValue :: (buffer:[]string, v:float, eol=false) {
+	insert(buffer, " ")
+	insert(buffer, toString(v))
+	if eol  insert(buffer, "\n")
+}
+local writeValue :: (buffer:[]string, v:string, eol=false) {
+	v = replace(v, "\\", "\\\\")
+	v = replace(v, "\n", "\\n")
+	insert(buffer, format(" %d %s", #v, v))
+	if eol  insert(buffer, "\n")
+}
+local writeValue :: (buffer:[]string, v:bool, eol=false) {
+	insert(buffer, (v ? " true" : " false"))
+	if eol  insert(buffer, "\n")
+}
+local writeValue :: (buffer:[]string, arr:[]$T, eol=false) {
+	for arr  writeValue(buffer, it)
+	if eol  insert(buffer, "\n")
+}
+
+local writeValues :: (buffer:[]string, v1,v2:$T, eol=false) {
+	writeValue(buffer, v1, eol=false)
+	writeValue(buffer, v2, eol=eol)
+}
+
 export saveWorkspace :: () {
-	local writeValue :: (buffer:[]string, v:int, eol=false) {
-		insert(buffer, format(" %d", v))
-		if eol  insert(buffer, "\n")
-	}
-	local writeValue :: (buffer:[]string, v:float, eol=false) {
-		insert(buffer, " ")
-		insert(buffer, toString(v))
-		if eol  insert(buffer, "\n")
-	}
-	local writeValue :: (buffer:[]string, v:string, eol=false) {
-		v = replace(v, "\\", "\\\\")
-		v = replace(v, "\n", "\\n")
-		insert(buffer, format(" %d %s", #v, v))
-		if eol  insert(buffer, "\n")
-	}
-	local writeValue :: (buffer:[]string, v:bool, eol=false) {
-		insert(buffer, (v ? " true" : " false"))
-		if eol  insert(buffer, "\n")
-	}
-	local writeValue :: (buffer:[]string, arr:[]$T, eol=false) {
-		for arr  writeValue(buffer, it)
-		if eol  insert(buffer, "\n")
-	}
-
-	local writeValues :: (buffer:[]string, v1,v2:$T, eol=false) {
-		writeValue(buffer, v1, eol=false)
-		writeValue(buffer, v2, eol=eol)
-	}
-
 	scheduleSaveWorkspace = false
-	print("Saving workspace.")
+	-- print("Saving workspace.")
 
 	local buffer: []string
 	insert(buffer, format("%d\n", LAST_FILE_VERSION))
 
+	insert(buffer, "stats") ; writeValue(buffer, eol=true, showStats)
+
 	for project: openProjects {
 		insert(buffer, ":project\n")
+		insert(buffer, "bgColor") ; writeValue(buffer, eol=true, {project.bgColorR, project.bgColorG, project.bgColorB})
 
 		for system: project.systems {
 			insert(buffer, ":system\n")
@@ -128,85 +133,91 @@ export saveWorkspace :: () {
 		}
 	}
 
-	LF.write("workspace", concatinate(buffer))
+	local ok, err = LF.write("workspace", concatinate(buffer))
+	if not ok {
+		messageText     = format("Could not save workspace: %s", err)
+		messageTextTime = LT.getTime()
+	}
 }
 
-export loadWorkspace :: () -> (success:bool, projects:[]Project) {
-	local parsingError :: (ln:int, s:string, ...:int|float|string) -> bool, []Project {
-		printf("Error: workspace:%d: "..s, ln, ...)
-		return false, NULL
+
+
+local parsingError :: (ln:int, s:string, ...:int|float|string) -> (success:bool, gotError:bool, projects:[]Project) {
+	printf("Error: workspace:%d: "..s, ln, ...)
+	return false, true, NULL
+}
+
+local readInt :: (line:string, ptr:int) -> (success:bool, ptr:int, n:int) {
+	local found, nStr, _ptr = matchPattern(line, "^ +(%-?%d+)()", ptr)
+	if not found  return false, NULL, NULL
+
+	local ok, n = stringToInt(cast(string)nStr)
+	if not ok  return false, NULL, NULL
+
+	return true, cast(int)_ptr, n
+}
+local readFloat :: (line:string, ptr:int) -> (success:bool, ptr:int, n:float) {
+	local found, nStr, _ptr = matchPattern(line, "^ +(%-?%d*%.?%d+)()", ptr)
+	if not found  return false, NULL, NULL
+
+	local ok, n = stringToFloat(cast(string)nStr)
+	if not ok  return false, NULL, NULL
+
+	return true, cast(int)_ptr, n
+}
+
+local readBool :: (line:string, ptr:int) -> (success:bool, ptr:int, b:bool) {
+	local found, boolStr, _ptr = matchPattern(line, "^ +(%S+)()", ptr)
+	if not found  return false, NULL, NULL
+
+	if boolStr == {
+		case "true":  return true,  cast(int)_ptr, true
+		case "false": return true,  cast(int)_ptr, false
+		case:         return false, NULL,          NULL
 	}
+}
 
-	local readInt :: (line:string, ptr:int) -> (success:bool, ptr:int, n:int) {
-		local found, nStr, _ptr = matchPattern(line, " +(%-?%d+)()", ptr)
-		if not found  return false, NULL, NULL
+local readString :: (line:string, ptr:int) -> (success:bool, ptr:int, s:string) {
+	-- Strings consist of a length (int) and then the actual string.
+	local ok, ^ptr, len = readInt(line, ptr)
+	if not ok  return false, NULL, NULL
 
-		local ok, n = stringToInt(cast(string)nStr)
+	if line[ptr] ~= !char " "  return false, NULL, NULL
+	ptr += 1
+
+	local v = getSubstring(line, ptr, ptr+len-1)
+	if #v ~= len  return false, NULL, NULL
+	ptr += len
+
+	local gotError = false
+	v = replacePatternWithFunction(v, "\\(.)", [gotError] (c:string) -> string|none {
+		if c == "n"   return ""
+		if c == "\\"  return ""
+		gotError = true
+		return nil
+	})
+	if gotError  return false, NULL, NULL
+
+	return true, ptr, v
+}
+
+local readFloatArray :: (line:string, ptr:int) -> (success:bool, ptr:int, arr:[]float) {
+	local arr: []float
+
+	while ptr <= #line {
+		local ok, _ptr, n = readFloat(line, ptr)
 		if not ok  return false, NULL, NULL
 
-		return true, cast(int)_ptr, n
-	}
-	local readFloat :: (line:string, ptr:int) -> (success:bool, ptr:int, n:float) {
-		local found, nStr, _ptr = matchPattern(line, " +(%-?%d*%.?%d+)()", ptr)
-		if not found  return false, NULL, NULL
-
-		local ok, n = stringToFloat(cast(string)nStr)
-		if not ok  return false, NULL, NULL
-
-		return true, cast(int)_ptr, n
+		ptr = cast(int) _ptr
+		insert(arr, n)
 	}
 
-	local readString :: (line:string, ptr:int) -> (success:bool, ptr:int, s:string) {
-		-- Strings consist of a length (int) and then the actual string.
-		local ok, ^ptr, len = readInt(line, ptr)
-		if not ok  return false, NULL, NULL
+	return true, ptr, arr
+}
 
-		if line[ptr] ~= !char " "  return false, NULL, NULL
-		ptr += 1
-
-		local v = getSubstring(line, ptr, ptr+len-1)
-		if #v ~= len  return false, NULL, NULL
-		ptr += len
-
-		local gotError = false
-		v = replacePatternWithFunction(v, "\\(.)", [gotError] (c:string) -> string|none {
-			if c == "n"   return ""
-			if c == "\\"  return ""
-			gotError = true
-			return nil
-		})
-		if gotError  return false, NULL, NULL
-
-		return true, ptr, v
-	}
-
-	local readBool :: (line:string, ptr:int) -> (success:bool, ptr:int, b:bool) {
-		local found, boolStr, _ptr = matchPattern(line, " +(%S+)()", ptr)
-		if not found  return false, NULL, NULL
-
-		if boolStr == {
-			case "true":  return true,  cast(int)_ptr, true
-			case "false": return true,  cast(int)_ptr, false
-			case:         return false, NULL,          NULL
-		}
-	}
-
-	local readFloatArray :: (line:string, ptr:int) -> (success:bool, ptr:int, arr:[]float) {
-		local arr: []float
-
-		while ptr <= #line {
-			local ok, _ptr, n = readFloat(line, ptr)
-			if not ok  return false, NULL, NULL
-
-			ptr = cast(int) _ptr
-			insert(arr, n)
-		}
-
-		return true, ptr, arr
-	}
-
+export loadWorkspace :: () -> (success:bool, gotError:bool, projects:[]Project) {
 	local file, err = LF.newFile("workspace", LF.FileMode.READ)
-	if file == NULL  return false, NULL
+	if file == NULL  return false, false, NULL
 
 	local projects: []Project
 
@@ -218,11 +229,12 @@ export loadWorkspace :: () -> (success:bool, projects:[]Project) {
 	local ln   = 0
 	local iter = (cast(LF.File)file).lines!()
 
+	local version: int
 	do {
 		local line1 = iter(nil, nil)
 		if line1 == nil  return parsingError(ln, "Missing file version.")
 
-		local ok, version = stringToInt(cast(string) line1)
+		local ok, ^version = stringToInt(cast(string) line1)
 		if not ok                       return parsingError(ln, "Invalid version line format.")
 		if version < 1                  return parsingError(ln, "Invalid version number '%d'.", version)
 		if version > LAST_FILE_VERSION  return parsingError(ln, "Unsupported version number '%d'.", version)
@@ -257,7 +269,33 @@ export loadWorkspace :: () -> (success:bool, projects:[]Project) {
 		local ok, param, ptr = matchPattern(line, "(%S+)()")
 		if not ok  return parsingError(ln, "Bad parameter line format: %s", line)
 
-		if system ~= NULL {
+		if project == NULL {
+			if param == {
+				case "stats":
+					local ^ok, ^ptr, _showStats = readBool(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
+					showStats = _showStats
+
+				case:
+					return parsingError(ln, "Unknown program parameter '%s'.", param)
+			}
+
+		} elseif system == NULL {
+			if param == {
+				case "bgColor":
+					local ^ok, ^ptr, r = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
+					local ^ok, ^ptr, g = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
+					local ^ok, ^ptr, b = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
+					project.bgColorR = r
+					project.bgColorG = g
+					project.bgColorB = b
+
+				case:
+					return parsingError(ln, "Unknown project parameter '%s'.", param)
+			}
+
+		} else {
 			if param == {
 				case "colors":
 					local ^ok, ^ptr, colors = readFloatArray(line, cast(int)ptr)
@@ -265,104 +303,117 @@ export loadWorkspace :: () -> (success:bool, projects:[]Project) {
 					if #colors % 4   ~= 0     return parsingError(ln, "Bad color array format: %s", line)
 					if colors[1]     == NULL  return parsingError(ln, "No colors.")
 					if colors[8*4+1] ~= NULL  return parsingError(ln, "Too many colors. (Max is 8, got %d)", #colors // 4)
+					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
 					system.colors = colors
 					ps.setColors!(colors)
 
 				case "blendMode":
-					local ^ok, ^ptr, blendMode = readString(line, cast(int)ptr)
-					if not ok  return parsingError(ln, "Bad value format: %s", line)
+					local ^ok, ^ptr, blendMode = readString(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
 					system.blendMode = cast(LG.BlendMode) blendMode -- @Robustness: Validate enum value.
 
 				case "bufferSize":
-					local ^ok, ^ptr, size = readInt(line, cast(int)ptr)
-					if not ok  return parsingError(ln, "Bad value format: %s", line)
+					local ^ok, ^ptr, size = readInt(line, cast(int)ptr)  if not ok  return parsingError(ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
 					ps.setBufferSize!(size)
 
 				case "direction":
-					local ^ok, ^ptr, dir = readFloat(line, cast(int)ptr)
-					if not ok  return parsingError(ln, "Bad value format: %s", line)
+					local ^ok, ^ptr, dir = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
 					ps.setDirection!(dir)
 
 				case "emissionRate":
-					local ^ok, ^ptr, rate = readFloat(line, cast(int)ptr)
-					if not ok  return parsingError(ln, "Bad value format: %s", line)
+					local ^ok, ^ptr, rate = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
 					ps.setEmissionRate!(rate)
 
 				case "emitterLifetime":
-					local ^ok, ^ptr, lifetime = readFloat(line, cast(int)ptr)
-					if not ok  return parsingError(ln, "Bad value format: %s", line)
+					local ^ok, ^ptr, lifetime = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
 					ps.setEmitterLifetime!(lifetime <= 0 ? -1.0 : lifetime)
 
 				case "insertMode":
-					local ^ok, ^ptr, mode = readString(line, cast(int)ptr)
-					if not ok  return parsingError(ln, "Bad value format: %s", line)
+					local ^ok, ^ptr, mode = readString(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
 					ps.setInsertMode!(cast(LG.ParticleInsertMode) mode) -- @Robustness: Validate enum value.
 
 				case "relativeRotation":
-					local ^ok, ^ptr, relative = readBool(line, cast(int)ptr)
-					if not ok  return parsingError(ln, "Bad value format: %s", line)
+					local ^ok, ^ptr, relative = readBool(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
 					ps.setRelativeRotation!(relative)
 
 				case "sizes":
 					local ^ok, ^ptr, sizes = readFloatArray(line, cast(int)ptr)
-					if not ok              return parsingError(ln, "Bad value format: %s", line)
-					if sizes[1]   == NULL  return parsingError(ln, "No sizes.")
-					if sizes[8+1] ~= NULL  return parsingError(ln, "Too many sizes. (Max is 8, got %d)", #sizes)
+					if not ok                 return parsingError(ln, "Bad value format: %s", line)
+					if sizes[1]   == NULL     return parsingError(ln, "No sizes.")
+					if sizes[8+1] ~= NULL     return parsingError(ln, "Too many sizes. (Max is 8, got %d)", #sizes)
+					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
 					ps.setSizes!(sizes)
 
 				case "sizeVariation":
 					local ^ok, ^ptr, variation = readFloat(line, cast(int)ptr)
-					if not ok  return parsingError(ln, "Bad value format: %s", line)
+					if not ok                 return parsingError(ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
 					ps.setSizeVariation!(variation)
 
 				case "spinVariation":
 					local ^ok, ^ptr, variation = readFloat(line, cast(int)ptr)
-					if not ok  return parsingError(ln, "Bad value format: %s", line)
+					if not ok                 return parsingError(ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
 					ps.setSpinVariation!(variation)
 
 				case "spread":
 					local ^ok, ^ptr, spread = readFloat(line, cast(int)ptr)
-					if not ok  return parsingError(ln, "Bad value format: %s", line)
+					if not ok                 return parsingError(ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
 					ps.setSpread!(spread)
 
 				case "linearDamping":
 					local ^ok, ^ptr, min = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
 					local ^ok, ^ptr, max = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
 					ps.setLinearDamping!(min, max)
 
 				case "particleLifetime":
 					local ^ok, ^ptr, min = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
 					local ^ok, ^ptr, max = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
 					ps.setParticleLifetime!(min, max)
 
 				case "radialAcceleration":
 					local ^ok, ^ptr, min = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
 					local ^ok, ^ptr, max = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
 					ps.setRadialAcceleration!(min, max)
 
 				case "rotation":
 					local ^ok, ^ptr, min = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
 					local ^ok, ^ptr, max = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
 					ps.setRotation!(min, max)
 
 				case "speed":
 					local ^ok, ^ptr, min = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
 					local ^ok, ^ptr, max = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
 					ps.setSpeed!(min, max)
 
 				case "spin":
 					local ^ok, ^ptr, min = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
 					local ^ok, ^ptr, max = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
 					ps.setSpin!(min, max)
 
 				case "tangentialAcceleration":
 					local ^ok, ^ptr, min = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
 					local ^ok, ^ptr, max = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
 					ps.setTangentialAcceleration!(min, max)
 
 				case "offset":
 					local ^ok, ^ptr, x = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
 					local ^ok, ^ptr, y = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
 					system.useCustomOffset = true
 					ps.setOffset!(x, y)
 
@@ -372,6 +423,7 @@ export loadWorkspace :: () -> (success:bool, projects:[]Project) {
 					local ^ok, ^ptr, dy           = readFloat (line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
 					local ^ok, ^ptr, angle        = readFloat (line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
 					local ^ok, ^ptr, relative     = readBool  (line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
 					ps.setEmissionArea!(cast(LG.AreaSpreadDistribution)distribution, dx, dy, angle, relative) -- @Robustness: Validate enum value.
 
 				case "linearAcceleration":
@@ -379,25 +431,12 @@ export loadWorkspace :: () -> (success:bool, projects:[]Project) {
 					local ^ok, ^ptr, ymin = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
 					local ^ok, ^ptr, xmax = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
 					local ^ok, ^ptr, ymax = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
 					ps.setLinearAcceleration!(xmin,ymin, xmax,ymax)
 
 				case:
 					return parsingError(ln, "Unknown project parameter '%s'.", param)
 			}
-
-		} elseif project ~= NULL {
-			if param == {
-				-- case "name":
-				-- 	local ^ok, ^ptr, name = readString(line, cast(int)ptr)
-				-- 	if not ok  return parsingError(ln, "Bad value format: %s", line)
-				-- 	project.name = name
-
-				case:
-					return parsingError(ln, "Unknown project parameter '%s'.", param)
-			}
-
-		} else {
-			return parsingError(ln, "Unknown context for parameter.")
 		}
 	}
 
@@ -406,5 +445,7 @@ export loadWorkspace :: () -> (success:bool, projects:[]Project) {
 		if not project.systems  return parsingError(ln, "Missing systems for at least one project.")
 	}
 
-	return true, projects
+	return true, false, projects
 }
+
+

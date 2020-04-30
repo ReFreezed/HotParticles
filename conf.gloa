@@ -5,7 +5,7 @@ local main :: () {
 		identity         = "Hot Particles"
 
 		window.title     = "Hot Particles"
-		window.width     = 1200
+		window.width     = 1400
 		window.height    = 800
 		window.resizable = true
 
