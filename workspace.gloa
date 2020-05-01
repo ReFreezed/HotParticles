@@ -49,12 +49,15 @@ export saveWorkspace :: () {
 	local buffer: []string
 	insert(buffer, format("%d\n", LAST_FILE_VERSION))
 
-	insert(buffer, "showProjectSettings") ; writeValue(buffer, eol=true, showProjectSettings)
 	insert(buffer, "stats")               ; writeValue(buffer, eol=true, showStats)
+	insert(buffer, "showProjectSettings") ; writeValue(buffer, eol=true, showProjectSettings)
+	insert(buffer, "showPanelNumbers")    ; writeValue(buffer, eol=true, showPanelNumbers)
 
 	for project: openProjects {
 		insert(buffer, ":project\n")
-		insert(buffer, "bgColor") ; writeValue(buffer, eol=true, {project.bgColorR, project.bgColorG, project.bgColorB})
+		insert(buffer, "bgColor")          ; writeValue(buffer, eol=true, {project.bgColorR, project.bgColorG, project.bgColorB})
+		insert(buffer, "pixelateWorld")    ; writeValue(buffer, eol=true, project.pixelateWorld)
+		insert(buffer, "pixelateTextures") ; writeValue(buffer, eol=true, project.pixelateTextures)
 
 		for system: project.systems {
 			insert(buffer, ":system\n")
@@ -272,15 +275,20 @@ export loadWorkspace :: () -> (success:bool, gotError:bool, projects:[]Project) 
 
 		if project == NULL {
 			if param == {
-				case "showProjectSettings":
-					local ^ok, ^ptr, _showProjectSettings = readBool(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
-					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
-					showProjectSettings = _showProjectSettings
-
 				case "stats":
-					local ^ok, ^ptr, _showStats = readBool(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
+					local ^ok, ^ptr, flag = readBool(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
 					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
-					showStats = _showStats
+					showStats = flag
+
+				case "showProjectSettings":
+					local ^ok, ^ptr, flag = readBool(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
+					showProjectSettings = flag
+
+				case "showPanelNumbers":
+					local ^ok, ^ptr, flag = readBool(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
+					showPanelNumbers = flag
 
 				case:
 					return parsingError(ln, "Unknown program parameter '%s'.", param)
@@ -296,6 +304,16 @@ export loadWorkspace :: () -> (success:bool, gotError:bool, projects:[]Project) 
 					project.bgColorR = r
 					project.bgColorG = g
 					project.bgColorB = b
+
+				case "pixelateWorld":
+					local ^ok, ^ptr, flag = readBool(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
+					project.pixelateWorld = flag
+
+				case "pixelateTextures":
+					local ^ok, ^ptr, flag = readBool(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
+					project.pixelateTextures = flag
 
 				case:
 					return parsingError(ln, "Unknown project parameter '%s'.", param)

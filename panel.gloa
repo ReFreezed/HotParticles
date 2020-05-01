@@ -9,9 +9,14 @@
 --=
 --============================================================]]
 
-export LABEL_WIDTH   :: 110
-export PANEL_WIDTH   :: LABEL_WIDTH+300
-export PANEL_SPACING :: 3
+export PANEL_WIDTH :: LABEL_WIDTH + 300
+
+local LABEL_WIDTH   :: 110
+local PANEL_SPACING :: 3
+
+local GUIDE_LINE_OPACITY           :: .2
+local HOVER_OUTLINE_OPACITY        :: .3
+local HOVER_OUTLINE_OPACITY_STRONG :: .5
 
 local BUTTON_LABELS_YES_NO :: {"yes", "no"}
 
@@ -39,8 +44,18 @@ local PanelState :: struct {
 
 
 
-local mayPress :: (panelItem:int) -> bool {
-	return draggedPanelItem == 0 and pressedPanelThisFrame
+local isHoveringPanelItemRectangle :: (state:PanelState, x,y,w,h:int) -> bool {
+	return state.panelItem == draggedPanelItem
+		or draggedPanelItem == 0 and state.mx >= x and state.mx < x+w and state.my >= y and state.my < y+h
+}
+local isHoveringPanelItemCircle :: (state:PanelState, x,y,radius:int) -> bool {
+	return state.panelItem == draggedPanelItem
+		or draggedPanelItem == 0 and math.distance(state.mx,state.my, x,y) <= radius
+}
+
+local isPressingOrMayPress :: (state:PanelState) -> bool {
+	return state.panelItem == draggedPanelItem
+		or draggedPanelItem == 0 and pressedPanelThisFrame
 }
 
 
@@ -85,7 +100,8 @@ local drawPanelDirection :: (state:PanelState, label1,label2:string, angle:float
 	local x = LABEL_WIDTH+PANEL_SPACING+RADIUS + (slot-1)*(PANEL_SPACING+2*RADIUS)
 	local y = state.panelY + RADIUS
 
-	local pressed = state.panelItem == draggedPanelItem or mayPress(state.panelItem) and math.distance(state.mx,state.my, x,y) <= RADIUS
+	local hovered = isHoveringPanelItemCircle(state, x, y, RADIUS)
+	local pressed = hovered and isPressingOrMayPress(state)
 	if pressed {
 		draggedPanelItem = state.panelItem
 		angle            = math.atan(state.my-y, state.mx-x)
@@ -100,13 +116,17 @@ local drawPanelDirection :: (state:PanelState, label1,label2:string, angle:float
 	LG.setColor(1, 1, 1, .25)
 	if spreadCcw  LG.arc(LG.DrawMode.FILL, x, y, .8*RADIUS, angle-spreadCcw, angle, 32)
 	if spreadCw   LG.arc(LG.DrawMode.FILL, x, y, .8*RADIUS, angle,  angle+spreadCw, 32)
-	LG.setColor(1, 1, 1, .15)
+	LG.setColor(1, 1, 1, GUIDE_LINE_OPACITY)
 	LG.line(x-RADIUS+1, y, x+RADIUS-1, y)
 	LG.line(x, y-RADIUS+1, x, y+RADIUS-1)
+	if hovered {
+		LG.setColor(1, 1, 1, HOVER_OUTLINE_OPACITY)
+		LG.circle(LG.DrawMode.LINE, x, y, RADIUS+.5)
+	}
 	LG.setColor(1, 1, 1)
 	LG.line(x, y, x+RADIUS*math.cos(angle), y+RADIUS*math.sin(angle))
 
-	do {
+	if showPanelNumbers {
 		local text  = format("%d°", angle*360/math.TAU)
 		local textX = math.round(x-fontSmall.getWidth!(text)/2)
 		local textY = (angle % math.TAU < math.PI) ? state.panelY+5 : state.panelY+2*RADIUS-5-fontSmall.getHeight!()
@@ -124,7 +144,7 @@ local drawPanelDirection :: (state:PanelState, label1,label2:string, angle:float
 }
 
 local drawSliderValue :: (sliderX,sliderY:float, sliderW,sliderH:float, value:float, readout:float, readoutFormat:string) {
-	if readoutFormat {
+	if showPanelNumbers and readoutFormat {
 		local text = format(readoutFormat, readout)
 		local x    = math.round(sliderX+(sliderW-fontSmall.getWidth!(text))/2)
 		local y    = math.round(sliderY+(sliderH-fontSmall.getHeight!())/2)
@@ -155,7 +175,8 @@ local drawPanelSlider :: (
 	local x = LABEL_WIDTH+PANEL_SPACING
 	local y = state.panelY
 
-	local pressed = state.panelItem == draggedPanelItem or mayPress(state.panelItem) and state.mx >= x and state.mx < x+w and state.my >= y and state.my < y+h
+	local hovered = isHoveringPanelItemRectangle(state, x, y, w, h)
+	local pressed = hovered and isPressingOrMayPress(state)
 	if pressed {
 		draggedPanelItem = state.panelItem
 		value            = math.lerp(valueMin, valueMax, math.clamp01((state.mx-x)/w))
@@ -173,7 +194,11 @@ local drawPanelSlider :: (
 		LG.setColor(1, 1, 1, .25)
 		LG.rectangle(LG.DrawMode.FILL, valueX, y+.25*h, otherX-valueX, h/2)
 	}
-	LG.setColor(1, 1, 1, .15)
+	if hovered {
+		LG.setColor(1, 1, 1, HOVER_OUTLINE_OPACITY)
+		LG.rectangle(LG.DrawMode.LINE, x-.5, y-.5, w+1, h+1)
+	}
+	LG.setColor(1, 1, 1, GUIDE_LINE_OPACITY)
 	LG.rectangle(LG.DrawMode.FILL, x+.25*w, y, 1, h)
 	LG.rectangle(LG.DrawMode.FILL, x+.50*w, y, 1, h)
 	LG.rectangle(LG.DrawMode.FILL, x+.75*w, y, 1, h)
@@ -184,20 +209,21 @@ local drawPanelSlider :: (
 	return pressed, value
 }
 
-local drawPanelColor :: (state:PanelState, label1,label2:string, r,g,b,a:float) -> (pressed:bool, r,g,b,a:float) {
+local drawPanelColor :: (state:PanelState, label1,label2:string, r,g,b:float,a:float|none) -> (pressed:bool, r,g,b,a:float) {
 	state.panelItem += 1
 
 	local SLIDER_HEIGHT :: 12
 
 	local w = PANEL_WIDTH-LABEL_WIDTH-2*PANEL_SPACING
-	local h = 4*SLIDER_HEIGHT
+	local h = SLIDER_HEIGHT * (a == nil ? 3 : 4)
 	local x = LABEL_WIDTH+PANEL_SPACING
 	local y = state.panelY
 
 	!import "color"
 	local hue, saturation, value = rgbToHsv(r, g, b)
 
-	local pressed = state.panelItem == draggedPanelItem or mayPress(state.panelItem) and state.mx >= x and state.mx < x+w and state.my >= y and state.my < y+h
+	local hovered = isHoveringPanelItemRectangle(state, x, y, w, h)
+	local pressed = hovered and isPressingOrMayPress(state)
 	if pressed {
 		draggedPanelItem = state.panelItem
 
@@ -248,33 +274,44 @@ local drawPanelColor :: (state:PanelState, label1,label2:string, r,g,b,a:float) 
 		drawSliderValue(x, sliderY, w, SLIDER_HEIGHT, value, 100, "%d%%")
 		sliderY += SLIDER_HEIGHT
 
-		LG.setColor(.1, .1, .1)
-		LG.rectangle(LG.DrawMode.FILL, x, sliderY, w, SLIDER_HEIGHT)
-		LG.setColor(.3, .3, .3)
-		drawChecker(x, sliderY, w, SLIDER_HEIGHT)
-		LG.setColor(r, g, b)
-		LG.draw(imageGradient, x, sliderY, 0, gradientSx, gradientSy)
-		drawSliderValue(x, sliderY, w, SLIDER_HEIGHT, a, 100, "%d%%")
+		if a ~= nil {
+			LG.setColor(.1, .1, .1)
+			LG.rectangle(LG.DrawMode.FILL, x, sliderY, w, SLIDER_HEIGHT)
+			LG.setColor(.3, .3, .3)
+			drawChecker(x, sliderY, w, SLIDER_HEIGHT)
+			LG.setColor(r, g, b)
+			LG.draw(imageGradient, x, sliderY, 0, gradientSx, gradientSy)
+			drawSliderValue(x, sliderY, w, SLIDER_HEIGHT, cast(float)a, 100, "%d%%")
+		}
+
+		if hovered {
+			local outlineY = y + ((state.my-y)//SLIDER_HEIGHT) * SLIDER_HEIGHT
+			LG.setColor(1, 1, 1, HOVER_OUTLINE_OPACITY_STRONG)
+			LG.rectangle(LG.DrawMode.LINE, x-.5, outlineY-.5, w+1, SLIDER_HEIGHT+1)
+		}
 	}
 
 	state.lastPanelY  = state.panelY
 	state.panelY     += h + PANEL_SPACING
-	return pressed, r,g,b,a
+	return pressed, r,g,b,cast(float)a -- 'a' is actually nil if the function was called with a=nil.
 }
 
-local drawPanelButtons :: (state:PanelState, label1,label2:string, buttonLabels:[]string, selected=0) -> (pressed:bool, pressedIndex:int) {
+local ButtonStyle :: enum { NORMAL, TABS }
+
+local drawPanelButtons :: (state:PanelState, label1,label2:string, buttonLabels:[]string, selected=0, style=ButtonStyle.NORMAL) -> (pressed:bool, pressedIndex:int) {
 	state.panelItem += 1
 
 	local highlightAll = (selected == 0)
 
-	local x = (label1 or label2) ? LABEL_WIDTH+PANEL_SPACING : PANEL_SPACING
+	local x = (style == ButtonStyle.TABS) ? PANEL_SPACING : LABEL_WIDTH+PANEL_SPACING
 	local y = state.panelY
 	local w = PANEL_WIDTH - x-PANEL_SPACING
 	local h = state.fontH
 
 	local buttonW = w / #buttonLabels
 
-	local pressed = state.panelItem == draggedPanelItem or mayPress(state.panelItem) and state.mx >= x and state.mx < x+w and state.my >= y and state.my < y+h
+	local hovered = isHoveringPanelItemRectangle(state, x, y, w, h)
+	local pressed = hovered and isPressingOrMayPress(state)
 	if pressed {
 		selected              = math.clamp(math.floor(1+(state.mx-x)/buttonW), 1, #buttonLabels)
 		scheduleSaveWorkspace = true
@@ -283,13 +320,24 @@ local drawPanelButtons :: (state:PanelState, label1,label2:string, buttonLabels:
 	drawLabels(label1, label2, state.panelY)
 
 	for buttonLabels {
-		local buttonX1  = math.round(x + (itIndex-1)*buttonW)
-		local buttonX2  = math.round(x + (itIndex  )*buttonW)
-		local textX     = math.round(buttonX1+(buttonW-fontNormal.getWidth!(it))/2)
-		local highlight = highlightAll or itIndex == selected
-		LG.setColor(.4, .4, .4, (highlight ? 1.0 : .7))
-		LG.rectangle(LG.DrawMode.FILL, buttonX1+1, y+1, buttonX2-buttonX1-2, h-2, 3)
-		LG.setColor(1, 1, 1, (highlight ? 1.0 : .5))
+		local buttonX1 = math.round(x + (itIndex-1)*buttonW)
+		local buttonX2 = math.round(x + (itIndex  )*buttonW)
+		local textX    = math.round(buttonX1 + (buttonW-fontNormal.getWidth!(it)) / 2)
+		local faded    = not (highlightAll or itIndex == selected)
+
+		if hovered and state.mx >= buttonX1 and state.mx < buttonX2
+			LG.setColor(1, 1, 1, .45)
+		elseif faded
+			LG.setColor(1, 1, 1, .15)
+		else
+			LG.setColor(1, 1, 1, .3)
+
+		if style == ButtonStyle.TABS
+			LG.polygon(LG.DrawMode.FILL, buttonX1,y+h, buttonX1+h,y, buttonX2-h,y, buttonX2,y+h)
+		else
+			LG.rectangle(LG.DrawMode.FILL, buttonX1+1, y+1, buttonX2-buttonX1-2, h-2, 3)
+
+		LG.setColor(1, 1, 1, (faded ? .6 : 1.0))
 		LG.print(it, textX, y)
 	}
 
@@ -324,23 +372,25 @@ export drawPanel :: () {
 
 		insert(buttonLabels, close?"CLOSE":"NEW")
 
-		local pressed, i = drawPanelButtons(state, "", "", buttonLabels, selected=currentProjectIndex)
-		if not pressed {
-			-- void
+		local pressed, i = drawPanelButtons(state, "", "", buttonLabels, selected=currentProjectIndex, style=ButtonStyle.TABS)
+		if pressed {
+			if i < #buttonLabels {
+				currentProjectIndex = i
 
-		} elseif i < #buttonLabels {
-			currentProjectIndex = i
+			} elseif close {
+				remove(openProjects, currentProjectIndex)
+				if openProjects[1] == NULL
+					addNewProject()
+				else
+					currentProjectIndex = math.min(currentProjectIndex, #openProjects)
 
-		} elseif close {
-			remove(openProjects, currentProjectIndex)
-			if openProjects[1] == NULL
+			} else {
 				addNewProject()
-			else
-				currentProjectIndex = math.min(currentProjectIndex, #openProjects)
+				currentProjectIndex = #openProjects
+			}
 
-		} else {
-			addNewProject()
-			currentProjectIndex = #openProjects
+			scheduleRecreateCanvases = true
+			updateParticleImageFilters()
 		}
 	}
 	do {
@@ -349,9 +399,29 @@ export drawPanel :: () {
 		if pressed  showProjectSettings = (i == 1)
 	}
 	if showProjectSettings {
+		local pressed, i = drawPanelButtons(state, "PixelateWorld", "", BUTTON_LABELS_YES_NO, selected=(project.pixelateWorld ? 1 : 2))
+		if pressed {
+			project.pixelateWorld    = (i == 1)
+			scheduleRecreateCanvases = true
+
+			if project.pixelateWorld and project.zoomLevel < -1 {
+				project.zoomLevel  = -1
+				project.zoomSource = project.zoom
+				project.zoomTarget = 2^project.zoomLevel
+			}
+		}
+	}
+	if showProjectSettings {
+		local pressed, i = drawPanelButtons(state, "PixelateTextures", "", BUTTON_LABELS_YES_NO, selected=(project.pixelateTextures ? 1 : 2))
+		if pressed {
+			project.pixelateTextures = (i == 1)
+			updateParticleImageFilters()
+		}
+	}
+	if showProjectSettings {
 		drawPanelSeparator(state)
 
-		local pressed, r,g,b = drawPanelColor(state, "Background", "", project.bgColorR, project.bgColorG, project.bgColorB, 1)
+		local pressed, r,g,b = drawPanelColor(state, "Background", "", project.bgColorR, project.bgColorG, project.bgColorB, nil)
 
 		if pressed  project.bgColorR, project.bgColorG, project.bgColorB = r,g,b
 	}

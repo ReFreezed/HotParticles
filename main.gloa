@@ -35,9 +35,12 @@ export fontLarge:  LG.Font  = NULL
 
 export imageChecker:  LG.Image = NULL
 export imageGradient: LG.Image = NULL
-export imageLight:    LG.Image = NULL
-export imageMoon:     LG.Image = NULL
 export imageRainbow:  LG.Image = NULL
+
+export particleImages: struct { !key:string, !value:LG.Image }
+
+export canvasGui:   LG.Canvas = NULL
+export canvasWorld: LG.Canvas = NULL
 
 export openProjects: []Project
 export currentProjectIndex = 1
@@ -47,44 +50,54 @@ export actionTextTime  = -9999.00
 export messageText     = ""
 export messageTextTime = -9999.00
 
-export isPositioningParticles = false
-export scheduleSaveWorkspace  = false
-
-export zoomLevel  = 0
-export zoom       = 1.0
-export zoomSource = 1.0
-export zoomTarget = 1.0
+export isPositioningParticles   = false
+export scheduleSaveWorkspace    = false
+export scheduleRecreateCanvases = false
 
 -- Saved settings.
 export showProjectSettings = true
 export showStats           = true
+export showPanelNumbers    = true
 
 
-
-export System :: struct {
-	colors: []float,
-	blendMode       = LG.BlendMode.ALPHA,
-	useCustomOffset = false,
-	particles: LG.ParticleSystem = NULL,
-
-	!call :: () -> System {
-		local system: System
-
-		local ps = LG.newParticleSystem(imageMoon)
-		ps.start!()
-		system.particles = ps
-
-		return system
-	},
-}
 
 export Project :: struct {
 	systemIndex = 1,
+
+	zoomLevel  = 0,
+	zoom       = 1.0,
+	zoomSource = 1.0,
+	zoomTarget = 1.0,
+
+	-- Saved stuff:
+
 	systems: []System,
 
 	bgColorR = .15,
 	bgColorG = .15,
 	bgColorB = .15,
+
+	pixelateWorld    = false,
+	pixelateTextures = false,
+}
+
+export System :: struct {
+	particles: LG.ParticleSystem = NULL,
+
+	colors: []float, -- {r1,g1,b1,a1,...}
+	blendMode = LG.BlendMode.ALPHA,
+
+	useCustomOffset = false,
+
+	!call :: () -> System {
+		local system: System
+
+		local ps = LG.newParticleSystem(particleImages.moon)
+		ps.start!()
+		system.particles = ps
+
+		return system
+	},
 }
 
 
@@ -118,6 +131,31 @@ export addNewProject :: () {
 	currentProjectIndex = #openProjects
 }
 
+export createCanvases :: () {
+	local ww, wh = LG.getDimensions()
+
+	if canvasGui ~= NULL {
+		canvasGui  .release!()
+		canvasWorld.release!()
+	}
+
+	local SETTINGS: LG.CanvasSettings : {msaa=4}
+	canvasGui   = LG.newCanvas(ww,             wh, SETTINGS)
+	canvasWorld = LG.newCanvas(ww-PANEL_WIDTH, wh)
+
+	if openProjects[currentProjectIndex].pixelateWorld {
+		canvasWorld.setFilter!(LG.FilterMode.NEAREST, LG.FilterMode.NEAREST)
+	}
+}
+
+export updateParticleImageFilters :: () {
+	local filter = openProjects[currentProjectIndex].pixelateTextures ? LG.FilterMode.NEAREST : LG.FilterMode.LINEAR
+
+	for cast(table) particleImages {
+		LG.Image.setFilter(cast(LG.Image)it, filter, filter)
+	}
+}
+
 export onLoad :: (args:[]string, argsRaw:[]string) {
 	io.disableBuffering(io.STDOUT)
 	io.disableBuffering(io.STDERR)
@@ -130,9 +168,10 @@ export onLoad :: (args:[]string, argsRaw:[]string) {
 
 	imageChecker  = LG.newImage("gfx/checker.png") ; imageChecker.setWrap!(LG.WrapMode.REPEAT, LG.WrapMode.REPEAT)
 	imageGradient = LG.newImage("gfx/gradient.png")
-	imageLight    = LG.newImage("gfx/light.png")
-	imageMoon     = LG.newImage("gfx/moon.png")
 	imageRainbow  = LG.newImage("gfx/rainbow.png")
+
+	particleImages.light = LG.newImage("gfx/light.png")
+	particleImages.moon  = LG.newImage("gfx/moon.png")
 
 	local ok, gotError, projects = loadWorkspace()
 	if ok {
@@ -145,6 +184,9 @@ export onLoad :: (args:[]string, argsRaw:[]string) {
 		}
 		addNewProject()
 	}
+
+	createCanvases()
+	updateParticleImageFilters()
 }
 
 
@@ -154,7 +196,8 @@ export onKeyPressed :: (key:string, scancode:string, isRepeat:bool) {
 	if key == {
 		case "r":      for openProjects[currentProjectIndex].systems { it.particles.reset!() ; it.particles.start!() }
 		case "escape": LE.quit(0)
-		case "f1":     showStats = not showStats ; scheduleSaveWorkspace = true
+		case "f1":     showStats        = not showStats        ; scheduleSaveWorkspace = true
+		case "f2":     showPanelNumbers = not showPanelNumbers ; scheduleSaveWorkspace = true
 		case "f10":    if LK.isDown("lctrl","rctrl")  LE.restart()
 	}
 }
@@ -174,8 +217,8 @@ export onMouseMoved :: (mx,my:int, dx,dy:int, isTouch:bool) {
 	if isPositioningParticles {
 		local project = openProjects[currentProjectIndex]
 
-		local x = (mx - (LG.getWidth()+PANEL_WIDTH)/2) / zoom
-		local y = (my - (LG.getHeight()           )/2) / zoom
+		local x = (mx - (LG.getWidth()+PANEL_WIDTH)/2) / project.zoom
+		local y = (my - (LG.getHeight()           )/2) / project.zoom
 
 		for system: project.systems {
 			system.particles.moveTo!(x, y)
@@ -201,11 +244,13 @@ export onMouseWheel :: (dx,dy:int) {
 		panelScrollTarget = math.min(panelScrollTarget+50*dy, 0)
 
 	} else {
-		zoomLevel  = math.clamp(zoomLevel+dy, -4, 6)
-		zoomSource = zoom
-		zoomTarget = 2^zoomLevel
+		local project = openProjects[currentProjectIndex]
 
-		actionText     = format("Zoom: %d%%", zoomTarget*100)
+		project.zoomLevel  = math.clamp(project.zoomLevel+dy, (project.pixelateWorld ? -1 : -4), 6)
+		project.zoomSource = project.zoom
+		project.zoomTarget = 2^project.zoomLevel
+
+		actionText     = format("Zoom: %d%%", project.zoomTarget*100)
 		actionTextTime = LT.getTime()
 	}
 }
@@ -230,16 +275,18 @@ export onUpdate :: (dt:float) {
 
 	if scheduleSaveWorkspace  saveWorkspace() -- @UX: Maybe wait a little while before saving?
 
-	zoom = math.moveTowards(
-		zoom,
-		zoomTarget,
-		math.abs(zoomTarget - zoomSource) * dt / 0.05
+	project.zoom = math.moveTowards(
+		project.zoom,
+		project.zoomTarget,
+		math.abs(project.zoomTarget - project.zoomSource) * dt / 0.05
 	)
 	panelScroll = math.moveTowards(
 		panelScroll,
 		panelScrollTarget,
 		math.abs(panelScrollTarget - panelScrollSource) * dt / 0.05
 	)
+
+	if scheduleRecreateCanvases  createCanvases()
 }
 
 
@@ -249,86 +296,117 @@ export onDraw :: () {
 	local project = openProjects[currentProjectIndex]
 
 	LG.reset()
-	LG.clear(project.bgColorR, project.bgColorG, project.bgColorB)
 
-	-- Particles.
-	LG.translate((ww+PANEL_WIDTH)/2, wh/2)
-	LG.scale(zoom)
+	-- GUI.
+	do {
+		LG.setCanvas(canvasGui)
+		LG.clear()
 
-	for system: project.systems {
-		LG.setBlendMode(system.blendMode)
-		LG.draw(system.particles)
-	}
-	LG.setBlendMode(LG.BlendMode.ALPHA)
+		LG.setFont(fontNormal)
 
-	if isPositioningParticles {
-		local mx, my = love.mouse.getPosition()
-		local x,  y  = LG.inverseTransformPoint(mx, my)
-		LG.setColor(1, 0, 0)
-		LG.line(x-50, y, x+50, y)
-		LG.line(x, y-50, x, y+50)
-	}
+		-- Stats.
+		if showStats {
+			local fontH = fontNormal.getHeight!()
 
-	LG.reset()
-	LG.setFont(fontNormal)
+			local x = PANEL_WIDTH+5
+			local y = 5
 
-	-- Stats.
-	if showStats {
-		local fontH = fontNormal.getHeight!()
+			if .30*project.bgColorR+.55*project.bgColorG+.15*project.bgColorB < .25
+				LG.setColor(1, 1, 1, .7)
+			else
+				LG.setColor(0, 0, 0, .7)
 
-		local x = PANEL_WIDTH+5
-		local y = 5
+			local particleCountTotal = 0
 
-		if .30*project.bgColorR+.55*project.bgColorG+.15*project.bgColorB < .25
-			LG.setColor(1, 1, 1, .7)
-		else
-			LG.setColor(0, 0, 0, .7)
+			local drawStatsLine = [x,y,fontH] (s:string, ...:int|float|string) {
+				LG.print(format(s, ...), x, y)
+				y += fontH+1
+			}
 
-		local particleCountTotal = 0
+			for system: project.systems {
+				local count         = system.particles.getCount!()
+				particleCountTotal += count
+				drawStatsLine("%d_ParticleCount: %d", itIndex, count)
+			}
 
-		local drawStatsLine = [x,y,fontH] (s:string, ...:int|float|string) {
-			LG.print(format(s, ...), x, y)
-			y += fontH+1
+			drawStatsLine("ParticleCountTotal: %d", particleCountTotal)
+			drawStatsLine("(hide this with F1)")
 		}
+
+		-- Panel.
+		drawPanel()
+
+		-- HUD texts.
+		LG.origin()
+		LG.setFont(fontLarge)
+
+		local visibility = 1 - (LT.getTime() - messageTextTime) / 8.00
+		if visibility > 0 {
+			local x = math.round((ww+PANEL_WIDTH-fontLarge.getWidth!(messageText))/2)
+			local y = math.round(.1*wh)
+			local a = visibility^.5
+			LG.setColor(0, 0, 0, a)
+			LG.print(messageText, x+1, y+1)
+			LG.setColor(1, 1, 1, a)
+			LG.print(messageText, x, y)
+		}
+
+		visibility = 1 - (LT.getTime() - actionTextTime) / 0.60
+		if visibility > 0 {
+			local x = math.round((ww+PANEL_WIDTH-fontLarge.getWidth!(actionText))/2)
+			local y = math.round(.1*wh+fontLarge.getHeight!())
+			local a = visibility^.5
+			LG.setColor(0, 0, 0, a)
+			LG.print(actionText, x+1, y+1)
+			LG.setColor(1, 1, 1, a)
+			LG.print(actionText, x, y)
+		}
+
+		-- Mouse stuff.
+		local mx, my = love.mouse.getPosition()
+		if isPositioningParticles {
+			LG.setColor(1, 0, 0)
+			LG.line(mx-50, my, mx+50, my)
+			LG.line(mx, my-50, mx, my+50)
+		}
+
+		LG.reset()
+	}
+
+	-- World.
+	do {
+		LG.setCanvas(canvasWorld)
+		LG.clear(project.bgColorR, project.bgColorG, project.bgColorB)
+
+		LG.translate((ww-PANEL_WIDTH)/2, wh/2)
+		if not project.pixelateWorld  LG.scale(project.zoom)
 
 		for system: project.systems {
-			local count         = system.particles.getCount!()
-			particleCountTotal += count
-			drawStatsLine("%d_ParticleCount: %d", itIndex, count)
+			LG.setBlendMode(system.blendMode)
+			LG.draw(system.particles)
 		}
+		LG.setBlendMode(LG.BlendMode.ALPHA)
 
-		drawStatsLine("ParticleCountTotal: %d", particleCountTotal)
-		drawStatsLine("(hide this with F1)")
+		LG.reset()
 	}
 
-	-- Panel.
-	drawPanel()
-	LG.reset()
+	-- Put stuff on the screen!
+	LG.clear()
+	LG.setBlendMode(LG.BlendMode.ALPHA, LG.BlendAlphaMode.PREMULTIPLIED)
 
-	-- HUD texts.
-	LG.setFont(fontLarge)
-
-	local visibility = 1 - (LT.getTime() - messageTextTime) / 8.00
-	if visibility > 0 {
-		local x = math.round((ww+PANEL_WIDTH-fontLarge.getWidth!(messageText))/2)
-		local y = math.round(.1*wh)
-		local a = visibility^.5
-		LG.setColor(0, 0, 0, a)
-		LG.print(messageText, x+1, y+1)
-		LG.setColor(1, 1, 1, a)
-		LG.print(messageText, x, y)
+	if project.pixelateWorld {
+		LG.draw(canvasWorld, (ww+PANEL_WIDTH)/2,wh/2, 0, project.zoom,project.zoom, (ww-PANEL_WIDTH)/2, wh/2)
+	} else {
+		LG.draw(canvasWorld, PANEL_WIDTH,0)
 	}
 
-	visibility = 1 - (LT.getTime() - actionTextTime) / 0.60
-	if visibility > 0 {
-		local x = math.round((ww+PANEL_WIDTH-fontLarge.getWidth!(actionText))/2)
-		local y = math.round(.1*wh+fontLarge.getHeight!())
-		local a = visibility^.5
-		LG.setColor(0, 0, 0, a)
-		LG.print(actionText, x+1, y+1)
-		LG.setColor(1, 1, 1, a)
-		LG.print(actionText, x, y)
-	}
+	LG.draw(canvasGui)
+}
+
+
+
+export onResize :: (w,h:int) {
+	createCanvases()
 }
 
 
@@ -345,6 +423,7 @@ export main :: () {
 	loveTable.wheelmoved    = wrapFunctionInGloaErrorHandler(onMouseWheel)
 	loveTable.update        = wrapFunctionInGloaErrorHandler(onUpdate)
 	loveTable.draw          = wrapFunctionInGloaErrorHandler(onDraw)
+	loveTable.resize        = wrapFunctionInGloaErrorHandler(onResize)
 	loveTable.errhand       = nil
 	loveTable.errorhandler  = nil
 }
