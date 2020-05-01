@@ -19,6 +19,7 @@ export LK :: love.keyboard
 export LT :: love.timer
 
 export !self
+export !load "misc"
 export !load "panel"
 export !load "workspace"
 
@@ -53,6 +54,8 @@ export messageTextTime = -9999.00
 export isPositioningParticles   = false
 export scheduleSaveWorkspace    = false
 export scheduleRecreateCanvases = false
+
+export keysPressedThisFrame: struct { !key:LK.KeyConstant, !value:bool }
 
 -- Saved settings.
 export showProjectSettings = true
@@ -161,6 +164,7 @@ export onLoad :: (args:[]string, argsRaw:[]string) {
 	io.disableBuffering(io.STDERR)
 
 	LF.setIdentity("Hot Particles")
+	LK.setKeyRepeat(true)
 
 	fontSmall  = LG.newFont(10)
 	fontNormal = LG.newFont(12)
@@ -191,14 +195,18 @@ export onLoad :: (args:[]string, argsRaw:[]string) {
 
 
 
-export onKeyPressed :: (key:string, scancode:string, isRepeat:bool) {
+export onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool) {
 	if love.mouse.isGrabbed()  return
+
+	keysPressedThisFrame[key] = true
+	local mod                 = getModifierKey()
+
 	if key == {
 		case "r":      for openProjects[currentProjectIndex].systems { it.particles.reset!() ; it.particles.start!() }
 		case "escape": LE.quit(0)
 		case "f1":     showStats        = not showStats        ; scheduleSaveWorkspace = true
 		case "f2":     showPanelNumbers = not showPanelNumbers ; scheduleSaveWorkspace = true
-		case "f10":    if LK.isDown("lctrl","rctrl")  LE.restart()
+		case "f10":    if mod == ModifierKey.C  LE.restart()
 	}
 }
 
@@ -403,6 +411,8 @@ export onDraw :: () {
 	}
 
 	LG.draw(canvasGui)
+
+	keysPressedThisFrame = {} -- We have to reset this here instead of in onUpdate() as some keys are processed while we draw things.
 }
 
 

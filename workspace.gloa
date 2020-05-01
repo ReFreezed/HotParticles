@@ -161,7 +161,8 @@ local readInt :: (line:string, ptr:int) -> (success:bool, ptr:int, n:int) {
 	return true, cast(int)_ptr, n
 }
 local readFloat :: (line:string, ptr:int) -> (success:bool, ptr:int, n:float) {
-	local found, nStr, _ptr = matchPattern(line, "^ +(%-?%d*%.?%d+)()", ptr)
+	local         found, nStr, _ptr = matchPattern(line, "^ +(%-?%d*%.?%d+[Ee][-+]?%d+)()", ptr)
+	if not found  found, nStr, _ptr = matchPattern(line, "^ +(%-?%d*%.?%d+)()",             ptr)
 	if not found  return false, NULL, NULL
 
 	local ok, n = stringToFloat(cast(string)nStr)

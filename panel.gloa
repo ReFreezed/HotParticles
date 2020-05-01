@@ -40,6 +40,7 @@ local PanelState :: struct {
 	my: int,
 	lastPanelY: int,
 	panelItem: int,
+	mod = ModifierKey.NONE,
 }
 
 
@@ -102,11 +103,17 @@ local drawPanelDirection :: (state:PanelState, label1,label2:string, angle:float
 
 	local hovered = isHoveringPanelItemCircle(state, x, y, RADIUS)
 	local pressed = hovered ? isPressingOrMayPress(state) : 0
+
 	if pressed == 1 {
 		draggedPanelItem = state.panelItem
 		angle            = math.atan(state.my-y, state.mx-x)
+		if state.mod == ModifierKey.C  angle = math.round(angle * 8/math.TAU) / 8*math.TAU
 
-		if LK.isDown("lctrl","rctrl")  angle = math.round(angle*8/math.TAU)/8*math.TAU
+	} elseif hovered and (keysPressedThisFrame.left or keysPressedThisFrame.right) {
+		local delta = math.TAU * ((state.mod == ModifierKey.S) ? 45/360 : (state.mod == ModifierKey.C) ? 1/360 : 5/360)
+		angle       = ((keysPressedThisFrame.left ? angle-delta : angle+delta) + math.PI) % math.TAU - math.PI
+		pressed     = 1
+		scheduleSaveWorkspace = true
 	}
 
 	drawLabels(label1, label2, math.round(y-state.fontH/2))
@@ -164,13 +171,12 @@ local drawSliderValue :: (sliderX,sliderY:float, sliderW,sliderH:float, value:fl
 	}
 }
 
-local drawPanelSlider ::
-	(
-		state:PanelState, label1,label2:string, valueMin,valueMax:float, value:float,
-		readoutMultiplier:float, readoutFormat:string, other:float|none=nil
-	)
-	-> (pressedMouseButton:int, value:float)
-{
+local drawPanelSlider :: (state:PanelState,
+	label1,label2:string, valueMin,valueMax:float, value:float,
+	readoutMultiplier:float, readoutFormat:string, other:float|none=nil
+) -> (
+	pressedMouseButton:int, value:float
+) {
 	state.panelItem += 1
 
 	local w = PANEL_WIDTH-LABEL_WIDTH-2*PANEL_SPACING
@@ -180,31 +186,46 @@ local drawPanelSlider ::
 
 	local hovered = isHoveringPanelItemRectangle(state, x, y, w, h)
 	local pressed = hovered ? isPressingOrMayPress(state) : 0
+
 	if pressed == 1 {
 		draggedPanelItem = state.panelItem
 		value            = math.lerp(valueMin, valueMax, math.clamp01((state.mx-x)/w))
+		if state.mod == ModifierKey.C  value = math.lerp(valueMin, valueMax, math.round(math.clamp01((state.mx-x)/w)*16)/16)
 
-		if LK.isDown("lctrl","rctrl")  value = math.lerp(valueMin, valueMax, math.round(math.clamp01((state.mx-x)/w)*16)/16)
+	} elseif hovered and (keysPressedThisFrame.left or keysPressedThisFrame.right) {
+		local delta = (valueMax-valueMin) * ((state.mod == ModifierKey.S) ? 1/16 : (state.mod == ModifierKey.C) ? 1/1024 : 1/128)
+		value       = math.clamp((keysPressedThisFrame.left ? value-delta : value+delta), valueMin, valueMax)
+		pressed     = 1
+		scheduleSaveWorkspace = true
 	}
 
 	drawLabels(label1, label2, state.panelY)
 
+	-- Background.
 	LG.setColor(0, 0, 0)
 	LG.rectangle(LG.DrawMode.FILL, x, y, w, h)
+
+	-- The other value.
 	if other ~= nil {
-		local valueX = x+w*(           (value)-valueMin)/(valueMax-valueMin)
-		local otherX = x+w*(cast(float)(other)-valueMin)/(valueMax-valueMin)
+		local valueX = (x+2) + (w-4) * (           (value)-valueMin) / (valueMax-valueMin)
+		local otherX = (x+2) + (w-4) * (cast(float)(other)-valueMin) / (valueMax-valueMin)
 		LG.setColor(1, 1, 1, .25)
 		LG.rectangle(LG.DrawMode.FILL, valueX, y+.25*h, otherX-valueX, h/2)
 	}
+
+	-- Hover effect.
 	if hovered {
 		LG.setColor(1, 1, 1, HOVER_OUTLINE_OPACITY)
 		LG.rectangle(LG.DrawMode.LINE, x-.5, y-.5, w+1, h+1)
 	}
+
+	-- Guide lines.
 	LG.setColor(1, 1, 1, GUIDE_LINE_OPACITY)
 	LG.rectangle(LG.DrawMode.FILL, x+.25*w, y, 1, h)
 	LG.rectangle(LG.DrawMode.FILL, x+.50*w, y, 1, h)
 	LG.rectangle(LG.DrawMode.FILL, x+.75*w, y, 1, h)
+
+	-- The actual value.
 	drawSliderValue(x, y, w, h, (value-valueMin)/(valueMax-valueMin), value*readoutMultiplier, readoutFormat)
 
 	state.lastPanelY  = state.panelY
@@ -217,9 +238,11 @@ local drawPanelColor :: (state:PanelState, label1,label2:string, r,g,b:float,a:f
 
 	local SLIDER_HEIGHT :: 12
 
-	local w = PANEL_WIDTH-LABEL_WIDTH-2*PANEL_SPACING
-	local h = SLIDER_HEIGHT * (a == nil ? 3 : 4)
-	local x = LABEL_WIDTH+PANEL_SPACING
+	local components = (a == nil ? 3 : 4)
+
+	local w = PANEL_WIDTH - LABEL_WIDTH - 2*PANEL_SPACING
+	local h = SLIDER_HEIGHT * components
+	local x = LABEL_WIDTH + PANEL_SPACING
 	local y = state.panelY
 
 	!import "color"
@@ -227,20 +250,36 @@ local drawPanelColor :: (state:PanelState, label1,label2:string, r,g,b:float,a:f
 
 	local hovered = isHoveringPanelItemRectangle(state, x, y, w, h)
 	local pressed = hovered ? isPressingOrMayPress(state) : 0
+
+	local component  = math.clamp(math.floor(1+(state.my-y)/SLIDER_HEIGHT), 1, components)
+	local hsvChanged = false
+
 	if pressed == 1 {
 		draggedPanelItem = state.panelItem
 
-		if not draggedPanelSubItem {
-			draggedPanelSubItem = math.clamp(math.floor(1+(state.my-y)/SLIDER_HEIGHT), 1, 4)
-		}
+		if not draggedPanelSubItem  draggedPanelSubItem = component
+		component = draggedPanelSubItem
 
 		if draggedPanelSubItem == {
-			case 1: hue        = math.clamp01((state.mx-x)/w) ; r, g, b = hsvToRgb(hue, saturation, value)
-			case 2: saturation = math.clamp01((state.mx-x)/w) ; r, g, b = hsvToRgb(hue, saturation, value)
-			case 3: value      = math.clamp01((state.mx-x)/w) ; r, g, b = hsvToRgb(hue, saturation, value)
+			case 1: hue        = math.clamp01((state.mx-x)/w) ; hsvChanged = true
+			case 2: saturation = math.clamp01((state.mx-x)/w) ; hsvChanged = true
+			case 3: value      = math.clamp01((state.mx-x)/w) ; hsvChanged = true
 			case 4: a          = math.clamp01((state.mx-x)/w)
 		}
+
+	} elseif hovered and (keysPressedThisFrame.left or keysPressedThisFrame.right) {
+		local delta = ((state.mod == ModifierKey.S) ? 16/255 : (state.mod == ModifierKey.C) ? 1/255 : 4/255)
+		if component == {
+			case 1: hue        = math.clamp01((keysPressedThisFrame.left ? hue           -delta : hue           +delta)) ; hsvChanged = true
+			case 2: saturation = math.clamp01((keysPressedThisFrame.left ? saturation    -delta : saturation    +delta)) ; hsvChanged = true
+			case 3: value      = math.clamp01((keysPressedThisFrame.left ? value         -delta : value         +delta)) ; hsvChanged = true
+			case 4: a          = math.clamp01((keysPressedThisFrame.left ? cast(float)(a)-delta : cast(float)(a)+delta))
+		}
+		pressed               = 1
+		scheduleSaveWorkspace = true
 	}
+
+	if hsvChanged  r, g, b = hsvToRgb(hue, saturation, value)
 
 	drawLabels(label1, label2, state.panelY)
 	-- drawLabels(label1, label2, math.round(state.panelY+(h-state.fontH)/2))
@@ -258,7 +297,7 @@ local drawPanelColor :: (state:PanelState, label1,label2:string, r,g,b:float,a:f
 
 		LG.setColor(1, 1, 1)
 		LG.draw(imageRainbow, x, sliderY, 0, rainbowSx, rainbowSy)
-		drawSliderValue(x, sliderY, w, SLIDER_HEIGHT, hue, 360, "%d°")
+		drawSliderValue(x, sliderY, w, SLIDER_HEIGHT, hue, hue*360, "%d°")
 		sliderY += SLIDER_HEIGHT
 
 		local r2, g2, b2 = hsvToRgb(hue, 1, 1)
@@ -266,7 +305,7 @@ local drawPanelColor :: (state:PanelState, label1,label2:string, r,g,b:float,a:f
 		LG.rectangle(LG.DrawMode.FILL, x, sliderY, w, SLIDER_HEIGHT)
 		LG.setColor(r2, g2, b2)
 		LG.draw(imageGradient, x, sliderY, 0, gradientSx, gradientSy)
-		drawSliderValue(x, sliderY, w, SLIDER_HEIGHT, saturation, 100, "%d%%")
+		drawSliderValue(x, sliderY, w, SLIDER_HEIGHT, saturation, saturation*100, "%d%%")
 		sliderY += SLIDER_HEIGHT
 
 		r2, g2, b2 = hsvToRgb(hue, saturation, 1)
@@ -274,7 +313,7 @@ local drawPanelColor :: (state:PanelState, label1,label2:string, r,g,b:float,a:f
 		LG.rectangle(LG.DrawMode.FILL, x, sliderY, w, SLIDER_HEIGHT)
 		LG.setColor(r2, g2, b2)
 		LG.draw(imageGradient, x, sliderY, 0, gradientSx, gradientSy)
-		drawSliderValue(x, sliderY, w, SLIDER_HEIGHT, value, 100, "%d%%")
+		drawSliderValue(x, sliderY, w, SLIDER_HEIGHT, value, value*100, "%d%%")
 		sliderY += SLIDER_HEIGHT
 
 		if a ~= nil {
@@ -284,13 +323,12 @@ local drawPanelColor :: (state:PanelState, label1,label2:string, r,g,b:float,a:f
 			drawChecker(x, sliderY, w, SLIDER_HEIGHT)
 			LG.setColor(r, g, b)
 			LG.draw(imageGradient, x, sliderY, 0, gradientSx, gradientSy)
-			drawSliderValue(x, sliderY, w, SLIDER_HEIGHT, cast(float)a, 100, "%d%%")
+			drawSliderValue(x, sliderY, w, SLIDER_HEIGHT, cast(float)a, cast(float)(a)*100, "%d%%")
 		}
 
 		if hovered {
-			local outlineY = y + ((state.my-y)//SLIDER_HEIGHT) * SLIDER_HEIGHT
 			LG.setColor(1, 1, 1, HOVER_OUTLINE_OPACITY_STRONG)
-			LG.rectangle(LG.DrawMode.LINE, x-.5, outlineY-.5, w+1, SLIDER_HEIGHT+1)
+			LG.rectangle(LG.DrawMode.LINE, x-.5, y+(component-1)*SLIDER_HEIGHT-.5, w+1, SLIDER_HEIGHT+1)
 		}
 	}
 
@@ -375,6 +413,7 @@ export drawPanel :: () {
 		fontH  = fontNormal.getHeight!(),
 		mx     = love.mouse.getX(),
 		my     = love.mouse.getY()-math.round(panelScroll),
+		mod    = getModifierKey(),
 	}
 
 	-- Note: Some things may render incorrectly for one frame if the user does
@@ -422,32 +461,34 @@ export drawPanel :: () {
 		if pressed == 1  showProjectSettings = (i == 1)
 	}
 	if showProjectSettings {
-		local pressed, i = drawPanelButtons(state, "PixelateWorld", "", BUTTON_LABELS_YES_NO, selected=(project.pixelateWorld ? 1 : 2))
-		if pressed == 1 {
-			project.pixelateWorld    = (i == 1)
-			scheduleRecreateCanvases = true
+		drawPanelSeparator(state)
+		do {
+			local pressed, i = drawPanelButtons(state, "PixelateWorld", "", BUTTON_LABELS_YES_NO, selected=(project.pixelateWorld ? 1 : 2))
+			if pressed == 1 {
+				project.pixelateWorld    = (i == 1)
+				scheduleRecreateCanvases = true
 
-			if project.pixelateWorld and project.zoomLevel < -1 {
-				project.zoomLevel  = -1
-				project.zoomSource = project.zoom
-				project.zoomTarget = 2^project.zoomLevel
+				if project.pixelateWorld and project.zoomLevel < -1 {
+					project.zoomLevel  = -1
+					project.zoomSource = project.zoom
+					project.zoomTarget = 2^project.zoomLevel
+				}
 			}
 		}
-	}
-	if showProjectSettings {
-		local pressed, i = drawPanelButtons(state, "PixelateTextures", "", BUTTON_LABELS_YES_NO, selected=(project.pixelateTextures ? 1 : 2))
-		if pressed == 1 {
-			project.pixelateTextures = (i == 1)
-			updateParticleImageFilters()
+		do {
+			local pressed, i = drawPanelButtons(state, "PixelateTextures", "", BUTTON_LABELS_YES_NO, selected=(project.pixelateTextures ? 1 : 2))
+			if pressed == 1 {
+				project.pixelateTextures = (i == 1)
+				updateParticleImageFilters()
+			}
 		}
-	}
-	if showProjectSettings {
 		drawPanelSeparator(state)
+		do {
+			local pressed, r,g,b = drawPanelColor(state, "Background", "", project.bgColorR, project.bgColorG, project.bgColorB, nil)
 
-		local pressed, r,g,b = drawPanelColor(state, "Background", "", project.bgColorR, project.bgColorG, project.bgColorB, nil)
-
-		if pressed == 1 {
-			project.bgColorR, project.bgColorG, project.bgColorB = r,g,b
+			if pressed == 1 {
+				project.bgColorR, project.bgColorG, project.bgColorB = r,g,b
+			}
 		}
 	}
 
@@ -455,7 +496,7 @@ export drawPanel :: () {
 	local system = project.systems[project.systemIndex]
 	drawPanelSeparator(state, true)
 	do {
-		local doRemove = LK.isDown("lalt","ralt")
+		local doRemove = (state.mod == ModifierKey.A)
 
 		local buttonLabels: []string
 		for project.systems  buttonLabels[itIndex] = format("%d", itIndex)
@@ -503,10 +544,10 @@ export drawPanel :: () {
 	drawPanelSeparator(state)
 	do {
 		local lifetime = math.max(ps.getEmitterLifetime!(), 0)
-		local pressed, ^lifetime = drawPanelSlider(state, "Lifetime", "emitter", 0, 20, lifetime,other=0, 1, (lifetime ? "%.2f sec" : "∞"))
+		local pressed, ^lifetime = drawPanelSlider(state, "Lifetime", "emitter", 0, 20, lifetime,other=0, 1, (lifetime > 0 ? "%.2f sec" : "∞"))
 		if pressed == 1 {
-			ps.setEmitterLifetime!(lifetime ?: -1.0)
-			if not lifetime  ps.start!()
+			ps.setEmitterLifetime!(lifetime > 0 ? lifetime : -1.0)
+			if lifetime <= 0  ps.start!()
 		}
 	}
 	do {
@@ -669,7 +710,7 @@ export drawPanel :: () {
 	drawPanelSeparator(state, true)
 	do {
 		local sizes    = {ps.getSizesAsVararg!()}
-		local doRemove = LK.isDown("lalt","ralt")
+		local doRemove = (state.mod == ModifierKey.A)
 		local buttonLabels: []string
 
 		if doRemove {
@@ -696,7 +737,7 @@ export drawPanel :: () {
 	do {
 		local sizes      = {ps.getSizesAsVararg!()}
 		local anyPressed = false
-		local moveAll    = LK.isDown("lctrl","rctrl") and LK.isDown("lshift","rshift")
+		local moveAll    = state.mod == ModifierKey.CS
 
 		for i = 1, #sizes {
 			local pressed, size = drawPanelSlider(state, "", format("#%d", i), 0, 8, sizes[i],other=0, 1, "%.2f")
@@ -721,7 +762,7 @@ export drawPanel :: () {
 	drawPanelSeparator(state)
 	do {
 		local colors   = system.colors
-		local doRemove = LK.isDown("lalt","ralt")
+		local doRemove = (state.mod == ModifierKey.A)
 		local buttonLabels: []string
 
 		if doRemove {
@@ -754,7 +795,7 @@ export drawPanel :: () {
 	do {
 		local colors     = system.colors
 		local anyPressed = false
-		local moveAll    = LK.isDown("lctrl","rctrl") and LK.isDown("lshift","rshift")
+		local moveAll    = state.mod == ModifierKey.CS
 
 		for i = 1, #colors, 4 {
 			local pressed, r,g,b,a = drawPanelColor(state, "", format("#%d", (i+3)//4), colors[i], colors[i+1], colors[i+2], colors[i+3])
