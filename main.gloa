@@ -203,10 +203,12 @@ export onKeyPressed :: (key:string, scancode:string, isRepeat:bool) {
 }
 
 export onMousePressed :: (mx,my:int, mbutton:int, isTouch:bool, presses:int) {
+	if love.mouse.isGrabbed()  return
+
+	if mx < PANEL_WIDTH  pressedOnPanelWithMouseButton = mbutton
+
 	if mbutton == 1 {
-		if mx < PANEL_WIDTH {
-			pressedPanelThisFrame = true
-		} else {
+		if not pressedOnPanelWithMouseButton {
 			isPositioningParticles = true
 			onMouseMoved(mx,my, 0,0, isTouch)
 		}
