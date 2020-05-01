@@ -56,7 +56,8 @@ export zoomSource = 1.0
 export zoomTarget = 1.0
 
 -- Saved settings.
-export showStats = true
+export showProjectSettings = true
+export showStats           = true
 
 
 
@@ -81,9 +82,9 @@ export Project :: struct {
 	systemIndex = 1,
 	systems: []System,
 
-	bgColorR = .05,
-	bgColorG = .05,
-	bgColorB = .05,
+	bgColorR = .15,
+	bgColorG = .15,
+	bgColorB = .15,
 }
 
 

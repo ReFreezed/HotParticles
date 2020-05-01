@@ -49,7 +49,8 @@ export saveWorkspace :: () {
 	local buffer: []string
 	insert(buffer, format("%d\n", LAST_FILE_VERSION))
 
-	insert(buffer, "stats") ; writeValue(buffer, eol=true, showStats)
+	insert(buffer, "showProjectSettings") ; writeValue(buffer, eol=true, showProjectSettings)
+	insert(buffer, "stats")               ; writeValue(buffer, eol=true, showStats)
 
 	for project: openProjects {
 		insert(buffer, ":project\n")
@@ -271,6 +272,11 @@ export loadWorkspace :: () -> (success:bool, gotError:bool, projects:[]Project) 
 
 		if project == NULL {
 			if param == {
+				case "showProjectSettings":
+					local ^ok, ^ptr, _showProjectSettings = readBool(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
+					showProjectSettings = _showProjectSettings
+
 				case "stats":
 					local ^ok, ^ptr, _showStats = readBool(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
 					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
