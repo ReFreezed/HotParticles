@@ -5,6 +5,10 @@
 --=
 --============================================================]]
 
+local MAX_BUFFER_SIZE :: 16000 -- Default buffer size for ParticleSystem is 1000. @Incomplete: make this configurable.
+
+
+
 export !import "basic"
 export !import "color"
 export !import "string"
@@ -41,8 +45,8 @@ export imageRainbow:  LG.Image = NULL
 
 export particleImages: struct { !key:string, !value:LG.Image }
 
-export canvasGui:   LG.Canvas = NULL
-export canvasWorld: LG.Canvas = NULL
+local canvasGui:   LG.Canvas = NULL
+local canvasWorld: LG.Canvas = NULL
 
 export openProjects: []Project
 export currentProjectIndex = 1
@@ -58,6 +62,8 @@ export scheduleSaveWorkspace    = false
 export scheduleRecreateCanvases = false
 
 export keysPressedThisFrame: struct { !key:LK.KeyConstant, !value:bool }
+
+local lastParticleDrawTime = 0.0
 
 -- Saved settings.
 export showProjectSettings = true
@@ -294,6 +300,15 @@ export onUpdate :: (dt:float) {
 		ps.update!(dt)
 
 		systemsActive = systemsActive or ps.isActive!() or ps.getCount!() > 0
+
+		local bufferSize = ps.getBufferSize!()
+
+		if ps.getCount!() > bufferSize-10 and bufferSize < MAX_BUFFER_SIZE {
+			ps.setBufferSize!(2*bufferSize)
+
+			actionText     = "Increased buffer size"
+			actionTextTime = LT.getTime()
+		}
 	}
 
 	if not systemsActive {
@@ -346,12 +361,15 @@ export onDraw :: () {
 			else
 				LG.setColor(0, 0, 0, .7)
 
-			local particleCountTotal = 0
-
 			local drawStatsLine = [x,y,fontH] (s:string, ...:int|float|string) {
 				LG.print(format(s, ...), x, y)
 				y += fontH+1
 			}
+
+			drawStatsLine("FPS: %d", LT.getFPS())
+			drawStatsLine("Particle draw time: %.3f ms", lastParticleDrawTime*1000)
+
+			local particleCountTotal = 0
 
 			for system: project.systems {
 				local count         = system.particles.getCount!()
@@ -415,11 +433,15 @@ export onDraw :: () {
 		LG.translate((ww-PANEL_WIDTH)/2, wh/2)
 		if not project.pixelateWorld  LG.scale(project.zoom)
 
+		local time = LT.getTime()
+
 		for system: project.systems {
 			LG.setBlendMode(system.blendMode)
 			LG.draw(system.particles)
 		}
 		LG.setBlendMode(LG.BlendMode.ALPHA)
+
+		lastParticleDrawTime = LT.getTime()-time
 
 		LG.reset()
 	}
