@@ -22,7 +22,10 @@ local CONTEXT_MENU_MIN_WIDTH :: 120
 local CONTEXT_MENU_PADDING_X :: 15
 local CONTEXT_MENU_PADDING_Y :: 5
 
-local BUTTON_LABELS_YES_NO :: {"yes", "no"}
+local BUTTONS_YES_NO: []Button : {
+	{label="yes"},
+	{label="no"},
+}
 
 
 
@@ -41,6 +44,13 @@ local panelItemToPasteAt = 0
 local pasteTarget        = 0 -- E.g. "the hue" in a color.
 
 
+
+local Button :: struct {
+	label   = "",
+	tooltip = "",
+	image   = "",
+	value: any,
+}
 
 local PanelState :: struct {
 	panelY:     int,
@@ -447,10 +457,12 @@ local drawPanelColor :: (state:PanelState, label1,label2:string, hue,saturation,
 local ButtonStyle :: enum { NORMAL, TABS }
 
 local drawPanelButtons :: (state:PanelState,
-	label1,label2:string, buttonLabels:[]string, selected=0, style=ButtonStyle.NORMAL, lastButtonWidth=0, showLabel=true, enableDragging=false
+	label1,label2:string, buttons:[]Button, selected=0, style=ButtonStyle.NORMAL, lastButtonWidth=0, showLabel=true, enableDragging=false
 ) -> (
 	pressedMouseButton:int, pressedIndex:int, dragged:bool
 ) {
+	local IMAGE_SIZE :: 20 -- @UX: Don't stretch the image.
+
 	state.panelItem += 1
 
 	local highlightAll = (selected == 0)
@@ -460,7 +472,12 @@ local drawPanelButtons :: (state:PanelState,
 	local w = PANEL_WIDTH - x-PANEL_SPACING
 	local h = state.fontH
 
-	local buttonW0 = lastButtonWidth ? (w-lastButtonWidth)/(#buttonLabels-1) : w/#buttonLabels
+	for buttons  if it.image {
+		h = math.max(h, IMAGE_SIZE+2*PANEL_SPACING)
+		break
+	}
+
+	local buttonW0 = lastButtonWidth ? (w-lastButtonWidth)/(#buttons-1) : w/#buttons
 
 	local hovered = isHoveringPanelItemRectangle(state, x, y, w, h)
 	local pressed = hovered ? isPressingOrMayPress(state) : 0
@@ -469,7 +486,7 @@ local drawPanelButtons :: (state:PanelState,
 	local dragged = false
 
 	if pressed {
-		pressedIndex = math.clamp(math.floor(1+(state.mx-x)/buttonW0), 1, #buttonLabels)
+		pressedIndex = math.clamp(math.floor(1+(state.mx-x)/buttonW0), 1, #buttons)
 
 		if enableDragging and pressed == 1 {
 			if not draggedPanelItem
@@ -481,23 +498,22 @@ local drawPanelButtons :: (state:PanelState,
 		}
 	}
 
-	if showLabel  drawLabels(label1, label2, state.panelY)
+	if showLabel  drawLabels(label1, label2, y+math.round((h-state.fontH)/2))
 
-	for buttonLabels {
+	for buttons {
 		local buttonX1 = math.round(x + (itIndex-1)*buttonW0)
 		local buttonX2 = math.round(x + (itIndex  )*buttonW0)
 		local buttonW  = buttonW0
 
-		if lastButtonWidth and itIndex == #buttonLabels {
+		if lastButtonWidth and itIndex == #buttons {
 			buttonX2 = x+w
 			buttonW  = buttonX2-buttonX1
 		}
 
-		local padding = (style == ButtonStyle.TABS) ? 8 : 3
+		local padding = style == ButtonStyle.TABS ? 8 : PANEL_SPACING
+		local faded   = not (highlightAll or itIndex == selected)
 
-		local textX = buttonX1 + math.max(math.round((buttonW-fontNormal.getWidth!(it))/2), padding)
-		local faded = not (highlightAll or itIndex == selected)
-
+		-- Button background.
 		if hovered and state.mx >= buttonX1 and state.mx < buttonX2
 			LG.setColor(1, 1, 1, .45)
 		elseif faded
@@ -512,15 +528,41 @@ local drawPanelButtons :: (state:PanelState,
 			LG.rectangle(LG.DrawMode.FILL, buttonX1+1, y+1, buttonX2-buttonX1-2, h-2, 3)
 		}
 
-		local scissorX1 = buttonX1+(padding-1)
-		local scissorX2 = buttonX2-(padding-1)
+		-- Button image.
+		if it.image {
+			local image  = particleImages[it.image]
+			local iw, ih = image.getDimensions!()
+			local sx     = IMAGE_SIZE/iw
+			local sy     = IMAGE_SIZE/ih
 
-		if scissorX2 > scissorX1 {
-			LG.push(LG.StackType.ALL)
-			LG.intersectScissor(scissorX1, 0, scissorX2-scissorX1, LG.getHeight())
-			LG.setColor(1, 1, 1, (faded ? .6 : 1.0))
-			LG.print(it, textX, y)
-			LG.pop()
+			LG.setColor(1, 1, 1)
+			if it.label
+				LG.draw(image, buttonX1+padding, y+PANEL_SPACING, 0, sx, sy)
+			else
+				LG.draw(image, math.round(buttonX1+(buttonW-IMAGE_SIZE)/2), y+PANEL_SPACING, 0, sx, sy)
+		}
+
+		-- Button label.
+		if it.label {
+			local scissorX1 = buttonX1+(padding-1)
+			local scissorX2 = buttonX2-(padding-1)
+
+			if scissorX2 > scissorX1 {
+				local textY = y + math.round((h-state.fontH)/2)
+				local textX: int
+
+				if it.image {
+					textX = buttonX1 + padding + IMAGE_SIZE + PANEL_SPACING
+				} else {
+					textX = buttonX1 + math.max(math.round((buttonW-fontNormal.getWidth!(it.label))/2), padding)
+				}
+
+				LG.push(LG.StackType.ALL)
+				LG.intersectScissor(scissorX1, 0, scissorX2-scissorX1, LG.getHeight())
+				LG.setColor(1, 1, 1, (faded ? .6 : 1.0))
+				LG.print(it.label, textX, textY)
+				LG.pop()
+			}
 		}
 	}
 
@@ -548,21 +590,21 @@ export drawPanel :: () {
 	local project = openProjects[currentProjectIndex]
 
 	do {
-		local buttonLabels: []string
-		for openProjects  buttonLabels[itIndex] = "(unnamed)" -- Use filenames on tabs.
+		local buttons: []Button
+		for openProjects  buttons[itIndex] = {label="(unnamed)"} -- @Incomplete: Use filenames on tabs.
 
-		insert(buttonLabels, "+")
+		insert(buttons, cast(Button){label="+"})
 
-		local pressed, i, dragged = drawPanelButtons(state, "", "", buttonLabels, selected=currentProjectIndex, style=ButtonStyle.TABS, showLabel=false, lastButtonWidth=32, enableDragging=true)
+		local pressed, i, dragged = drawPanelButtons(state, "", "", buttons, selected=currentProjectIndex, style=ButtonStyle.TABS, showLabel=false, lastButtonWidth=32, enableDragging=true)
 		if dragged {
-			if i < #buttonLabels {
+			if i < #buttons {
 				remove(openProjects, currentProjectIndex)
 				insert(openProjects, i, project)
 				currentProjectIndex = i
 			}
 
 		} elseif pressed == 1 {
-			if i < #buttonLabels {
+			if i < #buttons {
 				currentProjectIndex      = i
 				scheduleRecreateCanvases = true
 				updateParticleImageFilters()
@@ -575,7 +617,7 @@ export drawPanel :: () {
 				updateParticleImageFilters()
 			}
 
-		} elseif pressed == 3 and i < #buttonLabels {
+		} elseif pressed == 3 and i < #buttons {
 			-- @UX: Confirm closing project if there are changes.
 			remove(openProjects, i)
 			if openProjects[1] == NULL
@@ -589,9 +631,9 @@ export drawPanel :: () {
 		}
 	}
 	do {
-		local BUTTON_LABELS_SHOW :: {"show settings"}
-		local BUTTON_LABELS_HIDE :: {"hide settings"}
-		local pressed, i = drawPanelButtons(state, "", "", (showProjectSettings ? BUTTON_LABELS_HIDE : BUTTON_LABELS_SHOW), showLabel=false)
+		local BUTTONS_SHOW: []Button : {{label="show settings"}}
+		local BUTTONS_HIDE: []Button : {{label="hide settings"}}
+		local pressed, i = drawPanelButtons(state, "", "", (showProjectSettings ? BUTTONS_HIDE : BUTTONS_SHOW), showLabel=false)
 		if pressed == 1 {
 			showProjectSettings   = not showProjectSettings
 			scheduleSaveWorkspace = true
@@ -600,7 +642,7 @@ export drawPanel :: () {
 	if showProjectSettings {
 		drawPanelSeparator(state)
 		do {
-			local pressed, i = drawPanelButtons(state, "PixelateWorld", "", BUTTON_LABELS_YES_NO, selected=(project.pixelateWorld ? 1 : 2))
+			local pressed, i = drawPanelButtons(state, "PixelateWorld", "", BUTTONS_YES_NO, selected=(project.pixelateWorld ? 1 : 2))
 			if pressed == 1 {
 				project.pixelateWorld    = (i == 1)
 				scheduleRecreateCanvases = true
@@ -613,7 +655,7 @@ export drawPanel :: () {
 			}
 		}
 		do {
-			local pressed, i = drawPanelButtons(state, "PixelateTextures", "", BUTTON_LABELS_YES_NO, selected=(project.pixelateTextures ? 1 : 2))
+			local pressed, i = drawPanelButtons(state, "PixelateTextures", "", BUTTONS_YES_NO, selected=(project.pixelateTextures ? 1 : 2))
 			if pressed == 1 {
 				project.pixelateTextures = (i == 1)
 				updateParticleImageFilters()
@@ -633,23 +675,21 @@ export drawPanel :: () {
 	local system = project.systems[project.systemIndex]
 	drawPanelSeparator(state, true)
 	do {
-		local doRemove = (state.mod == ModifierKey.A)
+		local buttons: []Button
+		for project.systems  buttons[itIndex] = {label=format((it.visible ? "%d" : "(%d)"), itIndex)}
 
-		local buttonLabels: []string
-		for project.systems  buttonLabels[itIndex] = format((it.visible ? "%d" : "(%d)"), itIndex)
+		insert(buttons, cast(Button){label="+"})
 
-		insert(buttonLabels, "+")
-
-		local pressed, i, dragged = drawPanelButtons(state, "ParticleSystem", "", buttonLabels, selected=project.systemIndex, lastButtonWidth=32, style=ButtonStyle.TABS, enableDragging=true)
+		local pressed, i, dragged = drawPanelButtons(state, "ParticleSystem", "", buttons, selected=project.systemIndex, lastButtonWidth=32, style=ButtonStyle.TABS, enableDragging=true)
 		if dragged {
-			if i < #buttonLabels {
+			if i < #buttons {
 				remove(project.systems, project.systemIndex)
 				insert(project.systems, i, system)
 				project.systemIndex = i
 			}
 
 		} elseif pressed == 1 {
-			if i < #buttonLabels {
+			if i < #buttons {
 				project.systemIndex = i
 			} else {
 				stopDraggingPanelItem()
@@ -659,9 +699,9 @@ export drawPanel :: () {
 			system = project.systems[project.systemIndex]
 
 		} elseif pressed == 2 {
-			if i < #buttonLabels  project.systems[i].visible = not project.systems[i].visible
+			if i < #buttons  project.systems[i].visible = not project.systems[i].visible
 
-		} elseif pressed == 3 and i < #buttonLabels {
+		} elseif pressed == 3 and i < #buttons {
 			-- @UX: Confirm removal of system.
 			remove(project.systems, i)
 			if project.systems[1] == NULL
@@ -692,23 +732,23 @@ export drawPanel :: () {
 	-- Misc params.
 	local ps = system.particles
 	do {
-		local textureNames = {"light","moon"} -- @Incomplete: Dynamically get this list.
-		local i            = indexOf(textureNames, system.textureName)
-		local pressed, ^i  = drawPanelButtons(state, "Texture", "", textureNames, selected=i)
+		local buttons: []Button = {{value="light",tooltip="light",image="light"},{value="moon",tooltip="moon",image="moon"}} -- @Incomplete: Dynamically create this list.
+		local _, i              = indexWith(buttons, "value", system.textureName)
+		local pressed, ^i       = drawPanelButtons(state, "Texture", "", buttons, selected=i)
 		if pressed == 1 {
-			system.textureName = textureNames[i]
+			system.textureName = cast(string)buttons[i].value
 			ps.setTexture!(particleImages[system.textureName]) -- @Incomplete: Update offset if system.useCustomOffset is set.
 		}
 	}
 	drawPanelSeparator(state)
 	do {
-		local BUTTON_LABELS :: {"top", "bottom", "random"}
+		local BUTTONS: []Button : {{label="top"},{label="bottom"},{label="random"}}
 		local INSERT_MODE_TO_INDEX: struct { !key:LG.ParticleInsertMode, !value:int } = {
 			[LG.ParticleInsertMode.TOP]    = 1,
 			[LG.ParticleInsertMode.BOTTOM] = 2,
 			[LG.ParticleInsertMode.RANDOM] = 3,
 		}
-		local pressed, i = drawPanelButtons(state, "Insert", "", BUTTON_LABELS, selected=INSERT_MODE_TO_INDEX[ps.getInsertMode!()])
+		local pressed, i = drawPanelButtons(state, "Insert", "", BUTTONS, selected=INSERT_MODE_TO_INDEX[ps.getInsertMode!()])
 		if pressed == 1  if i == {
 			case 1: ps.setInsertMode!(LG.ParticleInsertMode.TOP)
 			case 2: ps.setInsertMode!(LG.ParticleInsertMode.BOTTOM)
@@ -742,7 +782,7 @@ export drawPanel :: () {
 		using LG.AreaSpreadDistribution
 		local distribution, dx,dy, angle, relative = ps.getEmissionArea!()
 
-		local BUTTON_LABELS :: {"none", "uni", "norm", "ellip", "b.ellip", "b.rect"}
+		local BUTTONS: []Button : {{label="none"},{label="uni"},{label="norm"},{label="ellip"},{label="b.ellip"},{label="b.rect"}}
 		local DISTRIBUTION_TO_INDEX: struct { !key:LG.AreaSpreadDistribution, !value:int } = {
 			[NONE]             = 1,
 			[UNIFORM]          = 2,
@@ -751,7 +791,7 @@ export drawPanel :: () {
 			[BORDER_ELLIPSE]   = 5,
 			[BORDER_RECTANGLE] = 6,
 		}
-		local pressed1, i = drawPanelButtons(state, "Area", "distribution", BUTTON_LABELS, selected=DISTRIBUTION_TO_INDEX[distribution])
+		local pressed1, i = drawPanelButtons(state, "Area", "distribution", BUTTONS, selected=DISTRIBUTION_TO_INDEX[distribution])
 		if pressed1 == 1  if i == {
 			case 1: distribution = NONE
 			case 2: distribution = UNIFORM
@@ -770,7 +810,7 @@ export drawPanel :: () {
 
 			local pressed4, ^angle = drawPanelDirection(state, "", "angle", angle)
 
-			local pressed5, ^i = drawPanelButtons(state, "", "dir relative to center", BUTTON_LABELS_YES_NO, selected=(relative ? 1 : 2))
+			local pressed5, ^i = drawPanelButtons(state, "", "dir relative to center", BUTTONS_YES_NO, selected=(relative ? 1 : 2))
 			if pressed5 == 1  relative = (i == 1)
 
 			if pressed1 == 1 or pressed2 == 1 or pressed3 == 1 or pressed4 == 1 or pressed5 == 1 {
@@ -858,7 +898,7 @@ export drawPanel :: () {
 		}
 	}
 	do {
-		local pressed, i = drawPanelButtons(state, "", "relative", BUTTON_LABELS_YES_NO, selected=(ps.hasRelativeRotation!() ? 1 : 2))
+		local pressed, i = drawPanelButtons(state, "", "relative", BUTTONS_YES_NO, selected=(ps.hasRelativeRotation!() ? 1 : 2))
 		if pressed == 1  ps.setRelativeRotation!(i == 1)
 	}
 	drawPanelSeparator(state)
@@ -885,15 +925,15 @@ export drawPanel :: () {
 	do {
 		local sizes    = {ps.getSizesAsVararg!()}
 		local doRemove = (state.mod == ModifierKey.A)
-		local buttonLabels: []string
+		local buttons: []Button
 
 		if doRemove {
-			for i = 1, #sizes  insert(buttonLabels, format("%d", i))
+			for i = 1, #sizes  insert(buttons, cast(Button){label=format("%d", i)})
 		} else {
-			insert(buttonLabels, "+")
+			insert(buttons, cast(Button){label="+"})
 		}
 
-		local pressed, i = drawPanelButtons(state, "Size", (doRemove ? "DEL" : ""), buttonLabels)
+		local pressed, i = drawPanelButtons(state, "Size", (doRemove ? "DEL" : ""), buttons)
 
 		if pressed ~= 1 {
 			-- void
@@ -937,15 +977,15 @@ export drawPanel :: () {
 	do {
 		local colors   = system.colors
 		local doRemove = (state.mod == ModifierKey.A)
-		local buttonLabels: []string
+		local buttons: []Button
 
 		if doRemove {
-			for i = 1, #colors//4  insert(buttonLabels, format("%d", i))
+			for i = 1, #colors//4  insert(buttons, cast(Button){label=format("%d", i)})
 		} else {
-			insert(buttonLabels, "+")
+			insert(buttons, cast(Button){label="+"})
 		}
 
-		local pressed, i = drawPanelButtons(state, "Color", (doRemove ? "DEL" : ""), buttonLabels)
+		local pressed, i = drawPanelButtons(state, "Color", (doRemove ? "DEL" : ""), buttons)
 
 		if pressed ~= 1 {
 			-- void
@@ -988,14 +1028,14 @@ export drawPanel :: () {
 		if anyPressed  updateParticleColors(ps, colors)
 	}
 	do {
-		local BUTTON_LABELS :: {"alpha", "add", "subtract", "screen"}
+		local BUTTONS: []Button : {{label="alpha"},{label="add"},{label="subtract"},{label="screen"}}
 		local BLEND_MODE_TO_INDEX: struct { !key:LG.BlendMode, !value:int } = {
 			[LG.BlendMode.ALPHA]    = 1,
 			[LG.BlendMode.ADD]      = 2,
 			[LG.BlendMode.SUBTRACT] = 3,
 			[LG.BlendMode.SCREEN]   = 4,
 		}
-		local pressed, i = drawPanelButtons(state, "", "blend mode", BUTTON_LABELS, selected=BLEND_MODE_TO_INDEX[system.blendMode])
+		local pressed, i = drawPanelButtons(state, "", "blend mode", BUTTONS, selected=BLEND_MODE_TO_INDEX[system.blendMode])
 		if pressed == 1  if i == {
 			case 1: system.blendMode = LG.BlendMode.ALPHA
 			case 2: system.blendMode = LG.BlendMode.ADD

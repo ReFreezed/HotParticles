@@ -84,10 +84,11 @@ export Project :: struct {
 	pixelateWorld    = false,
 	pixelateTextures = false,
 
+	zoomLevel = 0,
+
 	-- Runtime-only:
 	systemIndex = 1,
 
-	zoomLevel  = 0,
 	zoom       = 1.0,
 	zoomSource = 1.0,
 	zoomTarget = 1.0,
@@ -240,7 +241,12 @@ export onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool)
 
 	if key == {
 		case "escape":
-			if contextMenu ~= NULL  contextMenu = NULL  else  LE.quit(0)
+			if contextMenu ~= NULL {
+				contextMenu = NULL
+			} else {
+				saveWorkspace()
+				LE.quit(0)
+			}
 
 		case "tab":
 			if mod == {
@@ -254,6 +260,13 @@ export onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool)
 			if mod == {
 				case ModifierKey.NONE:
 					for project.systems { it.particles.reset!() ; it.particles.start!() }
+			}
+
+		case "h":
+			if mod == {
+				case ModifierKey.NONE:
+					local system   = project.systems[project.systemIndex]
+					system.visible = not system.visible
 			}
 
 		case "f1":
@@ -270,7 +283,12 @@ export onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool)
 					scheduleSaveWorkspace = true
 			}
 
-		case "f10":    if mod == ModifierKey.C  LE.restart()
+		case "f10":
+			if mod == {
+				case ModifierKey.C:
+					saveWorkspace()
+					LE.restart()
+			}
 	}
 }
 
@@ -482,7 +500,7 @@ export onDraw :: () {
 		}
 		LG.setBlendMode(LG.BlendMode.ALPHA)
 
-		particleDrawTime = LT.getTime()-time
+		particleDrawTime = LT.getTime()-time -- Not sure how accurate this actually is. This value is still very low even while the actual FPS is tanking a lot.
 
 		LG.reset()
 	}

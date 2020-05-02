@@ -58,6 +58,7 @@ export saveWorkspace :: () {
 		insert(buffer, "bgColor")          ; writeValue(buffer, eol=true, {project.bgColorH, project.bgColorS, project.bgColorV})
 		insert(buffer, "pixelateWorld")    ; writeValue(buffer, eol=true, project.pixelateWorld)
 		insert(buffer, "pixelateTextures") ; writeValue(buffer, eol=true, project.pixelateTextures)
+		insert(buffer, "zoom")             ; writeValue(buffer, eol=true, project.zoomLevel)
 
 		for system: project.systems {
 			insert(buffer, ":system\n")
@@ -317,6 +318,14 @@ export loadWorkspace :: () -> (success:bool, gotError:bool, projects:[]Project) 
 					local ^ok, ^ptr, flag = readBool(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
 					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
 					project.pixelateTextures = flag
+
+				case "zoom":
+					local ^ok, ^ptr, zoomLevel = readInt(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
+					project.zoomLevel  = zoomLevel
+					project.zoom       = 2^zoomLevel
+					project.zoomSource = project.zoom
+					project.zoomTarget = project.zoom
 
 				case:
 					return parsingError(ln, "Unknown project parameter '%s'.", param)
