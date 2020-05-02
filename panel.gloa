@@ -22,6 +22,10 @@ local CONTEXT_MENU_MIN_WIDTH :: 120
 local CONTEXT_MENU_PADDING_X :: 15
 local CONTEXT_MENU_PADDING_Y :: 5
 
+local ACTION_PASTE_COLOR  :: -1
+local ACTION_PASTE_SCALAR :: -2
+local ACTION_DELETE       :: -3
+
 local BUTTONS_YES_NO: []Button : {
 	{label="yes"},
 	{label="no"},
@@ -241,9 +245,9 @@ local drawSliderValue :: (sliderX,sliderY:float, sliderW,sliderH:float, value:fl
 
 local drawPanelSlider :: (state:PanelState,
 	label1,label2:string, valueMin,valueMax:float, value:float,
-	readoutMultiplier:float, readoutFormat:string, other:float|none=nil
+	readoutMultiplier:float, readoutFormat:string, other:float|none=nil, enableDelete=false
 ) -> (
-	pressedMouseButton:int, value:float
+	pressedMouseButton:int, value:float, deleted:bool
 ) {
 	state.panelItem += 1
 
@@ -255,26 +259,40 @@ local drawPanelSlider :: (state:PanelState,
 	local hovered = isHoveringPanelItemRectangle(state, x, y, w, h)
 	local pressed = hovered ? isPressingOrMayPress(state) : 0
 
+	local deleted = false
+
 	if pressed == 1 {
 		draggedPanelItem = state.panelItem
 		value            = math.lerp(valueMin, valueMax, math.clamp01((state.mx-x)/w))
 		if state.mod == ModifierKey.C  value = math.lerp(valueMin, valueMax, math.round(math.clamp01((state.mx-x)/w)*16)/16)
 
 	} elseif pressed == 2 {
-		local ITEMS :: {"Copy value","Paste value"}
 		local panelItem = state.panelItem
 
-		showContextMenu(state, ITEMS, [value,panelItem] (choice:int) {
+		local items = {
+			"Copy value",
+			"Paste value",
+		}
+		if enableDelete  insert(items, "Delete value")
+
+		showContextMenu(state, items, [value,panelItem] (choice:int) {
 			if choice == {
 				case 1: clipboardScalar = value
-				case 2: panelItemForContextMenu, contextMenuAction = panelItem, 0
+				case 2: panelItemForContextMenu, contextMenuAction = panelItem, ACTION_PASTE_SCALAR
+				case 3: panelItemForContextMenu, contextMenuAction = panelItem, ACTION_DELETE
 			}
 		})
 
 	} elseif state.panelItem == panelItemForContextMenu {
-		if clipboardScalar ~= NULL {
-			value                 = math.clamp(clipboardScalar, valueMin, valueMax)
-			pressed               = 1
+		if contextMenuAction == ACTION_PASTE_SCALAR {
+			if clipboardScalar ~= NULL {
+				value                 = math.clamp(clipboardScalar, valueMin, valueMax)
+				pressed               = 1
+				scheduleSaveWorkspace = true
+			}
+
+		} elseif contextMenuAction == ACTION_DELETE {
+			deleted = true
 			scheduleSaveWorkspace = true
 		}
 
@@ -316,7 +334,7 @@ local drawPanelSlider :: (state:PanelState,
 
 	state.lastPanelY  = state.panelY
 	state.panelY     += h + PANEL_SPACING
-	return pressed, value
+	return pressed, value, deleted
 }
 
 local drawPanelColor :: (state:PanelState,
@@ -328,9 +346,6 @@ local drawPanelColor :: (state:PanelState,
 
 	local SLIDER_HEIGHT :: 12
 	local PREVIEW_WIDTH :: 24
-
-	local ACTION_PASTE_COLOR :: -1
-	local ACTION_DELETE      :: -2
 
 	local components = (a == nil ? 3 : 4)
 
@@ -971,47 +986,35 @@ export drawPanel :: () {
 	ps.setQuads!(quad1,quad2)
 	ps.setTexture!(texture)
 	ps.setOffset!(x,y)
-	ps.setBufferSize!(size) -- Automatically calculate this!
 	]]
 
 	-- Sizes.
 	drawPanelSeparator(state, true)
 	do {
-		local sizes    = {ps.getSizesAsVararg!()}
-		local doRemove = (state.mod == ModifierKey.A)
-		local buttons: []Button
+		local sizes = {ps.getSizesAsVararg!()}
+		local buttons: []Button = {{label="+"}}
 
-		if doRemove {
-			for i = 1, #sizes  insert(buttons, cast(Button){label=format("%d", i)})
-		} else {
-			insert(buttons, cast(Button){label="+"})
-		}
+		local pressed, i = drawPanelButtons(state, "Size", "", buttons)
 
-		local pressed, i = drawPanelButtons(state, "Size", (doRemove ? "DEL" : ""), buttons)
-
-		if pressed ~= 1 {
-			-- void
-
-		} elseif doRemove {
-			remove(sizes, i)
-			if sizes[1] == NULL  insert(sizes, 1)
-			ps.setSizes!(sizes)
-
-		} elseif sizes[8] == NULL {
+		if pressed == 1 and sizes[8] == NULL {
 			insert(sizes, sizes[#sizes])
 			ps.setSizes!(sizes)
 		}
 	}
 	do {
-		local sizes      = {ps.getSizesAsVararg!()}
-		local anyPressed = false
-		local moveAll    = state.mod == ModifierKey.CS
+		local sizes   = {ps.getSizesAsVararg!()}
+		local moveAll = state.mod == ModifierKey.CS
+
+		local anyPressed    = false
+		local indexToDelete = 0
 
 		for i = 1, #sizes {
-			local pressed, size = drawPanelSlider(state, "", format("#%d", i), 0, 8, sizes[i],other=0, 1, "%.2f")
-			anyPressed          = anyPressed or pressed == 1
+			local pressed, size, deleted = drawPanelSlider(state, "", format("#%d", i), 0, 8, sizes[i],other=0, 1, "%.2f", enableDelete=true)
+			anyPressed                   = anyPressed or pressed == 1
 
-			if pressed ~= 1 {
+			if deleted {
+				indexToDelete = i
+			} elseif pressed ~= 1 {
 				-- void
 			} elseif not moveAll {
 				sizes[i] = size
@@ -1019,7 +1022,15 @@ export drawPanel :: () {
 				for j = 1, #sizes  sizes[j] = size
 			}
 		}
-		if anyPressed  ps.setSizes!(sizes)
+
+		if indexToDelete {
+			remove(sizes, indexToDelete)
+			if sizes[1] == NULL  insert(sizes, 1)
+			ps.setSizes!(sizes)
+
+		} elseif anyPressed {
+			ps.setSizes!(sizes)
+		}
 	}
 	do {
 		local pressed, variation = drawPanelSlider(state, "", "variation", 0, 1, ps.getSizeVariation!(),other=0, 100, "%d%%")
