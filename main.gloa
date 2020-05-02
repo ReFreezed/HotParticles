@@ -225,13 +225,42 @@ export onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool)
 	if love.mouse.isGrabbed()  return
 
 	keysPressedThisFrame[key] = true
-	local mod                 = getModifierKey()
+
+	local mod     = getModifierKey()
+	local project = openProjects[currentProjectIndex]
 
 	if key == {
-		case "r":      for openProjects[currentProjectIndex].systems { it.particles.reset!() ; it.particles.start!() }
-		case "escape": if contextMenu ~= NULL  contextMenu = NULL  else  LE.quit(0)
-		case "f1":     showStats        = not showStats        ; scheduleSaveWorkspace = true
-		case "f2":     showPanelNumbers = not showPanelNumbers ; scheduleSaveWorkspace = true
+		case "escape":
+			if contextMenu ~= NULL  contextMenu = NULL  else  LE.quit(0)
+
+		case "tab":
+			if mod == {
+				case ModifierKey.NONE: project.systemIndex = (project.systemIndex-0) % #project.systems + 1 ; scheduleRecreateCanvases = true
+				case ModifierKey.S:    project.systemIndex = (project.systemIndex-2) % #project.systems + 1 ; scheduleRecreateCanvases = true
+				case ModifierKey.C:    currentProjectIndex = (currentProjectIndex-0) % #openProjects    + 1
+				case ModifierKey.CS:   currentProjectIndex = (currentProjectIndex-2) % #openProjects    + 1
+			}
+
+		case "r":
+			if mod == {
+				case ModifierKey.NONE:
+					for project.systems { it.particles.reset!() ; it.particles.start!() }
+			}
+
+		case "f1":
+			if mod == {
+				case ModifierKey.NONE:
+					showStats             = not showStats
+					scheduleSaveWorkspace = true
+			}
+
+		case "f2":
+			if mod == {
+				case ModifierKey.NONE:
+					showPanelNumbers      = not showPanelNumbers
+					scheduleSaveWorkspace = true
+			}
+
 		case "f10":    if mod == ModifierKey.C  LE.restart()
 	}
 }
