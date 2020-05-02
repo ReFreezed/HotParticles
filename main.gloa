@@ -6,6 +6,7 @@
 --============================================================]]
 
 export !import "basic"
+export !import "color"
 export !import "string"
 export io   :: !import "io"
 export math :: !import "math"
@@ -77,9 +78,9 @@ export Project :: struct {
 
 	systems: []System,
 
-	bgColorR = .15,
-	bgColorG = .15,
-	bgColorB = .15,
+	bgColorH = .0,
+	bgColorS = .0,
+	bgColorV = .15,
 
 	pixelateWorld    = false,
 	pixelateTextures = false,
@@ -88,7 +89,7 @@ export Project :: struct {
 export System :: struct {
 	particles: LG.ParticleSystem = NULL,
 
-	colors: []float, -- {r1,g1,b1,a1,...}
+	colors: []float, -- {h1,s1,v1,a1,...}
 	blendMode = LG.BlendMode.ALPHA,
 
 	useCustomOffset = false,
@@ -106,19 +107,33 @@ export System :: struct {
 
 
 
+export updateParticleColors :: (ps:LG.ParticleSystem, colors:[]float) {
+	local colorsRgba: []float
+
+	for i = 1, #colors, 4 {
+		local r, g, b = hsvToRgb(colors[i], colors[i+1], colors[i+2])
+		insert(colorsRgba, r)
+		insert(colorsRgba, g)
+		insert(colorsRgba, b)
+		insert(colorsRgba, colors[i+3])
+	}
+
+	ps.setColors!(colorsRgba)
+}
+
 export addNewSystem :: (project:Project) {
 	local system = System()
-	system.colors    = {1,1,1,0, 1,1,1,1, 1,1,1,.5, 1,1,1,0}
+	system.colors    = {0,0,1,0, 0,0,1,1, 0,0,1,.5, 0,0,1,0}
 	system.blendMode = LG.BlendMode.ADD
 	insert(project.systems, system)
 
 	local ps = system.particles
 	ps.setEmissionRate!(20)
-	ps.setColors!(system.colors)
 	ps.setDirection!(-math.TAU/4)
 	ps.setSpread!(.05*math.TAU)
 	ps.setParticleLifetime!(1.8, 2.2)
 	ps.setSpeed!(90, 100)
+	updateParticleColors(ps, system.colors)
 
 	if project.systems[2] ~= NULL {
 		local x, y = project.systems[1].particles.getPosition!()
@@ -324,7 +339,9 @@ export onDraw :: () {
 			local x = PANEL_WIDTH+5
 			local y = 5
 
-			if .30*project.bgColorR+.55*project.bgColorG+.15*project.bgColorB < .25
+			local r, g, b          = hsvToRgb(project.bgColorH, project.bgColorS, project.bgColorV)
+			local _, _, brightness = rgbToHsp(r, g, b)
+			if brightness < .5
 				LG.setColor(1, 1, 1, .7)
 			else
 				LG.setColor(0, 0, 0, .7)
@@ -391,7 +408,9 @@ export onDraw :: () {
 	-- World.
 	do {
 		LG.setCanvas(canvasWorld)
-		LG.clear(project.bgColorR, project.bgColorG, project.bgColorB)
+
+		local r, g, b = hsvToRgb(project.bgColorH, project.bgColorS, project.bgColorV)
+		LG.clear(r, g, b)
 
 		LG.translate((ww-PANEL_WIDTH)/2, wh/2)
 		if not project.pixelateWorld  LG.scale(project.zoom)

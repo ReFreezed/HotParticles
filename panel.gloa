@@ -39,10 +39,10 @@ export contextMenu: ContextMenu = NULL
 
 local clipboardScalar: float   = NULL
 local clipboardAngle:  float   = NULL
-local clipboardColor:  []float = NULL
+local clipboardColor:  []float = NULL -- {h,s,v,a}
 
 local panelItemToPasteAt = 0
-local pasteTarget        = 0 -- E.g. "the green component" in a color.
+local pasteTarget        = 0 -- E.g. "the hue" in a color.
 
 
 
@@ -331,7 +331,7 @@ local drawPanelSlider :: (state:PanelState,
 	return pressed, value
 }
 
-local drawPanelColor :: (state:PanelState, label1,label2:string, r,g,b:float,a:float|none) -> (pressedMouseButton:int, r,g,b,a:float) {
+local drawPanelColor :: (state:PanelState, label1,label2:string, hue,saturation,value:float,a:float|none) -> (pressedMouseButton:int, hue,saturation,value,a:float) {
 	state.panelItem += 1
 
 	local SLIDER_HEIGHT :: 12
@@ -344,14 +344,10 @@ local drawPanelColor :: (state:PanelState, label1,label2:string, r,g,b:float,a:f
 	local x = LABEL_WIDTH + PANEL_SPACING
 	local y = state.panelY
 
-	!import "color"
-	local hue, saturation, value = rgbToHsv(r, g, b)
-
 	local hovered = isHoveringPanelItemRectangle(state, x, y, w, h)
 	local pressed = hovered ? isPressingOrMayPress(state) : 0
 
-	local component  = math.clamp(math.floor(1+(state.myScrolled-y)/SLIDER_HEIGHT), 1, components)
-	local hsvChanged = false
+	local component = math.clamp(math.floor(1+(state.myScrolled-y)/SLIDER_HEIGHT), 1, components)
 
 	if pressed == 1 {
 		draggedPanelItem = state.panelItem
@@ -360,9 +356,9 @@ local drawPanelColor :: (state:PanelState, label1,label2:string, r,g,b:float,a:f
 		component = draggedPanelSubItem
 
 		if component == {
-			case 1: hue        = math.clamp01((state.mx-x)/w) ; hsvChanged = true
-			case 2: saturation = math.clamp01((state.mx-x)/w) ; hsvChanged = true
-			case 3: value      = math.clamp01((state.mx-x)/w) ; hsvChanged = true
+			case 1: hue        = math.clamp01((state.mx-x)/w)
+			case 2: saturation = math.clamp01((state.mx-x)/w)
+			case 3: value      = math.clamp01((state.mx-x)/w)
 			case 4: a          = math.clamp01((state.mx-x)/w)
 		}
 
@@ -399,9 +395,9 @@ local drawPanelColor :: (state:PanelState, label1,label2:string, r,g,b:float,a:f
 		if component > 0 {
 			if clipboardScalar ~= NULL {
 				if component == {
-					case 1: hue        = math.clamp01(clipboardScalar) ; hsvChanged = true
-					case 2: saturation = math.clamp01(clipboardScalar) ; hsvChanged = true
-					case 3: value      = math.clamp01(clipboardScalar) ; hsvChanged = true
+					case 1: hue        = math.clamp01(clipboardScalar)
+					case 2: saturation = math.clamp01(clipboardScalar)
+					case 3: value      = math.clamp01(clipboardScalar)
 					case 4: a          = math.clamp01(clipboardScalar)
 				}
 				pressed               = 1
@@ -409,12 +405,11 @@ local drawPanelColor :: (state:PanelState, label1,label2:string, r,g,b:float,a:f
 			}
 		} else {
 			if clipboardColor ~= NULL {
-				hue                   = clipboardColor[1]
-				saturation            = clipboardColor[2]
-				value                 = clipboardColor[3]
-				a                     = clipboardColor[4]
-				hsvChanged            = true
-				pressed               = 1
+				hue        = clipboardColor[1]
+				saturation = clipboardColor[2]
+				value      = clipboardColor[3]
+				a          = clipboardColor[4]
+				pressed    = 1
 				scheduleSaveWorkspace = true
 			}
 		}
@@ -422,21 +417,21 @@ local drawPanelColor :: (state:PanelState, label1,label2:string, r,g,b:float,a:f
 	} elseif hovered and (keysPressedThisFrame.left or keysPressedThisFrame.right) {
 		local delta = ((state.mod == ModifierKey.S) ? 16/255 : (state.mod == ModifierKey.C) ? 1/255 : 4/255)
 		if component == {
-			case 1: hue        = math.clamp01((keysPressedThisFrame.left ? hue            - delta : hue            + delta)) ; hsvChanged = true
-			case 2: saturation = math.clamp01((keysPressedThisFrame.left ? saturation     - delta : saturation     + delta)) ; hsvChanged = true
-			case 3: value      = math.clamp01((keysPressedThisFrame.left ? value          - delta : value          + delta)) ; hsvChanged = true
+			case 1: hue        = math.clamp01((keysPressedThisFrame.left ? hue            - delta : hue            + delta))
+			case 2: saturation = math.clamp01((keysPressedThisFrame.left ? saturation     - delta : saturation     + delta))
+			case 3: value      = math.clamp01((keysPressedThisFrame.left ? value          - delta : value          + delta))
 			case 4: a          = math.clamp01((keysPressedThisFrame.left ? cast(float)(a) - delta : cast(float)(a) + delta))
 		}
 		pressed               = 1
 		scheduleSaveWorkspace = true
 	}
 
-	if hsvChanged  r, g, b = hsvToRgb(hue, saturation, value)
-
 	drawLabels(label1, label2, state.panelY)
 	-- drawLabels(label1, label2, math.round(state.panelY+(h-state.fontH)/2))
 
 	-- Preview.
+	local r, g, b = hsvToRgb(hue, saturation, value)
+
 	do {
 		local previewX = x+w+PANEL_SPACING
 		LG.setColor(.15, .15, .15)
@@ -498,7 +493,7 @@ local drawPanelColor :: (state:PanelState, label1,label2:string, r,g,b:float,a:f
 
 	state.lastPanelY  = state.panelY
 	state.panelY     += h + PANEL_SPACING
-	return pressed, r,g,b,cast(float)a -- 'a' is actually nil if the function was called with a=nil.
+	return pressed, hue,saturation,value,cast(float)a -- 'a' is actually nil if the function was called with a=nil.
 }
 
 local ButtonStyle :: enum { NORMAL, TABS }
@@ -649,10 +644,10 @@ export drawPanel :: () {
 		}
 		drawPanelSeparator(state)
 		do {
-			local pressed, r,g,b = drawPanelColor(state, "Background", "", project.bgColorR, project.bgColorG, project.bgColorB, nil)
+			local pressed, h,s,v = drawPanelColor(state, "Background", "", project.bgColorH, project.bgColorS, project.bgColorV, nil)
 
 			if pressed == 1 {
-				project.bgColorR, project.bgColorG, project.bgColorB = r,g,b
+				project.bgColorH, project.bgColorS, project.bgColorV = h,s,v
 			}
 		}
 	}
@@ -949,12 +944,12 @@ export drawPanel :: () {
 				for 1, 4  insert(colors, 1)
 			}
 
-			ps.setColors!(colors)
+			updateParticleColors(ps, colors)
 
 		} elseif colors[8*4] == NULL {
 			local lastColorIndex = (#colors//4)*4-3
 			for 1, 4  insert(colors, colors[lastColorIndex+it-1])
-			ps.setColors!(colors)
+			updateParticleColors(ps, colors)
 		}
 	}
 	do {
@@ -963,20 +958,20 @@ export drawPanel :: () {
 		local moveAll    = state.mod == ModifierKey.CS
 
 		for i = 1, #colors, 4 {
-			local pressed, r,g,b,a = drawPanelColor(state, "", format("#%d", (i+3)//4), colors[i], colors[i+1], colors[i+2], colors[i+3])
+			local pressed, h,s,v,a = drawPanelColor(state, "", format("#%d", (i+3)//4), colors[i], colors[i+1], colors[i+2], colors[i+3])
 			anyPressed             = anyPressed or pressed == 1
 
 			if pressed ~= 1 {
 				-- void
 			} elseif not moveAll {
-				colors[i], colors[i+1], colors[i+2], colors[i+3] = r,g,b,a
+				colors[i], colors[i+1], colors[i+2], colors[i+3] = h,s,v,a
 			} elseif draggedPanelSubItem < 4 {
-				for j = 1, #colors, 4  colors[j], colors[j+1], colors[j+2] = r,g,b
+				for j = 1, #colors, 4  colors[j], colors[j+1], colors[j+2] = h,s,v
 			} else {
 				for j = 4, #colors, 4  colors[j] = a
 			}
 		}
-		if anyPressed  ps.setColors!(colors)
+		if anyPressed  updateParticleColors(ps, colors)
 	}
 	do {
 		local BUTTON_LABELS :: {"alpha", "add", "screen", "subtract"}

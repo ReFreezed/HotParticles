@@ -9,7 +9,7 @@
 --=
 --============================================================]]
 
-local LAST_FILE_VERSION :: 1
+local LAST_FILE_VERSION :: 2
 
 
 
@@ -55,7 +55,7 @@ export saveWorkspace :: () {
 
 	for project: openProjects {
 		insert(buffer, ":project\n")
-		insert(buffer, "bgColor")          ; writeValue(buffer, eol=true, {project.bgColorR, project.bgColorG, project.bgColorB})
+		insert(buffer, "bgColor")          ; writeValue(buffer, eol=true, {project.bgColorH, project.bgColorS, project.bgColorV})
 		insert(buffer, "pixelateWorld")    ; writeValue(buffer, eol=true, project.pixelateWorld)
 		insert(buffer, "pixelateTextures") ; writeValue(buffer, eol=true, project.pixelateTextures)
 
@@ -298,13 +298,14 @@ export loadWorkspace :: () -> (success:bool, gotError:bool, projects:[]Project) 
 		} elseif system == NULL {
 			if param == {
 				case "bgColor":
-					local ^ok, ^ptr, r = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
-					local ^ok, ^ptr, g = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
-					local ^ok, ^ptr, b = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
+					local ^ok, ^ptr, h = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
+					local ^ok, ^ptr, s = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
+					local ^ok, ^ptr, v = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
 					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
-					project.bgColorR = r
-					project.bgColorG = g
-					project.bgColorB = b
+					if version < 2  h, s, v = rgbToHsv(h, s, v)
+					project.bgColorH = h
+					project.bgColorS = s
+					project.bgColorV = v
 
 				case "pixelateWorld":
 					local ^ok, ^ptr, flag = readBool(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
@@ -329,8 +330,13 @@ export loadWorkspace :: () -> (success:bool, gotError:bool, projects:[]Project) 
 					if colors[1]     == NULL  return parsingError(ln, "No colors.")
 					if colors[8*4+1] ~= NULL  return parsingError(ln, "Too many colors. (Max is 8, got %d)", #colors // 4)
 					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
+					if version < 2 {
+						for i = 1, #colors, 4 {
+							colors[i], colors[i+1], colors[i+2] = rgbToHsv(colors[i], colors[i+1], colors[i+2])
+						}
+					}
 					system.colors = colors
-					ps.setColors!(colors)
+					updateParticleColors(ps, colors)
 
 				case "blendMode":
 					local ^ok, ^ptr, blendMode = readString(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
