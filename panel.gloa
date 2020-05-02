@@ -31,10 +31,6 @@ export pressedOnPanelWithMouseButton = 0
 export draggedPanelItem    = 0
 export draggedPanelSubItem = 0
 
-export panelScroll       = 0.0
-export panelScrollSource = 0.0
-export panelScrollTarget = 0
-
 export contextMenu: ContextMenu = NULL
 
 local clipboardScalar: float   = NULL
@@ -47,15 +43,21 @@ local pasteTarget        = 0 -- E.g. "the hue" in a color.
 
 
 local PanelState :: struct {
-	panelY: int,
+	panelY:     int,
+	lastPanelY: int,
+
+	panelItem: int,
+
 	fontH: int,
+
 	mx: int,
 	my: int,
 	myScrolled: int,
-	lastPanelY: int,
-	panelItem: int,
-	mod = ModifierKey.NONE,
-	showedContextMenuThisFrame: bool,
+	ignoreMouseAboveY = 0,
+
+	mod: ModifierKey = NULL,
+
+	showedContextMenuThisFrame = false,
 }
 
 export ContextMenu :: struct {
@@ -106,12 +108,14 @@ export isInsideContextMenu :: (mx,my:int) -> bool {
 local isHoveringPanelItemRectangle :: (state:PanelState, x,y,w,h:int) -> bool {
 	if draggedPanelItem == state.panelItem      return true
 	if draggedPanelItem > 0                     return false
+	if state.my < state.ignoreMouseAboveY       return false
 	if isInsideContextMenu(state.mx, state.my)  return false
 	return isInside(state.mx, state.myScrolled, x, y, w, h)
 }
 local isHoveringPanelItemCircle :: (state:PanelState, x,y,radius:int) -> bool {
 	if draggedPanelItem == state.panelItem      return true
 	if draggedPanelItem > 0                     return false
+	if state.my < state.ignoreMouseAboveY       return false
 	if isInsideContextMenu(state.mx, state.my)  return false
 	return math.distance(state.mx,state.myScrolled, x,y) <= radius
 }
@@ -498,12 +502,12 @@ local drawPanelColor :: (state:PanelState, label1,label2:string, hue,saturation,
 
 local ButtonStyle :: enum { NORMAL, TABS }
 
-local drawPanelButtons :: (state:PanelState, label1,label2:string, buttonLabels:[]string, selected=0, style=ButtonStyle.NORMAL, lastButtonWidth=0) -> (pressedMouseButton:int, pressedIndex:int) {
+local drawPanelButtons :: (state:PanelState, label1,label2:string, buttonLabels:[]string, selected=0, style=ButtonStyle.NORMAL, lastButtonWidth=0, showLabel=true) -> (pressedMouseButton:int, pressedIndex:int) {
 	state.panelItem += 1
 
 	local highlightAll = (selected == 0)
 
-	local x = (style == ButtonStyle.TABS) ? PANEL_SPACING : LABEL_WIDTH+PANEL_SPACING
+	local x = showLabel ? LABEL_WIDTH+PANEL_SPACING : PANEL_SPACING
 	local y = state.panelY
 	local w = PANEL_WIDTH - x-PANEL_SPACING
 	local h = state.fontH
@@ -519,7 +523,7 @@ local drawPanelButtons :: (state:PanelState, label1,label2:string, buttonLabels:
 		scheduleSaveWorkspace = true
 	}
 
-	drawLabels(label1, label2, state.panelY)
+	if showLabel  drawLabels(label1, label2, state.panelY)
 
 	for buttonLabels {
 		local buttonX1 = math.round(x + (itIndex-1)*buttonW0)
@@ -554,10 +558,11 @@ local drawPanelButtons :: (state:PanelState, label1,label2:string, buttonLabels:
 		local scissorX2 = buttonX2-(padding-1)
 
 		if scissorX2 > scissorX1 {
-			LG.setScissor(scissorX1, 0, scissorX2-scissorX1, LG.getHeight())
+			LG.push(LG.StackType.ALL)
+			LG.intersectScissor(scissorX1, 0, scissorX2-scissorX1, LG.getHeight())
 			LG.setColor(1, 1, 1, (faded ? .6 : 1.0))
 			LG.print(it, textX, y)
-			LG.setScissor()
+			LG.pop()
 		}
 	}
 
@@ -572,7 +577,7 @@ export drawPanel :: () {
 		fontH      = fontNormal.getHeight!(),
 		mx         = love.mouse.getX(),
 		my         = love.mouse.getY(),
-		myScrolled = love.mouse.getY()-math.round(panelScroll),
+		myScrolled = love.mouse.getY(),
 		mod        = getModifierKey(),
 	}
 
@@ -580,8 +585,6 @@ export drawPanel :: () {
 	-- something because we handle mouse input here while rendering.
 	LG.setColor(.2, .2, .2)
 	LG.rectangle(LG.DrawMode.FILL, 0, 0, PANEL_WIDTH, LG.getHeight())
-
-	LG.translate(0, panelScroll)
 
 	-- Project.
 	local project = openProjects[currentProjectIndex]
@@ -592,7 +595,7 @@ export drawPanel :: () {
 
 		insert(buttonLabels, "+")
 
-		local pressed, i = drawPanelButtons(state, "", "", buttonLabels, selected=currentProjectIndex, style=ButtonStyle.TABS, lastButtonWidth=32)
+		local pressed, i = drawPanelButtons(state, "", "", buttonLabels, selected=currentProjectIndex, style=ButtonStyle.TABS, showLabel=false, lastButtonWidth=32)
 		if pressed == 1 {
 			if i < #buttonLabels {
 				currentProjectIndex = i
@@ -608,17 +611,22 @@ export drawPanel :: () {
 			remove(openProjects, i)
 			if openProjects[1] == NULL
 				addNewProject()
+			elseif i < currentProjectIndex
+				currentProjectIndex -= 1
 			else
 				currentProjectIndex = math.min(currentProjectIndex, #openProjects)
-
 			scheduleRecreateCanvases = true
 			updateParticleImageFilters()
 		}
 	}
 	do {
-		local BUTTON_LABELS :: {"show", "hide"}
-		local pressed, i = drawPanelButtons(state, "Settings", "", BUTTON_LABELS, selected=(showProjectSettings ? 1 : 2))
-		if pressed == 1  showProjectSettings = (i == 1)
+		local BUTTON_LABELS_SHOW :: {"show settings"}
+		local BUTTON_LABELS_HIDE :: {"hide settings"}
+		local pressed, i = drawPanelButtons(state, "", "", (showProjectSettings ? BUTTON_LABELS_HIDE : BUTTON_LABELS_SHOW), showLabel=false)
+		if pressed == 1 {
+			showProjectSettings   = not showProjectSettings
+			scheduleSaveWorkspace = true
+		}
 	}
 	if showProjectSettings {
 		drawPanelSeparator(state)
@@ -661,32 +669,48 @@ export drawPanel :: () {
 		local buttonLabels: []string
 		for project.systems  buttonLabels[itIndex] = format("%d", itIndex)
 
-		insert(buttonLabels, doRemove?"DEL":"+")
+		insert(buttonLabels, "+")
 
-		local pressed, i = drawPanelButtons(state, "ParticleSystem", "", buttonLabels, selected=project.systemIndex, lastButtonWidth=32)
-		if pressed ~= 1 {
-			-- void
+		local pressed, i = drawPanelButtons(state, "ParticleSystem", "", buttonLabels, selected=project.systemIndex, lastButtonWidth=32, style=ButtonStyle.TABS)
+		if pressed == 1 {
+			if i < #buttonLabels {
+				project.systemIndex = i
+			} else {
+				addNewSystem(project)
+				project.systemIndex = #project.systems
+			}
+			system = project.systems[project.systemIndex]
 
-		} elseif i < #buttonLabels {
-			project.systemIndex = i
-
-		} elseif doRemove {
-			remove(project.systems, project.systemIndex)
+		} elseif pressed == 3 and i < #buttonLabels {
+			-- @UX: Confirm removal of system.
+			remove(project.systems, i)
 			if project.systems[1] == NULL
 				addNewSystem(project)
+			elseif i < project.systemIndex
+				project.systemIndex -= 1
 			else
 				project.systemIndex = math.min(project.systemIndex, #project.systems)
 			system = project.systems[project.systemIndex]
-
-		} else {
-			addNewSystem(project)
-			project.systemIndex = #project.systems
 		}
+	}
+
+	drawPanelSeparator(state, true)
+
+	do {
+		local scissorY = state.panelY-PANEL_SPACING
+
+		LG.push(LG.StackType.ALL)
+		LG.setScissor(0, scissorY, PANEL_WIDTH, LG.getHeight()-scissorY)
+		LG.translate(0, project.panelScroll)
+
+		state.myScrolled        -= math.round(project.panelScroll)
+		state.ignoreMouseAboveY  = scissorY
+
+		state.panelY += 5
 	}
 
 	-- Misc params.
 	local ps = system.particles
-	drawPanelSeparator(state, true)
 	do {
 		local BUTTON_LABELS :: {"top", "bottom", "random"}
 		local INSERT_MODE_TO_INDEX: struct { !key:LG.ParticleInsertMode, !value:int } = {
@@ -997,7 +1021,18 @@ export drawPanel :: () {
 		pasteTarget        = 0
 	}
 
-	LG.origin()
+	LG.pop()
+
+	do {
+		local h = (project.panelScroll ? 30 : 10)
+
+		local iw, ih     = imageGradient.getDimensions!()
+		local gradientSx = h/ih
+		local gradientSy = PANEL_WIDTH/iw
+
+		LG.setColor(0, 0, 0, (project.panelScroll ? 1.0 : .3))
+		LG.draw(imageGradient, 0, state.ignoreMouseAboveY+h, -math.TAU/4, gradientSx, gradientSy)
+	}
 
 	if contextMenu ~= NULL {
 		local itemHeight  = state.fontH + 2*CONTEXT_MENU_PADDING_Y

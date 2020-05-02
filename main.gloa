@@ -80,6 +80,10 @@ export Project :: struct {
 	zoomSource = 1.0,
 	zoomTarget = 1.0,
 
+	panelScroll       = 0.0,
+	panelScrollSource = 0.0,
+	panelScrollTarget = 0,
+
 	-- Saved stuff:
 
 	systems: []System,
@@ -273,13 +277,13 @@ export onMouseReleased :: (mx,my:int, mbutton:int, isTouch:bool, presses:int) {
 export onMouseWheel :: (dx,dy:int) {
 	if love.mouse.isGrabbed()  return
 
+	local project = openProjects[currentProjectIndex]
+
 	if love.mouse.getX() < PANEL_WIDTH {
-		panelScrollSource = panelScroll
-		panelScrollTarget = math.min(panelScrollTarget+50*dy, 0)
+		project.panelScrollSource = project.panelScroll
+		project.panelScrollTarget = math.min(project.panelScrollTarget+50*dy, 0)
 
 	} else {
-		local project = openProjects[currentProjectIndex]
-
 		project.zoomLevel  = math.clamp(project.zoomLevel+dy, (project.pixelateWorld ? -1 : -4), 6)
 		project.zoomSource = project.zoom
 		project.zoomTarget = 2^project.zoomLevel
@@ -323,10 +327,10 @@ export onUpdate :: (dt:float) {
 		project.zoomTarget,
 		math.abs(project.zoomTarget - project.zoomSource) * dt / 0.05
 	)
-	panelScroll = math.moveTowards(
-		panelScroll,
-		panelScrollTarget,
-		math.abs(panelScrollTarget - panelScrollSource) * dt / 0.05
+	project.panelScroll = math.moveTowards(
+		project.panelScroll,
+		project.panelScrollTarget,
+		math.abs(project.panelScrollTarget - project.panelScrollSource) * dt / 0.05
 	)
 
 	if scheduleRecreateCanvases  createCanvases()
