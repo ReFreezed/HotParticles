@@ -256,7 +256,7 @@ export loadWorkspace :: () -> (success:bool, gotError:bool, projects:[]Project) 
 
 			if label == {
 				case "project":
-					project = {}
+					project = Project()
 					system  = NULL
 					insert(projects, project)
 

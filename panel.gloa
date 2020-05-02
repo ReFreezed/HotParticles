@@ -40,10 +40,16 @@ local clipboardScalar: float   = NULL
 local clipboardAngle:  float   = NULL
 local clipboardColor:  []float = NULL -- {h,s,v,a}
 
-local panelItemToPasteAt = 0
-local pasteTarget        = 0 -- E.g. "the hue" in a color.
+local panelItemForContextMenu = 0
+local contextMenuAction       = 0 -- E.g. "paste the hue" in a color field.
+
+export tooltipRendered  = false
+export tooltipHoverTime = 0.00
+export tooltipOpacity   = 0.0
 
 
+
+local ButtonStyle :: enum { NORMAL, TABS }
 
 local Button :: struct {
 	label   = "",
@@ -93,14 +99,6 @@ local drawChecker :: (x,y,w,h:float, scale=1.0) {
 	LG.draw(imageChecker, quad, x, y, 0, scale)
 }
 
-local drawPanelSeparator :: (state:PanelState, thick=false) {
-	local w = thick ? 6 : 2
-	LG.setColor(0, 0, 0, .5)
-	LG.rectangle(LG.DrawMode.FILL, 0, state.panelY, PANEL_WIDTH, w)
-	state.lastPanelY  = state.panelY
-	state.panelY     += w+PANEL_SPACING
-}
-
 local drawLabels :: (label1,label2:string, y:int) {
 	LG.setColor(1, 1, 1)
 	if label1 {
@@ -111,6 +109,38 @@ local drawLabels :: (label1,label2:string, y:int) {
 		LG.print(label2, LABEL_WIDTH-fontSmall.getWidth!(label2), y+1)
 		LG.setFont(fontNormal)
 	}
+}
+
+local drawTooltip :: (text:string, x,y:int) {
+	local PADDING_Y :: 2
+
+	local w = fontNormal.getWidth!(text) + 2*PANEL_SPACING
+	local h = fontNormal.getHeight!()    + 2*PADDING_Y
+
+	x = math.min(x, LG.getWidth()-w)
+	y = y-h-1
+
+	LG.push(LG.StackType.ALL)
+	LG.setScissor()
+
+	LG.setColor(.8, .8, .8, tooltipOpacity)
+	LG.rectangle(LG.DrawMode.FILL, x, y, w, h, 3)
+	LG.setColor(0, 0, 0, tooltipOpacity)
+	LG.print(text, x+PANEL_SPACING, y+PADDING_Y)
+
+	LG.pop()
+
+	tooltipRendered = true
+}
+
+
+
+local drawPanelSeparator :: (state:PanelState, thick=false) {
+	local w = thick ? 6 : 2
+	LG.setColor(0, 0, 0, .5)
+	LG.rectangle(LG.DrawMode.FILL, 0, state.panelY, PANEL_WIDTH, w)
+	state.lastPanelY  = state.panelY
+	state.panelY     += w+PANEL_SPACING
 }
 
 local drawPanelDirection :: (state:PanelState, label1,label2:string, angle:float, slot=1, spreadCcw,spreadCw=0.0) -> (pressedMouseButton:int, angle:float) {
@@ -135,12 +165,12 @@ local drawPanelDirection :: (state:PanelState, label1,label2:string, angle:float
 
 		showContextMenu(state, ITEMS, [angle,panelItem] (choice:int) {
 			if choice == {
-				case 1: clipboardAngle                  = angle
-				case 2: panelItemToPasteAt, pasteTarget = panelItem, 0
+				case 1: clipboardAngle = angle
+				case 2: panelItemForContextMenu, contextMenuAction = panelItem, 0
 			}
 		})
 
-	} elseif state.panelItem == panelItemToPasteAt {
+	} elseif state.panelItem == panelItemForContextMenu {
 		if clipboardAngle ~= NULL {
 			angle                 = clipboardAngle
 			pressed               = 1
@@ -236,12 +266,12 @@ local drawPanelSlider :: (state:PanelState,
 
 		showContextMenu(state, ITEMS, [value,panelItem] (choice:int) {
 			if choice == {
-				case 1: clipboardScalar                 = value
-				case 2: panelItemToPasteAt, pasteTarget = panelItem, 0
+				case 1: clipboardScalar = value
+				case 2: panelItemForContextMenu, contextMenuAction = panelItem, 0
 			}
 		})
 
-	} elseif state.panelItem == panelItemToPasteAt {
+	} elseif state.panelItem == panelItemForContextMenu {
 		if clipboardScalar ~= NULL {
 			value                 = math.clamp(clipboardScalar, valueMin, valueMax)
 			pressed               = 1
@@ -289,11 +319,18 @@ local drawPanelSlider :: (state:PanelState,
 	return pressed, value
 }
 
-local drawPanelColor :: (state:PanelState, label1,label2:string, hue,saturation,value:float,a:float|none) -> (pressedMouseButton:int, hue,saturation,value,a:float) {
+local drawPanelColor :: (state:PanelState,
+	label1,label2:string, hue,saturation,value:float,a:float|none, enableDelete=false
+) -> (
+	pressedMouseButton:int, hue,saturation,value,a:float, deleted:bool
+) {
 	state.panelItem += 1
 
 	local SLIDER_HEIGHT :: 12
 	local PREVIEW_WIDTH :: 24
+
+	local ACTION_PASTE_COLOR :: -1
+	local ACTION_DELETE      :: -2
 
 	local components = (a == nil ? 3 : 4)
 
@@ -306,6 +343,8 @@ local drawPanelColor :: (state:PanelState, label1,label2:string, hue,saturation,
 	local pressed = hovered ? isPressingOrMayPress(state) : 0
 
 	local component = math.clamp(math.floor(1+(state.myScrolled-y)/SLIDER_HEIGHT), 1, components)
+
+	local deleted = false
 
 	if pressed == 1 {
 		draggedPanelItem = state.panelItem
@@ -321,17 +360,23 @@ local drawPanelColor :: (state:PanelState, label1,label2:string, hue,saturation,
 		}
 
 	} elseif pressed == 2 {
-		local ITEMS_H :: {"Copy hue",           "Copy color","Paste hue",           "Paste color"}
-		local ITEMS_S :: {"Copy saturation",    "Copy color","Paste saturation",    "Paste color"}
-		local ITEMS_V :: {"Copy value strength","Copy color","Paste value strength","Paste color"}
-		local ITEMS_A :: {"Copy opacity",       "Copy color","Paste opacity",       "Paste color"}
 		local panelItem = state.panelItem
 
-		local items =
-			component == 1 ? ITEMS_H :
-			component == 2 ? ITEMS_S :
-			component == 3 ? ITEMS_V :
-			ITEMS_A
+		local componentTitle: string = NULL
+		if component == {
+			case 1: componentTitle = "hue"
+			case 2: componentTitle = "saturation"
+			case 3: componentTitle = "value strength"
+			case 4: componentTitle = "opacity"
+		}
+
+		local items = {
+			"Copy "..componentTitle,
+			"Copy color",
+			"Paste "..componentTitle,
+			"Paste color",
+		}
+		if enableDelete  insert(items, "Delete color")
 
 		showContextMenu(state, items, [hue,saturation,value,a,panelItem,component] (choice:int) {
 			if choice == {
@@ -343,14 +388,29 @@ local drawPanelColor :: (state:PanelState, label1,label2:string, hue,saturation,
 						case 4: clipboardScalar = cast(float) a
 					}
 				case 2: clipboardColor = {hue, saturation, value, (a == NULL ? 1.0 : cast(float)a)}
-				case 3: panelItemToPasteAt, pasteTarget = panelItem, component
-				case 4: panelItemToPasteAt, pasteTarget = panelItem, 0
+				case 3: panelItemForContextMenu, contextMenuAction = panelItem, component
+				case 4: panelItemForContextMenu, contextMenuAction = panelItem, ACTION_PASTE_COLOR
+				case 5: panelItemForContextMenu, contextMenuAction = panelItem, ACTION_DELETE
 			}
 		})
 
-	} elseif state.panelItem == panelItemToPasteAt {
-		component = cast(int) pasteTarget
-		if component > 0 {
+	} elseif state.panelItem == panelItemForContextMenu {
+		if contextMenuAction == ACTION_PASTE_COLOR {
+			if clipboardColor ~= NULL {
+				hue        = clipboardColor[1]
+				saturation = clipboardColor[2]
+				value      = clipboardColor[3]
+				a          = clipboardColor[4]
+				pressed    = 1
+				scheduleSaveWorkspace = true
+			}
+
+		} elseif contextMenuAction == ACTION_DELETE {
+			deleted = true
+			scheduleSaveWorkspace = true
+
+		} elseif contextMenuAction > 0 {
+			component = contextMenuAction
 			if clipboardScalar ~= NULL {
 				if component == {
 					case 1: hue        = math.clamp01(clipboardScalar)
@@ -358,16 +418,7 @@ local drawPanelColor :: (state:PanelState, label1,label2:string, hue,saturation,
 					case 3: value      = math.clamp01(clipboardScalar)
 					case 4: a          = math.clamp01(clipboardScalar)
 				}
-				pressed               = 1
-				scheduleSaveWorkspace = true
-			}
-		} else {
-			if clipboardColor ~= NULL {
-				hue        = clipboardColor[1]
-				saturation = clipboardColor[2]
-				value      = clipboardColor[3]
-				a          = clipboardColor[4]
-				pressed    = 1
+				pressed = 1
 				scheduleSaveWorkspace = true
 			}
 		}
@@ -451,10 +502,12 @@ local drawPanelColor :: (state:PanelState, label1,label2:string, hue,saturation,
 
 	state.lastPanelY  = state.panelY
 	state.panelY     += h + PANEL_SPACING
-	return pressed, hue,saturation,value,cast(float)a -- 'a' is actually nil if the function was called with a=nil.
-}
 
-local ButtonStyle :: enum { NORMAL, TABS }
+	return
+		pressed,
+		hue, saturation, value, cast(float)a, -- 'a' is actually nil if the function was called with a=nil.
+		deleted
+}
 
 local drawPanelButtons :: (state:PanelState,
 	label1,label2:string, buttons:[]Button, selected=0, style=ButtonStyle.NORMAL, lastButtonWidth=0, showLabel=true, enableDragging=false
@@ -513,8 +566,10 @@ local drawPanelButtons :: (state:PanelState,
 		local padding = style == ButtonStyle.TABS ? 8 : PANEL_SPACING
 		local faded   = not (highlightAll or itIndex == selected)
 
+		local buttonHovered = hovered and state.mx >= buttonX1 and state.mx < buttonX2
+
 		-- Button background.
-		if hovered and state.mx >= buttonX1 and state.mx < buttonX2
+		if buttonHovered
 			LG.setColor(1, 1, 1, .45)
 		elseif faded
 			LG.setColor(1, 1, 1, .15)
@@ -564,6 +619,11 @@ local drawPanelButtons :: (state:PanelState,
 				LG.pop()
 			}
 		}
+
+		-- Tooltip.
+		if buttonHovered and it.tooltip {
+			drawTooltip(it.tooltip, buttonX1, y)
+		}
 	}
 
 	state.lastPanelY  = state.panelY
@@ -591,7 +651,7 @@ export drawPanel :: () {
 
 	do {
 		local buttons: []Button
-		for openProjects  buttons[itIndex] = {label="(unnamed)"} -- @Incomplete: Use filenames on tabs.
+		for openProjects  buttons[itIndex] = {label=it.displayedName} -- @Incomplete: Use filenames on tabs.
 
 		insert(buttons, cast(Button){label="+"})
 
@@ -742,18 +802,17 @@ export drawPanel :: () {
 	}
 	drawPanelSeparator(state)
 	do {
-		local BUTTONS: []Button : {{label="top"},{label="bottom"},{label="random"}}
-		local INSERT_MODE_TO_INDEX: struct { !key:LG.ParticleInsertMode, !value:int } = {
-			[LG.ParticleInsertMode.TOP]    = 1,
-			[LG.ParticleInsertMode.BOTTOM] = 2,
-			[LG.ParticleInsertMode.RANDOM] = 3,
+		using LG.ParticleInsertMode
+
+		local BUTTONS: []Button : {
+			{value=TOP,    label="top"},
+			{value=BOTTOM, label="bottom"},
+			{value=RANDOM, label="random"},
 		}
-		local pressed, i = drawPanelButtons(state, "Insert", "", BUTTONS, selected=INSERT_MODE_TO_INDEX[ps.getInsertMode!()])
-		if pressed == 1  if i == {
-			case 1: ps.setInsertMode!(LG.ParticleInsertMode.TOP)
-			case 2: ps.setInsertMode!(LG.ParticleInsertMode.BOTTOM)
-			case 3: ps.setInsertMode!(LG.ParticleInsertMode.RANDOM)
-		}
+
+		local _, i        = indexWith(BUTTONS, "value", ps.getInsertMode!())
+		local pressed, ^i = drawPanelButtons(state, "InsertMode", "", BUTTONS, selected=i)
+		if pressed == 1  ps.setInsertMode!(cast(LG.ParticleInsertMode) BUTTONS[i].value)
 	}
 	drawPanelSeparator(state)
 	do {
@@ -780,26 +839,21 @@ export drawPanel :: () {
 	drawPanelSeparator(state)
 	do {
 		using LG.AreaSpreadDistribution
+
+		local BUTTONS: []Button : {
+			{value=NONE,             label="none",    tooltip="None"},
+			{value=NORMAL,           label="norm",    tooltip="Normal"},
+			{value=ELLIPSE,          label="ellip",   tooltip="Ellipse"},
+			{value=UNIFORM,          label="rect",    tooltip="Rectangle (uniform)"},
+			{value=BORDER_ELLIPSE,   label="b.ellip", tooltip="Border ellipse"},
+			{value=BORDER_RECTANGLE, label="b.rect",  tooltip="Border rectangle"},
+		}
+
 		local distribution, dx,dy, angle, relative = ps.getEmissionArea!()
 
-		local BUTTONS: []Button : {{label="none"},{label="uni"},{label="norm"},{label="ellip"},{label="b.ellip"},{label="b.rect"}}
-		local DISTRIBUTION_TO_INDEX: struct { !key:LG.AreaSpreadDistribution, !value:int } = {
-			[NONE]             = 1,
-			[UNIFORM]          = 2,
-			[NORMAL]           = 3,
-			[ELLIPSE]          = 4,
-			[BORDER_ELLIPSE]   = 5,
-			[BORDER_RECTANGLE] = 6,
-		}
-		local pressed1, i = drawPanelButtons(state, "Area", "distribution", BUTTONS, selected=DISTRIBUTION_TO_INDEX[distribution])
-		if pressed1 == 1  if i == {
-			case 1: distribution = NONE
-			case 2: distribution = UNIFORM
-			case 3: distribution = NORMAL
-			case 4: distribution = ELLIPSE
-			case 5: distribution = BORDER_ELLIPSE
-			case 6: distribution = BORDER_RECTANGLE
-		}
+		local _, i         = indexWith(BUTTONS, "value", distribution)
+		local pressed1, ^i = drawPanelButtons(state, "Area", "distribution", BUTTONS, selected=i)
+		if pressed1 == 1  distribution = cast(LG.AreaSpreadDistribution) BUTTONS[i].value
 
 		if distribution == NONE {
 			if pressed1 == 1  ps.setEmissionArea!(distribution, 0,0)
@@ -975,47 +1029,30 @@ export drawPanel :: () {
 	-- Colors + blend mode.
 	drawPanelSeparator(state)
 	do {
-		local colors   = system.colors
-		local doRemove = (state.mod == ModifierKey.A)
-		local buttons: []Button
+		local BUTTONS: []Button : {{label="+"}}
+		local colors     = system.colors
+		local pressed, i = drawPanelButtons(state, "Color", "", BUTTONS)
 
-		if doRemove {
-			for i = 1, #colors//4  insert(buttons, cast(Button){label=format("%d", i)})
-		} else {
-			insert(buttons, cast(Button){label="+"})
-		}
-
-		local pressed, i = drawPanelButtons(state, "Color", (doRemove ? "DEL" : ""), buttons)
-
-		if pressed ~= 1 {
-			-- void
-
-		} elseif doRemove {
-			local colorIndex = i*4-3
-			for 1, 4  remove(colors, colorIndex)
-
-			if colors[1] == NULL {
-				for 1, 4  insert(colors, 1)
-			}
-
-			updateParticleColors(ps, colors)
-
-		} elseif colors[8*4] == NULL {
+		if pressed == 1 and colors[8*4] == NULL {
 			local lastColorIndex = (#colors//4)*4-3
 			for 1, 4  insert(colors, colors[lastColorIndex+it-1])
 			updateParticleColors(ps, colors)
 		}
 	}
 	do {
-		local colors     = system.colors
-		local anyPressed = false
-		local moveAll    = state.mod == ModifierKey.CS
+		local colors  = system.colors
+		local moveAll = state.mod == ModifierKey.CS
+
+		local anyPressed         = false
+		local colorIndexToDelete = 0
 
 		for i = 1, #colors, 4 {
-			local pressed, h,s,v,a = drawPanelColor(state, "", format("#%d", (i+3)//4), colors[i], colors[i+1], colors[i+2], colors[i+3])
-			anyPressed             = anyPressed or pressed == 1
+			local pressed, h,s,v,a, deleted = drawPanelColor(state, "", format("#%d", (i+3)//4), colors[i],colors[i+1],colors[i+2],colors[i+3], enableDelete=true)
+			anyPressed                      = anyPressed or pressed == 1
 
-			if pressed ~= 1 {
+			if deleted {
+				colorIndexToDelete = i
+			} elseif pressed ~= 1 {
 				-- void
 			} elseif not moveAll {
 				colors[i], colors[i+1], colors[i+2], colors[i+3] = h,s,v,a
@@ -1025,7 +1062,22 @@ export drawPanel :: () {
 				for j = 4, #colors, 4  colors[j] = a
 			}
 		}
-		if anyPressed  updateParticleColors(ps, colors)
+
+		if colorIndexToDelete {
+			for 1, 4  remove(colors, colorIndexToDelete)
+
+			if colors[1] == NULL {
+				colors[1] = 0
+				colors[2] = 0
+				colors[3] = 1
+				colors[4] = 1
+			}
+
+			updateParticleColors(ps, colors)
+
+		} elseif anyPressed {
+			updateParticleColors(ps, colors)
+		}
 	}
 	do {
 		local BUTTONS: []Button : {{label="alpha"},{label="add"},{label="subtract"},{label="screen"}}
@@ -1046,9 +1098,9 @@ export drawPanel :: () {
 	drawPanelSeparator(state, true)
 
 	do {
-		-- Reset these here after the target panel item has handled the paste.
-		panelItemToPasteAt = 0
-		pasteTarget        = 0
+		-- Reset these here after the target panel item has handled the action.
+		panelItemForContextMenu = 0
+		contextMenuAction       = 0
 	}
 
 	LG.pop()
@@ -1157,7 +1209,7 @@ local isHoveringPanelItemCircle :: (state:PanelState, x,y,radius:int) -> bool {
 
 local isPressingOrMayPress :: (state:PanelState) -> (pressedMouseButton:int) {
 	if state.panelItem == draggedPanelItem  return 1
-	return (draggedPanelItem or panelItemToPasteAt) ? 0 : pressedOnPanelWithMouseButton
+	return (draggedPanelItem or panelItemForContextMenu) ? 0 : pressedOnPanelWithMouseButton
 }
 
 

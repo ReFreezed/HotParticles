@@ -96,6 +96,13 @@ export Project :: struct {
 	panelScroll       = 0.0,
 	panelScrollSource = 0.0,
 	panelScrollTarget = 0,
+
+	displayedName: string,
+
+	!call :: () -> Project {
+		static n = 0 ; n += 1
+		return {displayedName=format("(unnamed %d)", n)}
+	}
 }
 
 export System :: struct {
@@ -162,7 +169,7 @@ export addNewSystem :: (project:Project) {
 }
 
 export addNewProject :: () {
-	local project: Project
+	local project = Project()
 	insert(openProjects, project)
 
 	addNewSystem(project)
@@ -314,9 +321,7 @@ export onMouseMoved :: (mx,my:int, dx,dy:int, isTouch:bool) {
 		local x = (mx - (LG.getWidth()+PANEL_WIDTH)/2) / project.zoom
 		local y = (my - (LG.getHeight()           )/2) / project.zoom
 
-		for system: project.systems {
-			system.particles.moveTo!(x, y)
-		}
+		for project.systems  it.particles.moveTo!(x, y)
 	}
 }
 export onMouseReleased :: (mx,my:int, mbutton:int, isTouch:bool, presses:int) {
@@ -351,33 +356,36 @@ export onMouseWheel :: (dx,dy:int) {
 
 
 export onUpdate :: (dt:float) {
-	local project       = openProjects[currentProjectIndex]
-	local systemsActive = false
+	local project = openProjects[currentProjectIndex]
 
-	local time = LT.getTime()
-	for project.systems  it.particles.update!(dt)
-	particleUpdateTime = LT.getTime()-time
+	do {
+		local systemsActive = false
 
-	for system: project.systems {
-		local ps         = system.particles
-		local bufferSize = ps.getBufferSize!()
+		local time = LT.getTime()
+		for project.systems  it.particles.update!(dt)
+		particleUpdateTime = LT.getTime()-time
 
-		systemsActive = systemsActive or ps.isActive!() or ps.getCount!() > 0
+		for project.systems {
+			local ps         = it.particles
+			local bufferSize = ps.getBufferSize!()
 
-		if ps.getCount!() > bufferSize-10 and bufferSize < MAX_BUFFER_SIZE {
-			ps.setBufferSize!(2*bufferSize)
+			systemsActive = systemsActive or ps.isActive!() or ps.getCount!() > 0
 
-			actionText     = "Increased buffer size"
-			actionTextTime = LT.getTime()
+			if ps.getCount!() > bufferSize-10 and bufferSize < MAX_BUFFER_SIZE {
+				ps.setBufferSize!(2*bufferSize)
+
+				actionText     = "Increased buffer size"
+				actionTextTime = LT.getTime()
+			}
+		}
+
+		if not systemsActive {
+			for project.systems  it.particles.start!()
 		}
 	}
 
-	if not systemsActive {
-		for system: project.systems
-			system.particles.start!()
-	}
-
-	if scheduleSaveWorkspace  saveWorkspace() -- @UX: Maybe wait a little while before saving?
+	if scheduleSaveWorkspace     saveWorkspace() -- @UX: Maybe wait a little while before saving?
+	if scheduleRecreateCanvases  createCanvases()
 
 	project.zoom = math.moveTowards(
 		project.zoom,
@@ -390,7 +398,9 @@ export onUpdate :: (dt:float) {
 		math.abs(project.panelScrollTarget - project.panelScrollSource) * dt / 0.05
 	)
 
-	if scheduleRecreateCanvases  createCanvases()
+	tooltipHoverTime = tooltipRendered ? tooltipHoverTime+dt : .0
+	tooltipOpacity   = math.clamp01((tooltipHoverTime-.30)/0.20)
+	tooltipRendered  = false
 }
 
 
@@ -492,10 +502,10 @@ export onDraw :: () {
 
 		local time = LT.getTime()
 
-		for system: project.systems {
-			if system.visible {
-				LG.setBlendMode(system.blendMode)
-				LG.draw(system.particles)
+		for project.systems {
+			if it.visible {
+				LG.setBlendMode(it.blendMode)
+				LG.draw(it.particles)
 			}
 		}
 		LG.setBlendMode(LG.BlendMode.ALPHA)
