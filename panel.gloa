@@ -18,6 +18,10 @@ local GUIDE_LINE_OPACITY           :: .2
 local HOVER_OUTLINE_OPACITY        :: .3
 local HOVER_OUTLINE_OPACITY_STRONG :: .5
 
+local CONTEXT_MENU_MIN_WIDTH :: 120
+local CONTEXT_MENU_PADDING_X :: 15
+local CONTEXT_MENU_PADDING_Y :: 5
+
 local BUTTON_LABELS_YES_NO :: {"yes", "no"}
 
 
@@ -31,6 +35,15 @@ export panelScroll       = 0.0
 export panelScrollSource = 0.0
 export panelScrollTarget = 0
 
+export contextMenu: ContextMenu = NULL
+
+local clipboardScalar: float   = NULL
+local clipboardAngle:  float   = NULL
+local clipboardColor:  []float = NULL
+
+local panelItemToPasteAt = 0
+local pasteTarget        = 0 -- E.g. "the green component" in a color.
+
 
 
 local PanelState :: struct {
@@ -38,25 +51,74 @@ local PanelState :: struct {
 	fontH: int,
 	mx: int,
 	my: int,
+	myScrolled: int,
 	lastPanelY: int,
 	panelItem: int,
 	mod = ModifierKey.NONE,
+	showedContextMenuThisFrame: bool,
+}
+
+export ContextMenu :: struct {
+	x:        int,
+	y:        int,
+	width:    int,
+	height:   int,
+	items:    []string,
+	callback: (choice:int) = NULL,
 }
 
 
+
+local showContextMenu :: (state:PanelState, items:[]string, cb:type_of(ContextMenu.callback)) {
+	local w = 0
+	local h = #items * (fontNormal.getHeight!() + 2*CONTEXT_MENU_PADDING_Y)
+
+	for items  w = math.max(w, fontNormal.getWidth!(it))
+	w = math.max(w+2*CONTEXT_MENU_PADDING_X, CONTEXT_MENU_MIN_WIDTH)
+
+	local x, y  = love.mouse.getPosition()
+	y          += 2
+
+	x = math.min(x, LG.getWidth()-w)
+	if y+h > LG.getHeight()  y -= h+4
+
+	contextMenu = {
+		x        = x,
+		y        = y,
+		width    = w,
+		height   = h,
+		items    = items,
+		callback = cb,
+	}
+	state.showedContextMenuThisFrame = true
+}
+
+
+
+export isInsideContextMenu :: (mx,my:int) -> bool {
+	return contextMenu ~= NULL
+		and mx >= contextMenu.x
+		and my >= contextMenu.y
+		and mx <  contextMenu.x + contextMenu.width
+		and my <  contextMenu.y + contextMenu.height
+}
 
 local isHoveringPanelItemRectangle :: (state:PanelState, x,y,w,h:int) -> bool {
-	return state.panelItem == draggedPanelItem
-		or draggedPanelItem == 0 and state.mx >= x and state.mx < x+w and state.my >= y and state.my < y+h
+	if draggedPanelItem == state.panelItem      return true
+	if draggedPanelItem > 0                     return false
+	if isInsideContextMenu(state.mx, state.my)  return false
+	return isInside(state.mx, state.myScrolled, x, y, w, h)
 }
 local isHoveringPanelItemCircle :: (state:PanelState, x,y,radius:int) -> bool {
-	return state.panelItem == draggedPanelItem
-		or draggedPanelItem == 0 and math.distance(state.mx,state.my, x,y) <= radius
+	if draggedPanelItem == state.panelItem      return true
+	if draggedPanelItem > 0                     return false
+	if isInsideContextMenu(state.mx, state.my)  return false
+	return math.distance(state.mx,state.myScrolled, x,y) <= radius
 }
 
 local isPressingOrMayPress :: (state:PanelState) -> (pressedMouseButton:int) {
 	if state.panelItem == draggedPanelItem  return 1
-	return draggedPanelItem == 0 ? pressedOnPanelWithMouseButton : 0
+	return (draggedPanelItem or panelItemToPasteAt) ? 0 : pressedOnPanelWithMouseButton
 }
 
 
@@ -106,8 +168,26 @@ local drawPanelDirection :: (state:PanelState, label1,label2:string, angle:float
 
 	if pressed == 1 {
 		draggedPanelItem = state.panelItem
-		angle            = math.atan(state.my-y, state.mx-x)
+		angle            = math.atan(state.myScrolled-y, state.mx-x)
 		if state.mod == ModifierKey.C  angle = math.round(angle * 8/math.TAU) / 8*math.TAU
+
+	} elseif pressed == 2 {
+		local ITEMS :: {"Copy angle","Paste angle"}
+		local panelItem = state.panelItem
+
+		showContextMenu(state, ITEMS, [angle,panelItem] (choice:int) {
+			if choice == {
+				case 1: clipboardAngle                  = angle
+				case 2: panelItemToPasteAt, pasteTarget = panelItem, 0
+			}
+		})
+
+	} elseif state.panelItem == panelItemToPasteAt {
+		if clipboardAngle ~= NULL {
+			angle                 = clipboardAngle
+			pressed               = 1
+			scheduleSaveWorkspace = true
+		}
 
 	} elseif hovered and (keysPressedThisFrame.left or keysPressedThisFrame.right) {
 		local delta = math.TAU * ((state.mod == ModifierKey.S) ? 45/360 : (state.mod == ModifierKey.C) ? 1/360 : 5/360)
@@ -192,10 +272,28 @@ local drawPanelSlider :: (state:PanelState,
 		value            = math.lerp(valueMin, valueMax, math.clamp01((state.mx-x)/w))
 		if state.mod == ModifierKey.C  value = math.lerp(valueMin, valueMax, math.round(math.clamp01((state.mx-x)/w)*16)/16)
 
+	} elseif pressed == 2 {
+		local ITEMS :: {"Copy value","Paste value"}
+		local panelItem = state.panelItem
+
+		showContextMenu(state, ITEMS, [value,panelItem] (choice:int) {
+			if choice == {
+				case 1: clipboardScalar                 = value
+				case 2: panelItemToPasteAt, pasteTarget = panelItem, 0
+			}
+		})
+
+	} elseif state.panelItem == panelItemToPasteAt {
+		if clipboardScalar ~= NULL {
+			value                 = math.clamp(clipboardScalar, valueMin, valueMax)
+			pressed               = 1
+			scheduleSaveWorkspace = true
+		}
+
 	} elseif hovered and (keysPressedThisFrame.left or keysPressedThisFrame.right) {
-		local delta = (valueMax-valueMin) * ((state.mod == ModifierKey.S) ? 1/16 : (state.mod == ModifierKey.C) ? 1/1024 : 1/128)
-		value       = math.clamp((keysPressedThisFrame.left ? value-delta : value+delta), valueMin, valueMax)
-		pressed     = 1
+		local delta           = (valueMax-valueMin) * ((state.mod == ModifierKey.S) ? 1/16 : (state.mod == ModifierKey.C) ? 1/1024 : 1/128)
+		value                 = math.clamp((keysPressedThisFrame.left ? value-delta : value+delta), valueMin, valueMax)
+		pressed               = 1
 		scheduleSaveWorkspace = true
 	}
 
@@ -237,10 +335,11 @@ local drawPanelColor :: (state:PanelState, label1,label2:string, r,g,b:float,a:f
 	state.panelItem += 1
 
 	local SLIDER_HEIGHT :: 12
+	local PREVIEW_WIDTH :: 24
 
 	local components = (a == nil ? 3 : 4)
 
-	local w = PANEL_WIDTH - LABEL_WIDTH - 2*PANEL_SPACING
+	local w = PANEL_WIDTH - LABEL_WIDTH - PREVIEW_WIDTH - 3*PANEL_SPACING
 	local h = SLIDER_HEIGHT * components
 	local x = LABEL_WIDTH + PANEL_SPACING
 	local y = state.panelY
@@ -251,7 +350,7 @@ local drawPanelColor :: (state:PanelState, label1,label2:string, r,g,b:float,a:f
 	local hovered = isHoveringPanelItemRectangle(state, x, y, w, h)
 	local pressed = hovered ? isPressingOrMayPress(state) : 0
 
-	local component  = math.clamp(math.floor(1+(state.my-y)/SLIDER_HEIGHT), 1, components)
+	local component  = math.clamp(math.floor(1+(state.myScrolled-y)/SLIDER_HEIGHT), 1, components)
 	local hsvChanged = false
 
 	if pressed == 1 {
@@ -260,20 +359,73 @@ local drawPanelColor :: (state:PanelState, label1,label2:string, r,g,b:float,a:f
 		if not draggedPanelSubItem  draggedPanelSubItem = component
 		component = draggedPanelSubItem
 
-		if draggedPanelSubItem == {
+		if component == {
 			case 1: hue        = math.clamp01((state.mx-x)/w) ; hsvChanged = true
 			case 2: saturation = math.clamp01((state.mx-x)/w) ; hsvChanged = true
 			case 3: value      = math.clamp01((state.mx-x)/w) ; hsvChanged = true
 			case 4: a          = math.clamp01((state.mx-x)/w)
 		}
 
+	} elseif pressed == 2 {
+		local ITEMS_H :: {"Copy hue",           "Copy color","Paste hue",           "Paste color"}
+		local ITEMS_S :: {"Copy saturation",    "Copy color","Paste saturation",    "Paste color"}
+		local ITEMS_V :: {"Copy value strength","Copy color","Paste value strength","Paste color"}
+		local ITEMS_A :: {"Copy opacity",       "Copy color","Paste opacity",       "Paste color"}
+		local panelItem = state.panelItem
+
+		local items =
+			component == 1 ? ITEMS_H :
+			component == 2 ? ITEMS_S :
+			component == 3 ? ITEMS_V :
+			ITEMS_A
+
+		showContextMenu(state, items, [hue,saturation,value,a,panelItem,component] (choice:int) {
+			if choice == {
+				case 1:
+					if component == {
+						case 1: clipboardScalar = hue
+						case 2: clipboardScalar = saturation
+						case 3: clipboardScalar = value
+						case 4: clipboardScalar = cast(float) a
+					}
+				case 2: clipboardColor = {hue, saturation, value, (a == NULL ? 1.0 : cast(float)a)}
+				case 3: panelItemToPasteAt, pasteTarget = panelItem, component
+				case 4: panelItemToPasteAt, pasteTarget = panelItem, 0
+			}
+		})
+
+	} elseif state.panelItem == panelItemToPasteAt {
+		component = cast(int) pasteTarget
+		if component > 0 {
+			if clipboardScalar ~= NULL {
+				if component == {
+					case 1: hue        = math.clamp01(clipboardScalar) ; hsvChanged = true
+					case 2: saturation = math.clamp01(clipboardScalar) ; hsvChanged = true
+					case 3: value      = math.clamp01(clipboardScalar) ; hsvChanged = true
+					case 4: a          = math.clamp01(clipboardScalar)
+				}
+				pressed               = 1
+				scheduleSaveWorkspace = true
+			}
+		} else {
+			if clipboardColor ~= NULL {
+				hue                   = clipboardColor[1]
+				saturation            = clipboardColor[2]
+				value                 = clipboardColor[3]
+				a                     = clipboardColor[4]
+				hsvChanged            = true
+				pressed               = 1
+				scheduleSaveWorkspace = true
+			}
+		}
+
 	} elseif hovered and (keysPressedThisFrame.left or keysPressedThisFrame.right) {
 		local delta = ((state.mod == ModifierKey.S) ? 16/255 : (state.mod == ModifierKey.C) ? 1/255 : 4/255)
 		if component == {
-			case 1: hue        = math.clamp01((keysPressedThisFrame.left ? hue           -delta : hue           +delta)) ; hsvChanged = true
-			case 2: saturation = math.clamp01((keysPressedThisFrame.left ? saturation    -delta : saturation    +delta)) ; hsvChanged = true
-			case 3: value      = math.clamp01((keysPressedThisFrame.left ? value         -delta : value         +delta)) ; hsvChanged = true
-			case 4: a          = math.clamp01((keysPressedThisFrame.left ? cast(float)(a)-delta : cast(float)(a)+delta))
+			case 1: hue        = math.clamp01((keysPressedThisFrame.left ? hue            - delta : hue            + delta)) ; hsvChanged = true
+			case 2: saturation = math.clamp01((keysPressedThisFrame.left ? saturation     - delta : saturation     + delta)) ; hsvChanged = true
+			case 3: value      = math.clamp01((keysPressedThisFrame.left ? value          - delta : value          + delta)) ; hsvChanged = true
+			case 4: a          = math.clamp01((keysPressedThisFrame.left ? cast(float)(a) - delta : cast(float)(a) + delta))
 		}
 		pressed               = 1
 		scheduleSaveWorkspace = true
@@ -284,6 +436,18 @@ local drawPanelColor :: (state:PanelState, label1,label2:string, r,g,b:float,a:f
 	drawLabels(label1, label2, state.panelY)
 	-- drawLabels(label1, label2, math.round(state.panelY+(h-state.fontH)/2))
 
+	-- Preview.
+	do {
+		local previewX = x+w+PANEL_SPACING
+		LG.setColor(.15, .15, .15)
+		LG.rectangle(LG.DrawMode.FILL, previewX, y, PREVIEW_WIDTH, h)
+		LG.setColor(.27, .27, .27)
+		drawChecker(previewX, y, PREVIEW_WIDTH, h)
+		LG.setColor(r, g, b, (a == nil ? 1.0 : cast(float)a))
+		LG.rectangle(LG.DrawMode.FILL, previewX, y, PREVIEW_WIDTH, h)
+	}
+
+	-- Components.
 	do {
 		local iw, ih     = imageGradient.getDimensions!()
 		local gradientSx = w/iw
@@ -317,9 +481,9 @@ local drawPanelColor :: (state:PanelState, label1,label2:string, r,g,b:float,a:f
 		sliderY += SLIDER_HEIGHT
 
 		if a ~= nil {
-			LG.setColor(.1, .1, .1)
+			LG.setColor(.15, .15, .15)
 			LG.rectangle(LG.DrawMode.FILL, x, sliderY, w, SLIDER_HEIGHT)
-			LG.setColor(.3, .3, .3)
+			LG.setColor(.27, .27, .27)
 			drawChecker(x, sliderY, w, SLIDER_HEIGHT)
 			LG.setColor(r, g, b)
 			LG.draw(imageGradient, x, sliderY, 0, gradientSx, gradientSy)
@@ -409,11 +573,12 @@ local drawPanelButtons :: (state:PanelState, label1,label2:string, buttonLabels:
 
 export drawPanel :: () {
 	local state: PanelState = {
-		panelY = PANEL_SPACING,
-		fontH  = fontNormal.getHeight!(),
-		mx     = love.mouse.getX(),
-		my     = love.mouse.getY()-math.round(panelScroll),
-		mod    = getModifierKey(),
+		panelY     = PANEL_SPACING,
+		fontH      = fontNormal.getHeight!(),
+		mx         = love.mouse.getX(),
+		my         = love.mouse.getY(),
+		myScrolled = love.mouse.getY()-math.round(panelScroll),
+		mod        = getModifierKey(),
 	}
 
 	-- Note: Some things may render incorrectly for one frame if the user does
@@ -830,6 +995,47 @@ export drawPanel :: () {
 		}
 	}
 	drawPanelSeparator(state, true)
+
+	do {
+		-- Reset these here after the target panel item has handled the paste.
+		panelItemToPasteAt = 0
+		pasteTarget        = 0
+	}
+
+	LG.origin()
+
+	if contextMenu ~= NULL {
+		local itemHeight  = state.fontH + 2*CONTEXT_MENU_PADDING_Y
+		local pressedItem = 0
+
+		LG.setColor(.6, .6, .6)
+		LG.rectangle(LG.DrawMode.FILL, contextMenu.x, contextMenu.y, contextMenu.width, contextMenu.height)
+
+		for contextMenu.items {
+			local x = contextMenu.x
+			local y = contextMenu.y + (itIndex-1)*itemHeight
+
+			if isInside(state.mx, state.my, x, y, contextMenu.width, itemHeight) {
+				if not state.showedContextMenuThisFrame and pressedOnPanelWithMouseButton == 1
+					pressedItem = itIndex
+
+				LG.setColor(.8, .8, .8)
+				LG.rectangle(LG.DrawMode.FILL, x, y, contextMenu.width, itemHeight)
+			}
+
+			LG.setColor(0, 0, 0)
+			LG.print(it, x+CONTEXT_MENU_PADDING_X, y+CONTEXT_MENU_PADDING_Y)
+		}
+
+		if pressedItem {
+			local _contextMenu = contextMenu
+			contextMenu        = NULL
+			_contextMenu.callback(pressedItem)
+
+		} elseif pressedAnythingThisFrame and not (state.showedContextMenuThisFrame or isInsideContextMenu(state.mx, state.my)) {
+			contextMenu = NULL
+		}
+	}
 
 	pressedOnPanelWithMouseButton = 0
 }

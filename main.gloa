@@ -51,6 +51,7 @@ export actionTextTime  = -9999.00
 export messageText     = ""
 export messageTextTime = -9999.00
 
+export pressedAnythingThisFrame = false
 export isPositioningParticles   = false
 export scheduleSaveWorkspace    = false
 export scheduleRecreateCanvases = false
@@ -143,8 +144,8 @@ export createCanvases :: () {
 	}
 
 	local SETTINGS: LG.CanvasSettings : {msaa=4}
-	canvasGui   = LG.newCanvas(ww,             wh, SETTINGS)
-	canvasWorld = LG.newCanvas(ww-PANEL_WIDTH, wh)
+	canvasGui   = LG.newCanvas(ww,                          wh, SETTINGS)
+	canvasWorld = LG.newCanvas(math.max(ww-PANEL_WIDTH, 1), wh)
 
 	if openProjects[currentProjectIndex].pixelateWorld {
 		canvasWorld.setFilter!(LG.FilterMode.NEAREST, LG.FilterMode.NEAREST)
@@ -203,7 +204,7 @@ export onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool)
 
 	if key == {
 		case "r":      for openProjects[currentProjectIndex].systems { it.particles.reset!() ; it.particles.start!() }
-		case "escape": LE.quit(0)
+		case "escape": if contextMenu ~= NULL  contextMenu = NULL  else  LE.quit(0)
 		case "f1":     showStats        = not showStats        ; scheduleSaveWorkspace = true
 		case "f2":     showPanelNumbers = not showPanelNumbers ; scheduleSaveWorkspace = true
 		case "f10":    if mod == ModifierKey.C  LE.restart()
@@ -211,9 +212,11 @@ export onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool)
 }
 
 export onMousePressed :: (mx,my:int, mbutton:int, isTouch:bool, presses:int) {
+	pressedAnythingThisFrame = true
+
 	if love.mouse.isGrabbed()  return
 
-	if mx < PANEL_WIDTH  pressedOnPanelWithMouseButton = mbutton
+	if mx < PANEL_WIDTH or isInsideContextMenu(mx, my)  pressedOnPanelWithMouseButton = mbutton
 
 	if mbutton == 1 {
 		if not pressedOnPanelWithMouseButton {
@@ -373,12 +376,14 @@ export onDraw :: () {
 		}
 
 		-- Mouse stuff.
+		--[[
 		local mx, my = love.mouse.getPosition()
 		if isPositioningParticles {
 			LG.setColor(1, 0, 0)
 			LG.line(mx-50, my, mx+50, my)
 			LG.line(mx, my-50, mx, my+50)
 		}
+		--]]
 
 		LG.reset()
 	}
@@ -412,7 +417,9 @@ export onDraw :: () {
 
 	LG.draw(canvasGui)
 
-	keysPressedThisFrame = {} -- We have to reset this here instead of in onUpdate() as some keys are processed while we draw things.
+	-- We have to reset these here instead of in onUpdate() as a bunch of update stuff happen while we draw things.
+	keysPressedThisFrame     = {}
+	pressedAnythingThisFrame = false
 }
 
 
