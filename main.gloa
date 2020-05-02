@@ -63,7 +63,8 @@ export scheduleRecreateCanvases = false
 
 export keysPressedThisFrame: struct { !key:LK.KeyConstant, !value:bool }
 
-local lastParticleDrawTime = 0.0
+local particleUpdateTime = 0.00
+local particleDrawTime   = 0.00
 
 -- Saved settings.
 export showProjectSettings = true
@@ -73,17 +74,6 @@ export showPanelNumbers    = true
 
 
 export Project :: struct {
-	systemIndex = 1,
-
-	zoomLevel  = 0,
-	zoom       = 1.0,
-	zoomSource = 1.0,
-	zoomTarget = 1.0,
-
-	panelScroll       = 0.0,
-	panelScrollSource = 0.0,
-	panelScrollTarget = 0,
-
 	-- Saved stuff:
 
 	systems: []System,
@@ -94,15 +84,34 @@ export Project :: struct {
 
 	pixelateWorld    = false,
 	pixelateTextures = false,
+
+	-- Runtime stuff:
+
+	systemIndex = 1,
+
+	zoomLevel  = 0,
+	zoom       = 1.0,
+	zoomSource = 1.0,
+	zoomTarget = 1.0,
+
+	panelScroll       = 0.0,
+	panelScrollSource = 0.0,
+	panelScrollTarget = 0,
 }
 
 export System :: struct {
+	-- Saved stuff:
+
 	particles: LG.ParticleSystem = NULL,
 
 	colors: []float, -- {h1,s1,v1,a1,...}
 	blendMode = LG.BlendMode.ALPHA,
 
 	useCustomOffset = false,
+
+	-- Runtime stuff:
+
+	visible = true,
 
 	!call :: () -> System {
 		local system: System
@@ -295,8 +304,7 @@ export onMouseMoved :: (mx,my:int, dx,dy:int, isTouch:bool) {
 export onMouseReleased :: (mx,my:int, mbutton:int, isTouch:bool, presses:int) {
 	if mbutton == 1 {
 		if draggedPanelItem {
-			draggedPanelItem      = 0
-			draggedPanelSubItem   = 0
+			stopDraggingPanelItem()
 			scheduleSaveWorkspace = true
 		}
 		isPositioningParticles = false
@@ -328,13 +336,15 @@ export onUpdate :: (dt:float) {
 	local project       = openProjects[currentProjectIndex]
 	local systemsActive = false
 
+	local time = LT.getTime()
+	for project.systems  it.particles.update!(dt)
+	particleUpdateTime = LT.getTime()-time
+
 	for system: project.systems {
-		local ps = system.particles
-		ps.update!(dt)
+		local ps         = system.particles
+		local bufferSize = ps.getBufferSize!()
 
 		systemsActive = systemsActive or ps.isActive!() or ps.getCount!() > 0
-
-		local bufferSize = ps.getBufferSize!()
 
 		if ps.getCount!() > bufferSize-10 and bufferSize < MAX_BUFFER_SIZE {
 			ps.setBufferSize!(2*bufferSize)
@@ -382,6 +392,9 @@ export onDraw :: () {
 
 		-- Stats.
 		if showStats {
+			local particleCountTotal = 0
+			for project.systems  particleCountTotal += it.particles.getCount!()
+
 			local fontH = fontNormal.getHeight!()
 
 			local x = PANEL_WIDTH+5
@@ -400,17 +413,10 @@ export onDraw :: () {
 			}
 
 			drawStatsLine("FPS: %d", LT.getFPS())
-			drawStatsLine("Particle draw time: %.3f ms", lastParticleDrawTime*1000)
-
-			local particleCountTotal = 0
-
-			for system: project.systems {
-				local count         = system.particles.getCount!()
-				particleCountTotal += count
-				drawStatsLine("%d_ParticleCount: %d", itIndex, count)
-			}
-
-			drawStatsLine("ParticleCountTotal: %d", particleCountTotal)
+			drawStatsLine("ParticleSystemUpdateTime: %.3f ms", 1000*particleUpdateTime)
+			drawStatsLine("ParticleSystemDrawTime: %.3f ms",   1000*particleDrawTime)
+			drawStatsLine("ParticleCountTotal: %d",            particleCountTotal)
+			for project.systems  drawStatsLine("ParticleCount_%d: %d", itIndex, it.particles.getCount!())
 			drawStatsLine("(hide this with F1)")
 		}
 
@@ -469,12 +475,14 @@ export onDraw :: () {
 		local time = LT.getTime()
 
 		for system: project.systems {
-			LG.setBlendMode(system.blendMode)
-			LG.draw(system.particles)
+			if system.visible {
+				LG.setBlendMode(system.blendMode)
+				LG.draw(system.particles)
+			}
 		}
 		LG.setBlendMode(LG.BlendMode.ALPHA)
 
-		lastParticleDrawTime = LT.getTime()-time
+		particleDrawTime = LT.getTime()-time
 
 		LG.reset()
 	}

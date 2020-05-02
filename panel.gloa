@@ -71,62 +71,6 @@ export ContextMenu :: struct {
 
 
 
-local showContextMenu :: (state:PanelState, items:[]string, cb:type_of(ContextMenu.callback)) {
-	local w = 0
-	local h = #items * (fontNormal.getHeight!() + 2*CONTEXT_MENU_PADDING_Y)
-
-	for items  w = math.max(w, fontNormal.getWidth!(it))
-	w = math.max(w+2*CONTEXT_MENU_PADDING_X, CONTEXT_MENU_MIN_WIDTH)
-
-	local x, y  = love.mouse.getPosition()
-	y          += 2
-
-	x = math.min(x, LG.getWidth()-w)
-	if y+h > LG.getHeight()  y -= h+4
-
-	contextMenu = {
-		x        = x,
-		y        = y,
-		width    = w,
-		height   = h,
-		items    = items,
-		callback = cb,
-	}
-	state.showedContextMenuThisFrame = true
-}
-
-
-
-export isInsideContextMenu :: (mx,my:int) -> bool {
-	return contextMenu ~= NULL
-		and mx >= contextMenu.x
-		and my >= contextMenu.y
-		and mx <  contextMenu.x + contextMenu.width
-		and my <  contextMenu.y + contextMenu.height
-}
-
-local isHoveringPanelItemRectangle :: (state:PanelState, x,y,w,h:int) -> bool {
-	if draggedPanelItem == state.panelItem      return true
-	if draggedPanelItem > 0                     return false
-	if state.my < state.ignoreMouseAboveY       return false
-	if isInsideContextMenu(state.mx, state.my)  return false
-	return isInside(state.mx, state.myScrolled, x, y, w, h)
-}
-local isHoveringPanelItemCircle :: (state:PanelState, x,y,radius:int) -> bool {
-	if draggedPanelItem == state.panelItem      return true
-	if draggedPanelItem > 0                     return false
-	if state.my < state.ignoreMouseAboveY       return false
-	if isInsideContextMenu(state.mx, state.my)  return false
-	return math.distance(state.mx,state.myScrolled, x,y) <= radius
-}
-
-local isPressingOrMayPress :: (state:PanelState) -> (pressedMouseButton:int) {
-	if state.panelItem == draggedPanelItem  return 1
-	return (draggedPanelItem or panelItemToPasteAt) ? 0 : pressedOnPanelWithMouseButton
-}
-
-
-
 local drawChecker :: (x,y,w,h:float, scale=1.0) {
 	static quad: LG.Quad = NULL
 
@@ -502,7 +446,11 @@ local drawPanelColor :: (state:PanelState, label1,label2:string, hue,saturation,
 
 local ButtonStyle :: enum { NORMAL, TABS }
 
-local drawPanelButtons :: (state:PanelState, label1,label2:string, buttonLabels:[]string, selected=0, style=ButtonStyle.NORMAL, lastButtonWidth=0, showLabel=true) -> (pressedMouseButton:int, pressedIndex:int) {
+local drawPanelButtons :: (state:PanelState,
+	label1,label2:string, buttonLabels:[]string, selected=0, style=ButtonStyle.NORMAL, lastButtonWidth=0, showLabel=true, enableDragging=false
+) -> (
+	pressedMouseButton:int, pressedIndex:int, dragged:bool
+) {
 	state.panelItem += 1
 
 	local highlightAll = (selected == 0)
@@ -516,11 +464,21 @@ local drawPanelButtons :: (state:PanelState, label1,label2:string, buttonLabels:
 
 	local hovered = isHoveringPanelItemRectangle(state, x, y, w, h)
 	local pressed = hovered ? isPressingOrMayPress(state) : 0
+
 	local pressedIndex: int
+	local dragged = false
 
 	if pressed {
-		pressedIndex          = math.clamp(math.floor(1+(state.mx-x)/buttonW0), 1, #buttonLabels)
-		scheduleSaveWorkspace = true
+		pressedIndex = math.clamp(math.floor(1+(state.mx-x)/buttonW0), 1, #buttonLabels)
+
+		if enableDragging and pressed == 1 {
+			if not draggedPanelItem
+				draggedPanelItem = state.panelItem
+			else
+				dragged = true
+		} else {
+			scheduleSaveWorkspace = true
+		}
 	}
 
 	if showLabel  drawLabels(label1, label2, state.panelY)
@@ -568,7 +526,7 @@ local drawPanelButtons :: (state:PanelState, label1,label2:string, buttonLabels:
 
 	state.lastPanelY  = state.panelY
 	state.panelY     += h + PANEL_SPACING
-	return pressed, pressedIndex
+	return pressed, pressedIndex, dragged
 }
 
 export drawPanel :: () {
@@ -595,16 +553,27 @@ export drawPanel :: () {
 
 		insert(buttonLabels, "+")
 
-		local pressed, i = drawPanelButtons(state, "", "", buttonLabels, selected=currentProjectIndex, style=ButtonStyle.TABS, showLabel=false, lastButtonWidth=32)
-		if pressed == 1 {
+		local pressed, i, dragged = drawPanelButtons(state, "", "", buttonLabels, selected=currentProjectIndex, style=ButtonStyle.TABS, showLabel=false, lastButtonWidth=32, enableDragging=true)
+		if dragged {
 			if i < #buttonLabels {
+				remove(openProjects, currentProjectIndex)
+				insert(openProjects, i, project)
 				currentProjectIndex = i
-			} else {
-				addNewProject()
-				currentProjectIndex = #openProjects
 			}
-			scheduleRecreateCanvases = true
-			updateParticleImageFilters()
+
+		} elseif pressed == 1 {
+			if i < #buttonLabels {
+				currentProjectIndex      = i
+				scheduleRecreateCanvases = true
+				updateParticleImageFilters()
+
+			} else {
+				stopDraggingPanelItem()
+				addNewProject()
+				currentProjectIndex      = #openProjects
+				scheduleRecreateCanvases = true
+				updateParticleImageFilters()
+			}
 
 		} elseif pressed == 3 and i < #buttonLabels {
 			-- @UX: Confirm closing project if there are changes.
@@ -667,19 +636,30 @@ export drawPanel :: () {
 		local doRemove = (state.mod == ModifierKey.A)
 
 		local buttonLabels: []string
-		for project.systems  buttonLabels[itIndex] = format("%d", itIndex)
+		for project.systems  buttonLabels[itIndex] = format((it.visible ? "%d" : "(%d)"), itIndex)
 
 		insert(buttonLabels, "+")
 
-		local pressed, i = drawPanelButtons(state, "ParticleSystem", "", buttonLabels, selected=project.systemIndex, lastButtonWidth=32, style=ButtonStyle.TABS)
-		if pressed == 1 {
+		local pressed, i, dragged = drawPanelButtons(state, "ParticleSystem", "", buttonLabels, selected=project.systemIndex, lastButtonWidth=32, style=ButtonStyle.TABS, enableDragging=true)
+		if dragged {
+			if i < #buttonLabels {
+				remove(project.systems, project.systemIndex)
+				insert(project.systems, i, system)
+				project.systemIndex = i
+			}
+
+		} elseif pressed == 1 {
 			if i < #buttonLabels {
 				project.systemIndex = i
 			} else {
+				stopDraggingPanelItem()
 				addNewSystem(project)
 				project.systemIndex = #project.systems
 			}
 			system = project.systems[project.systemIndex]
+
+		} elseif pressed == 2 {
+			if i < #buttonLabels  project.systems[i].visible = not project.systems[i].visible
 
 		} elseif pressed == 3 and i < #buttonLabels {
 			-- @UX: Confirm removal of system.
@@ -998,19 +978,19 @@ export drawPanel :: () {
 		if anyPressed  updateParticleColors(ps, colors)
 	}
 	do {
-		local BUTTON_LABELS :: {"alpha", "add", "screen", "subtract"}
+		local BUTTON_LABELS :: {"alpha", "add", "subtract", "screen"}
 		local BLEND_MODE_TO_INDEX: struct { !key:LG.BlendMode, !value:int } = {
 			[LG.BlendMode.ALPHA]    = 1,
 			[LG.BlendMode.ADD]      = 2,
-			[LG.BlendMode.SCREEN]   = 3,
-			[LG.BlendMode.SUBTRACT] = 4,
+			[LG.BlendMode.SUBTRACT] = 3,
+			[LG.BlendMode.SCREEN]   = 4,
 		}
 		local pressed, i = drawPanelButtons(state, "", "blend mode", BUTTON_LABELS, selected=BLEND_MODE_TO_INDEX[system.blendMode])
 		if pressed == 1  if i == {
 			case 1: system.blendMode = LG.BlendMode.ALPHA
 			case 2: system.blendMode = LG.BlendMode.ADD
-			case 3: system.blendMode = LG.BlendMode.SCREEN
-			case 4: system.blendMode = LG.BlendMode.SUBTRACT
+			case 3: system.blendMode = LG.BlendMode.SUBTRACT
+			case 4: system.blendMode = LG.BlendMode.SCREEN
 		}
 	}
 	drawPanelSeparator(state, true)
@@ -1068,6 +1048,73 @@ export drawPanel :: () {
 	}
 
 	pressedOnPanelWithMouseButton = 0
+}
+
+
+
+local showContextMenu :: (state:PanelState, items:[]string, cb:type_of(ContextMenu.callback)) {
+	local w = 0
+	local h = #items * (fontNormal.getHeight!() + 2*CONTEXT_MENU_PADDING_Y)
+
+	for items  w = math.max(w, fontNormal.getWidth!(it))
+	w = math.max(w+2*CONTEXT_MENU_PADDING_X, CONTEXT_MENU_MIN_WIDTH)
+
+	local x, y  = love.mouse.getPosition()
+	y          += 2
+
+	x = math.min(x, LG.getWidth()-w)
+	if y+h > LG.getHeight()  y -= h+4
+
+	contextMenu = {
+		x        = x,
+		y        = y,
+		width    = w,
+		height   = h,
+		items    = items,
+		callback = cb,
+	}
+	state.showedContextMenuThisFrame = true
+}
+
+
+
+export isInsideContextMenu :: (mx,my:int) -> bool {
+	return contextMenu ~= NULL
+		and mx >= contextMenu.x
+		and my >= contextMenu.y
+		and mx <  contextMenu.x + contextMenu.width
+		and my <  contextMenu.y + contextMenu.height
+}
+
+
+
+local isHoveringPanelItemRectangle :: (state:PanelState, x,y,w,h:int) -> bool {
+	if draggedPanelItem == state.panelItem      return true
+	if draggedPanelItem > 0                     return false
+	if state.my < state.ignoreMouseAboveY       return false
+	if isInsideContextMenu(state.mx, state.my)  return false
+	return isInside(state.mx, state.myScrolled, x, y, w, h)
+}
+local isHoveringPanelItemCircle :: (state:PanelState, x,y,radius:int) -> bool {
+	if draggedPanelItem == state.panelItem      return true
+	if draggedPanelItem > 0                     return false
+	if state.my < state.ignoreMouseAboveY       return false
+	if isInsideContextMenu(state.mx, state.my)  return false
+	return math.distance(state.mx,state.myScrolled, x,y) <= radius
+}
+
+
+
+local isPressingOrMayPress :: (state:PanelState) -> (pressedMouseButton:int) {
+	if state.panelItem == draggedPanelItem  return 1
+	return (draggedPanelItem or panelItemToPasteAt) ? 0 : pressedOnPanelWithMouseButton
+}
+
+
+
+export stopDraggingPanelItem :: () {
+	draggedPanelItem    = 0
+	draggedPanelSubItem = 0
 }
 
 
