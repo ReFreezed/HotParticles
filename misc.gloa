@@ -29,3 +29,10 @@ export getModifierKey :: () -> ModifierKey {
 export isInside :: (x,y:int, areaX,areaY,areaW,areaH:int) -> bool {
 	return x >= areaX and y >= areaY and x < areaX+areaW and y < areaY+areaH
 }
+
+export indexOf :: (arr:[]$T, v:T) -> (i:int, found:bool) {
+	for arr {
+		if it == v  return itIndex, true
+	}
+	return 0, false
+}

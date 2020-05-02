@@ -191,7 +191,7 @@ local drawSliderValue :: (sliderX,sliderY:float, sliderW,sliderH:float, value:fl
 		LG.setFont(fontNormal)
 	}
 	do {
-		local x = sliderX + value*(sliderW-4)
+		local x = math.round(sliderX + value*(sliderW-4))
 		LG.setColor(0, 0, 0)
 		LG.rectangle(LG.DrawMode.FILL, x, sliderY, 4, sliderH)
 		LG.setColor(1, 1, 1)
@@ -691,6 +691,16 @@ export drawPanel :: () {
 
 	-- Misc params.
 	local ps = system.particles
+	do {
+		local textureNames = {"light","moon"} -- @Incomplete: Dynamically get this list.
+		local i            = indexOf(textureNames, system.textureName)
+		local pressed, ^i  = drawPanelButtons(state, "Texture", "", textureNames, selected=i)
+		if pressed == 1 {
+			system.textureName = textureNames[i]
+			ps.setTexture!(particleImages[system.textureName]) -- @Incomplete: Update offset if system.useCustomOffset is set.
+		}
+	}
+	drawPanelSeparator(state)
 	do {
 		local BUTTON_LABELS :: {"top", "bottom", "random"}
 		local INSERT_MODE_TO_INDEX: struct { !key:LG.ParticleInsertMode, !value:int } = {

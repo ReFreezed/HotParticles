@@ -74,8 +74,7 @@ export showPanelNumbers    = true
 
 
 export Project :: struct {
-	-- Saved stuff:
-
+	-- Saved:
 	systems: []System,
 
 	bgColorH = .0,
@@ -85,8 +84,7 @@ export Project :: struct {
 	pixelateWorld    = false,
 	pixelateTextures = false,
 
-	-- Runtime stuff:
-
+	-- Runtime-only:
 	systemIndex = 1,
 
 	zoomLevel  = 0,
@@ -100,8 +98,7 @@ export Project :: struct {
 }
 
 export System :: struct {
-	-- Saved stuff:
-
+	-- Saved:
 	particles: LG.ParticleSystem = NULL,
 
 	colors: []float, -- {h1,s1,v1,a1,...}
@@ -109,14 +106,17 @@ export System :: struct {
 
 	useCustomOffset = false,
 
-	-- Runtime stuff:
+	textureName = "light",
+	-- textureIsPreset = true,
+	-- texturePath     = "",
 
+	-- Runtime-only:
 	visible = true,
 
 	!call :: () -> System {
 		local system: System
 
-		local ps = LG.newParticleSystem(particleImages.moon)
+		local ps = LG.newParticleSystem(particleImages.light)
 		ps.start!()
 		system.particles = ps
 
