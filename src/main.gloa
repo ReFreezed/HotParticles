@@ -24,13 +24,13 @@ export LK :: love.keyboard
 export LT :: love.timer
 
 export !self
-export !load "misc"
-export !load "panel"
-export !load "workspace"
+export !load "src/misc"
+export !load "src/panel"
+export !load "src/workspace"
 
 !run {
 	!import "compiler"
-	compile("conf.gloa")
+	compile("src/conf.gloa")
 }
 
 

@@ -1084,7 +1084,7 @@ export drawPanel :: () {
 			local previewX   = PANEL_WIDTH - PANEL_SPACING - COLOR_PREVIEW_WIDTH
 
 			static shader: LG.Shader = NULL
-			if shader == NULL  shader = LG.newShader("particleColorPreview.glsl")
+			if shader == NULL  shader = LG.newShader("src/particleColorPreview.glsl")
 
 			static colorsForShader: [][]float = {{},{},{},{},{},{},{},{}}
 
