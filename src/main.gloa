@@ -339,6 +339,13 @@ export onMouseReleased :: (mx,my:int, mbutton:int, isTouch:bool, presses:int) {
 export onMouseWheel :: (dx,dy:int) {
 	if love.mouse.isGrabbed()  return
 
+	local mod = getModifierKey()
+	if mod == ModifierKey.S {
+		shiftScrolledOnPanel = -dy
+		return
+	}
+	if mod ~= ModifierKey.NONE  return
+
 	local project = openProjects[currentProjectIndex]
 
 	if love.mouse.getX() < PANEL_WIDTH {

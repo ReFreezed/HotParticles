@@ -37,6 +37,7 @@ local BUTTONS_YES_NO: []Button : {
 
 
 export pressedOnPanelWithMouseButton = 0
+export shiftScrolledOnPanel          = 0
 
 export draggedPanelItem    = 0
 export draggedPanelSubItem = 0
@@ -1008,12 +1009,19 @@ export drawPanel :: () {
 
 		local anyPressed    = false
 		local indexToDelete = 0
+		local indexToShift  = 0
 
 		for i = 1, #sizes {
+			local y1 = state.panelY
+
 			local pressed, size, deleted = drawPanelSlider(state, "", format("#%d", i), 0, 8, sizes[i],other=0, 1, "%.2f", enableDelete=true)
 			anyPressed                   = anyPressed or pressed == 1
 
-			if deleted {
+			local y2 = state.panelY-PANEL_SPACING
+
+			if shiftScrolledOnPanel and state.myScrolled > y1 and state.myScrolled < y2 {
+				indexToShift = i
+			} elseif deleted {
 				indexToDelete = i
 			} elseif pressed ~= 1 {
 				-- void
@@ -1024,7 +1032,19 @@ export drawPanel :: () {
 			}
 		}
 
-		if indexToDelete {
+		if indexToShift {
+			if shiftScrolledOnPanel < 0 and indexToShift > 1 {
+				sizes[indexToShift], sizes[indexToShift-1] = sizes[indexToShift-1], sizes[indexToShift]
+				love.mouse.setPosition(state.mx, state.my-state.fontH-PANEL_SPACING)
+			} elseif shiftScrolledOnPanel > 0 and indexToShift < #sizes {
+				sizes[indexToShift], sizes[indexToShift+1] = sizes[indexToShift+1], sizes[indexToShift]
+				love.mouse.setPosition(state.mx, state.my+state.fontH+PANEL_SPACING)
+			}
+
+			scheduleSaveWorkspace = true
+			ps.setSizes!(sizes)
+
+		} elseif indexToDelete {
 			remove(sizes, indexToDelete)
 			if sizes[1] == NULL  insert(sizes, 1)
 			ps.setSizes!(sizes)
@@ -1056,15 +1076,22 @@ export drawPanel :: () {
 		local moveAll = state.mod == ModifierKey.CS
 
 		local anyPressed         = false
+		local colorIndexToShift  = 0
 		local colorIndexToDelete = 0
 
 		local previewY1 = state.panelY
 
 		for i = 1, #colors, 4 {
+			local y1 = state.panelY
+
 			local pressed, h,s,v,a, deleted = drawPanelColor(state, "", format("#%d", (i+3)//4), colors[i],colors[i+1],colors[i+2],colors[i+3], enableDelete=true, showPreview=(colors[5]==NULL))
 			anyPressed                      = anyPressed or pressed == 1
 
-			if deleted {
+			local y2 = state.panelY-PANEL_SPACING
+
+			if shiftScrolledOnPanel and state.myScrolled > y1 and state.myScrolled < y2 {
+				colorIndexToShift = i
+			} elseif deleted {
 				colorIndexToDelete = i
 			} elseif pressed ~= 1 {
 				-- void
@@ -1077,11 +1104,11 @@ export drawPanel :: () {
 			}
 		}
 
-		if colors[5] ~= NULL {
-			local previewY2  = state.panelY-PANEL_SPACING
+		local colorCount = #colors//4
 
-			local colorCount = #colors//4
-			local previewX   = PANEL_WIDTH - PANEL_SPACING - COLOR_PREVIEW_WIDTH
+		if colors[5] ~= NULL {
+			local previewX  = PANEL_WIDTH - PANEL_SPACING - COLOR_PREVIEW_WIDTH
+			local previewY2 = state.panelY-PANEL_SPACING
 
 			static shader: LG.Shader = NULL
 			if shader == NULL  shader = LG.newShader("src/particleColorPreview.glsl")
@@ -1111,7 +1138,26 @@ export drawPanel :: () {
 			LG.setShader()
 		}
 
-		if colorIndexToDelete {
+		if colorIndexToShift {
+			local swap :: (colors:[]float, i1,i2:int) {
+				colors[i1  ], colors[i2  ] = colors[i2  ], colors[i1  ]
+				colors[i1+1], colors[i2+1] = colors[i2+1], colors[i1+1]
+				colors[i1+2], colors[i2+2] = colors[i2+2], colors[i1+2]
+				colors[i1+3], colors[i2+3] = colors[i2+3], colors[i1+3]
+			}
+
+			if shiftScrolledOnPanel < 0 and colorIndexToShift > 1 {
+				swap(colors, colorIndexToShift, colorIndexToShift-4)
+				love.mouse.setPosition(state.mx, state.my-4*COLOR_SLIDER_HEIGHT-PANEL_SPACING)
+			} elseif shiftScrolledOnPanel > 0 and colorIndexToShift < colorCount*4-3 {
+				swap(colors, colorIndexToShift, colorIndexToShift+4)
+				love.mouse.setPosition(state.mx, state.my+4*COLOR_SLIDER_HEIGHT+PANEL_SPACING)
+			}
+
+			scheduleSaveWorkspace = true
+			updateParticleColors(ps, colors)
+
+		} elseif colorIndexToDelete {
 			for 1, 4  remove(colors, colorIndexToDelete)
 
 			if colors[1] == NULL {
@@ -1198,6 +1244,7 @@ export drawPanel :: () {
 	}
 
 	pressedOnPanelWithMouseButton = 0
+	shiftScrolledOnPanel          = 0
 }
 
 
