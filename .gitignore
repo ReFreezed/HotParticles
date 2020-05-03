@@ -1,6 +1,7 @@
 *.lnk
-*.sublime-*
 .gloa.*
+local/
 
 /*.lua
-/local
+/*.sublime-*
+/.run

@@ -43,6 +43,7 @@ local writeValues :: (buffer:[]string, v1,v2:$T, eol=false) {
 }
 
 export saveWorkspace :: () {
+	if not scheduleSaveWorkspace  return
 	scheduleSaveWorkspace = false
 	-- print("Saving workspace.")
 
@@ -52,6 +53,7 @@ export saveWorkspace :: () {
 	insert(buffer, "stats")               ; writeValue(buffer, eol=true, showStats)
 	insert(buffer, "showProjectSettings") ; writeValue(buffer, eol=true, showProjectSettings)
 	insert(buffer, "showPanelNumbers")    ; writeValue(buffer, eol=true, showPanelNumbers)
+	insert(buffer, "project")             ; writeValue(buffer, eol=true, currentProjectIndex)
 
 	for project: openProjects {
 		insert(buffer, ":project\n")
@@ -292,6 +294,11 @@ export loadWorkspace :: () -> (success:bool, gotError:bool, projects:[]Project) 
 					local ^ok, ^ptr, flag = readBool(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
 					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
 					showPanelNumbers = flag
+
+				case "project":
+					local ^ok, ^ptr, i = readInt(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
+					currentProjectIndex = i
 
 				case:
 					return parsingError(ln, "Unknown program parameter '%s'.", param)

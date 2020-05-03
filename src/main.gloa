@@ -49,9 +49,6 @@ export particleImages: struct { !key:string, !value:LG.Image }
 local canvasGui:   LG.Canvas = NULL
 local canvasWorld: LG.Canvas = NULL
 
-export openProjects: []Project
-export currentProjectIndex = 1
-
 export actionText      = ""
 export actionTextTime  = -9999.00
 export messageText     = ""
@@ -68,6 +65,9 @@ local particleUpdateTime = 0.00
 local particleDrawTime   = 0.00
 
 -- Saved settings.
+export openProjects: []Project
+export currentProjectIndex = 1
+
 export showProjectSettings = true
 export showStats           = true
 export showPanelNumbers    = true
@@ -186,7 +186,7 @@ export createCanvases :: () {
 		canvasWorld.release!()
 	}
 
-	local SETTINGS: LG.CanvasSettings : {msaa=4}
+	local SETTINGS: LG.CanvasSettings : {msaa=2^2}
 	canvasGui   = LG.newCanvas(ww,                          wh, SETTINGS)
 	canvasWorld = LG.newCanvas(math.max(ww-PANEL_WIDTH, 1), wh)
 
@@ -206,6 +206,8 @@ export updateParticleImageFilters :: () {
 export onLoad :: (args:[]string, argsRaw:[]string) {
 	io.disableBuffering(io.STDOUT)
 	io.disableBuffering(io.STDERR)
+
+	print("Running Hot Particles")
 
 	LF.setIdentity("Hot Particles")
 	LK.setKeyRepeat(true)
