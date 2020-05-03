@@ -22,6 +22,9 @@ local CONTEXT_MENU_MIN_WIDTH :: 120
 local CONTEXT_MENU_PADDING_X :: 15
 local CONTEXT_MENU_PADDING_Y :: 5
 
+local COLOR_SLIDER_HEIGHT :: 12
+local COLOR_PREVIEW_WIDTH :: 24
+
 local ACTION_PASTE_COLOR  :: -1
 local ACTION_PASTE_SCALAR :: -2
 local ACTION_DELETE       :: -3
@@ -101,6 +104,13 @@ local drawChecker :: (x,y,w,h:float, scale=1.0) {
 
 	quad.setViewport!(0, 0, w/scale, h/scale)
 	LG.draw(imageChecker, quad, x, y, 0, scale)
+}
+
+local drawCheckerBox :: (x,y,w,h:int) {
+	LG.setColor(.15, .15, .15)
+	LG.rectangle(LG.DrawMode.FILL, x, y, w, h)
+	LG.setColor(.27, .27, .27)
+	drawChecker(x, y, w, h)
 }
 
 local drawLabels :: (label1,label2:string, y:int) {
@@ -338,26 +348,23 @@ local drawPanelSlider :: (state:PanelState,
 }
 
 local drawPanelColor :: (state:PanelState,
-	label1,label2:string, hue,saturation,value:float,a:float|none, enableDelete=false
+	label1,label2:string, hue,saturation,value:float,a:float|none, enableDelete=false, showPreview=true
 ) -> (
 	pressedMouseButton:int, hue,saturation,value,a:float, deleted:bool
 ) {
 	state.panelItem += 1
 
-	local SLIDER_HEIGHT :: 12
-	local PREVIEW_WIDTH :: 24
-
 	local components = (a == nil ? 3 : 4)
 
-	local w = PANEL_WIDTH - LABEL_WIDTH - PREVIEW_WIDTH - 3*PANEL_SPACING
-	local h = SLIDER_HEIGHT * components
+	local w = PANEL_WIDTH - LABEL_WIDTH - COLOR_PREVIEW_WIDTH - 3*PANEL_SPACING
+	local h = COLOR_SLIDER_HEIGHT * components
 	local x = LABEL_WIDTH + PANEL_SPACING
 	local y = state.panelY
 
 	local hovered = isHoveringPanelItemRectangle(state, x, y, w, h)
 	local pressed = hovered ? isPressingOrMayPress(state) : 0
 
-	local component = math.clamp(math.floor(1+(state.myScrolled-y)/SLIDER_HEIGHT), 1, components)
+	local component = math.clamp(math.floor(1+(state.myScrolled-y)/COLOR_SLIDER_HEIGHT), 1, components)
 
 	local deleted = false
 
@@ -456,62 +463,56 @@ local drawPanelColor :: (state:PanelState,
 	-- Preview.
 	local r, g, b = hsvToRgb(hue, saturation, value)
 
-	do {
-		local previewX = x+w+PANEL_SPACING
-		LG.setColor(.15, .15, .15)
-		LG.rectangle(LG.DrawMode.FILL, previewX, y, PREVIEW_WIDTH, h)
-		LG.setColor(.27, .27, .27)
-		drawChecker(previewX, y, PREVIEW_WIDTH, h)
+	if showPreview {
+		local previewX = PANEL_WIDTH - PANEL_SPACING - COLOR_PREVIEW_WIDTH
+		drawCheckerBox(previewX, y, COLOR_PREVIEW_WIDTH, h)
 		LG.setColor(r, g, b, (a == nil ? 1.0 : cast(float)a))
-		LG.rectangle(LG.DrawMode.FILL, previewX, y, PREVIEW_WIDTH, h)
+		LG.rectangle(LG.DrawMode.FILL, previewX, y, COLOR_PREVIEW_WIDTH, h)
 	}
 
 	-- Components.
 	do {
 		local iw, ih     = imageGradient.getDimensions!()
 		local gradientSx = w/iw
-		local gradientSy = SLIDER_HEIGHT/ih
+		local gradientSy = COLOR_SLIDER_HEIGHT/ih
 
 		iw, ih           = imageRainbow.getDimensions!()
 		local rainbowSx  = w/iw
-		local rainbowSy  = SLIDER_HEIGHT/ih
+		local rainbowSy  = COLOR_SLIDER_HEIGHT/ih
 
 		local sliderY    = y
 
 		LG.setColor(1, 1, 1)
 		LG.draw(imageRainbow, x, sliderY, 0, rainbowSx, rainbowSy)
-		drawSliderValue(x, sliderY, w, SLIDER_HEIGHT, hue, hue*360, "%d°")
-		sliderY += SLIDER_HEIGHT
+		drawSliderValue(x, sliderY, w, COLOR_SLIDER_HEIGHT, hue, hue*360, "%d°")
+		sliderY += COLOR_SLIDER_HEIGHT
 
 		local r2, g2, b2 = hsvToRgb(hue, 1, 1)
 		LG.setColor(.5, .5, .5)
-		LG.rectangle(LG.DrawMode.FILL, x, sliderY, w, SLIDER_HEIGHT)
+		LG.rectangle(LG.DrawMode.FILL, x, sliderY, w, COLOR_SLIDER_HEIGHT)
 		LG.setColor(r2, g2, b2)
 		LG.draw(imageGradient, x, sliderY, 0, gradientSx, gradientSy)
-		drawSliderValue(x, sliderY, w, SLIDER_HEIGHT, saturation, saturation*100, "%d%%")
-		sliderY += SLIDER_HEIGHT
+		drawSliderValue(x, sliderY, w, COLOR_SLIDER_HEIGHT, saturation, saturation*100, "%d%%")
+		sliderY += COLOR_SLIDER_HEIGHT
 
 		r2, g2, b2 = hsvToRgb(hue, saturation, 1)
 		LG.setColor(0, 0, 0)
-		LG.rectangle(LG.DrawMode.FILL, x, sliderY, w, SLIDER_HEIGHT)
+		LG.rectangle(LG.DrawMode.FILL, x, sliderY, w, COLOR_SLIDER_HEIGHT)
 		LG.setColor(r2, g2, b2)
 		LG.draw(imageGradient, x, sliderY, 0, gradientSx, gradientSy)
-		drawSliderValue(x, sliderY, w, SLIDER_HEIGHT, value, value*100, "%d%%")
-		sliderY += SLIDER_HEIGHT
+		drawSliderValue(x, sliderY, w, COLOR_SLIDER_HEIGHT, value, value*100, "%d%%")
+		sliderY += COLOR_SLIDER_HEIGHT
 
 		if a ~= nil {
-			LG.setColor(.15, .15, .15)
-			LG.rectangle(LG.DrawMode.FILL, x, sliderY, w, SLIDER_HEIGHT)
-			LG.setColor(.27, .27, .27)
-			drawChecker(x, sliderY, w, SLIDER_HEIGHT)
+			drawCheckerBox(x, sliderY, w, COLOR_SLIDER_HEIGHT)
 			LG.setColor(r, g, b)
 			LG.draw(imageGradient, x, sliderY, 0, gradientSx, gradientSy)
-			drawSliderValue(x, sliderY, w, SLIDER_HEIGHT, cast(float)a, cast(float)(a)*100, "%d%%")
+			drawSliderValue(x, sliderY, w, COLOR_SLIDER_HEIGHT, cast(float)a, cast(float)(a)*100, "%d%%")
 		}
 
 		if hovered {
 			LG.setColor(1, 1, 1, HOVER_OUTLINE_OPACITY_STRONG)
-			LG.rectangle(LG.DrawMode.LINE, x-.5, y+(component-1)*SLIDER_HEIGHT-.5, w+1, SLIDER_HEIGHT+1)
+			LG.rectangle(LG.DrawMode.LINE, x-.5, y+(component-1)*COLOR_SLIDER_HEIGHT-.5, w+1, COLOR_SLIDER_HEIGHT+1)
 		}
 	}
 
@@ -1057,8 +1058,10 @@ export drawPanel :: () {
 		local anyPressed         = false
 		local colorIndexToDelete = 0
 
+		local previewY1 = state.panelY
+
 		for i = 1, #colors, 4 {
-			local pressed, h,s,v,a, deleted = drawPanelColor(state, "", format("#%d", (i+3)//4), colors[i],colors[i+1],colors[i+2],colors[i+3], enableDelete=true)
+			local pressed, h,s,v,a, deleted = drawPanelColor(state, "", format("#%d", (i+3)//4), colors[i],colors[i+1],colors[i+2],colors[i+3], enableDelete=true, showPreview=(colors[5]==NULL))
 			anyPressed                      = anyPressed or pressed == 1
 
 			if deleted {
@@ -1072,6 +1075,40 @@ export drawPanel :: () {
 			} else {
 				for j = 4, #colors, 4  colors[j] = a
 			}
+		}
+
+		if colors[5] ~= NULL {
+			local previewY2  = state.panelY-PANEL_SPACING
+
+			local colorCount = #colors//4
+			local previewX   = PANEL_WIDTH - PANEL_SPACING - COLOR_PREVIEW_WIDTH
+
+			static shader: LG.Shader = NULL
+			if shader == NULL  shader = LG.newShader("particleColorPreview.glsl")
+
+			static colorsForShader: [][]float = {{},{},{},{},{},{},{},{}}
+
+			for i = 1, 8*4, 4 {
+				local color = colorsForShader[(i+3)//4]
+				if colors[i] == NULL {
+					color[1] = 0
+					color[2] = 0
+					color[3] = 0
+					color[4] = 0
+				} else {
+					color[1], color[2], color[3] = hsvToRgb(colors[i], colors[i+1], colors[i+2])
+					color[4]                     = colors[i+3]
+				}
+			}
+
+			shader.send!("colors",     colorsForShader[1], unpack(colorsForShader, 2))
+			shader.send!("colorCount", colorCount)
+
+			drawCheckerBox(previewX, previewY1, COLOR_PREVIEW_WIDTH, previewY2-previewY1)
+
+			LG.setShader(shader)
+			LG.draw(imagePixel, previewX, previewY1, 0, COLOR_PREVIEW_WIDTH, previewY2-previewY1)
+			LG.setShader()
 		}
 
 		if colorIndexToDelete {

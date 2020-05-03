@@ -41,6 +41,7 @@ export fontLarge:  LG.Font  = NULL
 
 export imageChecker:  LG.Image = NULL
 export imageGradient: LG.Image = NULL
+export imagePixel:    LG.Image = NULL
 export imageRainbow:  LG.Image = NULL
 
 export particleImages: struct { !key:string, !value:LG.Image }
@@ -215,6 +216,7 @@ export onLoad :: (args:[]string, argsRaw:[]string) {
 
 	imageChecker  = LG.newImage("gfx/checker.png") ; imageChecker.setWrap!(LG.WrapMode.REPEAT, LG.WrapMode.REPEAT)
 	imageGradient = LG.newImage("gfx/gradient.png")
+	imagePixel    = LG.newImage("gfx/pixel.png")
 	imageRainbow  = LG.newImage("gfx/rainbow.png")
 
 	particleImages.light = LG.newImage("gfx/light.png")
