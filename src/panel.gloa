@@ -355,7 +355,7 @@ local drawPanelSlider :: (state:PanelState,
 local drawPanelColor :: (state:PanelState,
 	label1,label2:string, hue,saturation,value:float,a:float|none, enableDelete=false, showPreview=true
 ) -> (
-	pressedMouseButton:int, hue,saturation,value,a:float, deleted:bool
+	pressedMouseButton:int, hue,saturation,value,a:float, deleted:bool, pressedComponent:int
 ) {
 	state.panelItem += 1
 
@@ -379,11 +379,19 @@ local drawPanelColor :: (state:PanelState,
 		if not draggedPanelSubItem  draggedPanelSubItem = component
 		component = draggedPanelSubItem
 
+		local theValue = (state.mx-x)/w
+		local steps    = component == 1 ? 24 : 16
+
+		if state.mod == ModifierKey.C or state.mod == ModifierKey.CS
+			theValue = math.round(math.clamp01((state.mx-x)/w)*steps)/steps
+
+		theValue = math.clamp01(theValue)
+
 		if component == {
-			case 1: hue        = math.clamp01((state.mx-x)/w)
-			case 2: saturation = math.clamp01((state.mx-x)/w)
-			case 3: value      = math.clamp01((state.mx-x)/w)
-			case 4: a          = math.clamp01((state.mx-x)/w)
+			case 1: hue        = theValue
+			case 2: saturation = theValue
+			case 3: value      = theValue
+			case 4: a          = theValue
 		}
 
 	} elseif pressed == 2 {
@@ -526,7 +534,7 @@ local drawPanelColor :: (state:PanelState,
 	return
 		pressed,
 		hue, saturation, value, cast(float)a, -- 'a' is actually nil if the function was called with a=nil.
-		deleted
+		deleted, component
 }
 
 local drawPanelButtons :: (state:PanelState,
@@ -1016,7 +1024,7 @@ export drawPanel :: () {
 	}
 	do {
 		local sizes   = {ps.getSizesAsVararg!()}
-		local moveAll = state.mod == ModifierKey.CS
+		local moveAll = state.mod == ModifierKey.S or state.mod == ModifierKey.CS
 
 		local anyPressed    = false
 		local indexToDelete = 0
@@ -1036,10 +1044,11 @@ export drawPanel :: () {
 				indexToDelete = i
 			} elseif pressed ~= 1 {
 				-- void
-			} elseif not moveAll {
-				sizes[i] = size
 			} else {
-				for j = 1, #sizes  sizes[j] = size
+				if moveAll
+					for j = 1, #sizes  sizes[j] = size
+				else
+					sizes[i] = size
 			}
 		}
 
@@ -1084,7 +1093,7 @@ export drawPanel :: () {
 	}
 	do {
 		local colors  = system.colors
-		local moveAll = state.mod == ModifierKey.CS
+		local moveAll = state.mod == ModifierKey.S or state.mod == ModifierKey.CS
 
 		local anyPressed         = false
 		local colorIndexToShift  = 0
@@ -1095,8 +1104,8 @@ export drawPanel :: () {
 		for i = 1, #colors, 4 {
 			local y1 = state.y
 
-			local pressed, h,s,v,a, deleted = drawPanelColor(state, "", format("#%d", (i+3)//4), colors[i],colors[i+1],colors[i+2],colors[i+3], enableDelete=true, showPreview=(colors[5]==NULL)) ; gotoNextRow(state)
-			anyPressed                      = anyPressed or pressed == 1
+			local pressed, h,s,v,a, deleted, component = drawPanelColor(state, "", format("#%d", (i+3)//4), colors[i],colors[i+1],colors[i+2],colors[i+3], enableDelete=true, showPreview=(colors[5]==NULL)) ; gotoNextRow(state)
+			anyPressed = anyPressed or pressed == 1
 
 			local y2 = state.y-PANEL_SPACING
 
@@ -1106,12 +1115,12 @@ export drawPanel :: () {
 				colorIndexToDelete = i
 			} elseif pressed ~= 1 {
 				-- void
-			} elseif not moveAll {
-				colors[i], colors[i+1], colors[i+2], colors[i+3] = h,s,v,a
-			} elseif draggedPanelSubItem < 4 {
-				for j = 1, #colors, 4  colors[j], colors[j+1], colors[j+2] = h,s,v
 			} else {
-				for j = 4, #colors, 4  colors[j] = a
+				local theValue = component==1?h : component==2?s : component==3?v : a
+				if moveAll
+					for j = component, #colors, 4  colors[j] = theValue
+				else
+					colors[i+component-1] = theValue
 			}
 		}
 
