@@ -261,7 +261,7 @@ local drawSliderValue :: (sliderX,sliderY:float, sliderW,sliderH:float, value:fl
 
 local drawPanelSlider :: (state:PanelState,
 	label1,label2:string, valueMin,valueMax:float, value:float,
-	readoutMultiplier:float, readoutFormat:string, other:float|none=nil, enableDelete=false, inset=0
+	readoutMultiplier:float, readoutFormat:string, other:float|none=nil, enableDelete=false, inset=0, width=0
 ) -> (
 	pressedMouseButton:int, value:float, deleted:bool
 ) {
@@ -269,7 +269,7 @@ local drawPanelSlider :: (state:PanelState,
 
 	local x = state.x + inset
 	local y = state.y
-	local w = PANEL_WIDTH - PANEL_SPACING - x
+	local w = width ?: PANEL_WIDTH - PANEL_SPACING - x
 	local h = state.fontH
 
 	local hovered = isHoveringPanelItemRectangle(state, x, y, w, h)
@@ -551,7 +551,7 @@ local drawPanelButtons :: (state:PanelState,
 
 	local x = showLabel ? state.x+inset : PANEL_SPACING
 	local y = state.y
-	local w = width ?: PANEL_WIDTH - x - PANEL_SPACING
+	local w = width ?: PANEL_WIDTH - PANEL_SPACING - x
 	local h = state.fontH
 
 	for buttons  if it.image {
@@ -766,6 +766,33 @@ export drawPanel :: () {
 			if pressed == 1 {
 				project.bgColorH, project.bgColorS, project.bgColorV = h,s,v
 			}
+		}
+		drawPanelSeparator(state)
+		do {
+			using Movement
+
+			local BUTTONS: []Button : {
+				{value=NONE,      label="none",      tooltip="No movement"},
+				{value=CIRCLE,    label="circle",    tooltip="Circle, or back and forth"},
+				{value=EIGHT,     label="eight",     tooltip="Numeral eight"},
+				{value=IRREGULAR, label="irregular", tooltip="Irregular movement"},
+			}
+
+			local _, i         = indexWith(BUTTONS, "value", project.movementPreset)
+			local pressed1, ^i = drawPanelButtons(state, "EmitterMovem.", "", BUTTONS, selected=i) ; gotoNextRow(state)
+			if pressed1 == 1  project.movementPreset = cast(Movement) BUTTONS[i].value
+		}
+		do {
+			local pressed, scale = drawPanelSlider(state, "", "scale x", 0, 2, project.movementScaleX, 100, "%d%%", width=100) ; gotoNextColumn(state)
+			if pressed == 1  project.movementScaleX = scale
+		}
+		do {
+			local pressed, speed = drawPanelSlider(state, "", "speed", -8, 8, project.movementSpeed, 100, "%d%%", inset=40) ; gotoNextRow(state)
+			if pressed == 1  project.movementSpeed = speed
+		}
+		do {
+			local pressed, scale = drawPanelSlider(state, "", "scale y", 0, 2, project.movementScaleY, 100, "%d%%", width=100) ; gotoNextRow(state)
+			if pressed == 1  project.movementScaleY = scale
 		}
 	}
 

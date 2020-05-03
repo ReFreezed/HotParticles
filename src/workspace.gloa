@@ -62,6 +62,13 @@ export saveWorkspace :: () {
 		insert(buffer, "pixelateTextures") ; writeValue(buffer, eol=true, project.pixelateTextures)
 		insert(buffer, "zoom")             ; writeValue(buffer, eol=true, project.zoomLevel)
 
+		insert(buffer, "movement")
+		writeValue(buffer, cast(int) project.movementPreset)
+		writeValue(buffer, project.movementScaleX)
+		writeValue(buffer, project.movementScaleY)
+		writeValue(buffer, project.movementSpeed)
+		insert(buffer, "\n")
+
 		for system: project.systems {
 			insert(buffer, ":system\n")
 			insert(buffer, "colors")    ; writeValue(buffer, eol=true, system.colors)
@@ -320,7 +327,6 @@ export loadWorkspace :: () -> (success:bool, gotError:bool, projects:[]Project) 
 					local ^ok, ^ptr, flag = readBool(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
 					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
 					project.pixelateWorld = flag
-
 				case "pixelateTextures":
 					local ^ok, ^ptr, flag = readBool(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
 					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
@@ -333,6 +339,17 @@ export loadWorkspace :: () -> (success:bool, gotError:bool, projects:[]Project) 
 					project.zoom       = 2^zoomLevel
 					project.zoomSource = project.zoom
 					project.zoomTarget = project.zoom
+
+				case "movement":
+					local ^ok, ^ptr, preset = readInt  (line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
+					local ^ok, ^ptr, sx     = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
+					local ^ok, ^ptr, sy     = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
+					local ^ok, ^ptr, speed  = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
+					project.movementPreset = cast(Movement) preset -- @Robustness: Validate enum value.
+					project.movementScaleX = sx
+					project.movementScaleY = sy
+					project.movementSpeed  = speed
 
 				case:
 					return parsingError(ln, "Unknown project parameter '%s'.", param)

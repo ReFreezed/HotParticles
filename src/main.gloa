@@ -74,6 +74,8 @@ export showPanelNumbers    = true
 
 
 
+export Movement :: enum  { NONE::0, CIRCLE, EIGHT, IRREGULAR }
+
 export Project :: struct {
 	-- Saved:
 	systems: []System,
@@ -87,6 +89,11 @@ export Project :: struct {
 
 	zoomLevel = 0,
 
+	movementPreset = Movement.NONE,
+	movementScaleX = 1.0,
+	movementScaleY = 1.0,
+	movementSpeed  = 1.0,
+
 	-- Runtime-only:
 	systemIndex = 1,
 
@@ -99,6 +106,17 @@ export Project :: struct {
 	panelScrollTarget = 0,
 
 	displayedName: string,
+
+	movementPhase    = 0.0,
+	movementPhaseAbs = 0.0,
+	movementPoint1X  = 0.0, -- For irregular movement.
+	movementPoint1Y  = 0.0,
+	movementPoint2X  = 0.0,
+	movementPoint2Y  = 0.0,
+	movementPoint3X  = 0.0,
+	movementPoint3Y  = 0.0,
+	movementPoint4X  = 0.0,
+	movementPoint4Y  = 0.0,
 
 	!call :: () -> Project {
 		static n = 0 ; n += 1
@@ -202,6 +220,12 @@ export updateParticleImageFilters :: () {
 		LG.Image.setFilter(cast(LG.Image)it, filter, filter)
 	}
 }
+
+export moveEmittersTo :: (x,y:float) {
+	for openProjects[currentProjectIndex].systems  it.particles.moveTo!(x, y)
+}
+
+
 
 export onLoad :: (args:[]string, argsRaw:[]string) {
 	io.disableBuffering(io.STDOUT)
@@ -325,7 +349,7 @@ export onMouseMoved :: (mx,my:int, dx,dy:int, isTouch:bool) {
 		local x = (mx - (LG.getWidth()+PANEL_WIDTH)/2) / project.zoom
 		local y = (my - (LG.getHeight()           )/2) / project.zoom
 
-		for project.systems  it.particles.moveTo!(x, y)
+		moveEmittersTo(x, y)
 	}
 }
 export onMouseReleased :: (mx,my:int, mbutton:int, isTouch:bool, presses:int) {
@@ -412,6 +436,80 @@ export onUpdate :: (dt:float) {
 	tooltipHoverTime = tooltipRendered ? tooltipHoverTime+dt : .0
 	tooltipOpacity   = math.clamp01((tooltipHoverTime-.30)/0.20)
 	tooltipRendered  = false
+
+	if not isPositioningParticles {
+		local MOVEMENT_BASE :: 250
+
+		-- project.movementSpeed = LK.isDown"." ? .04 : 1.0 -- DEBUG
+
+		local lastMovementPhaseAbs  = project.movementPhaseAbs
+		project.movementPhase      +=         (project.movementSpeed) * dt
+		project.movementPhaseAbs   += math.abs(project.movementSpeed) * dt
+
+		using project.movementPreset
+		if !complete project.movementPreset == {
+			case NONE:
+				-- void
+
+			case CIRCLE:
+				local angle = project.movementPhase*math.TAU/5.00
+				moveEmittersTo(
+					MOVEMENT_BASE * project.movementScaleX * math.cos(angle),
+					MOVEMENT_BASE * project.movementScaleY * math.sin(angle)
+				)
+
+			case EIGHT:
+				local angle = project.movementPhase*math.TAU/5.00
+				moveEmittersTo(
+					MOVEMENT_BASE   * project.movementScaleX * math.cos(angle),
+					MOVEMENT_BASE/2 * project.movementScaleY * math.sin(angle*2)
+				)
+
+			case IRREGULAR:
+				if math.floor(project.movementPhaseAbs) ~= math.floor(lastMovementPhaseAbs) or lastMovementPhaseAbs == 0 {
+					local dx       = project.movementPoint3X - project.movementPoint4X
+					local dy       = project.movementPoint3Y - project.movementPoint4Y
+					local angleOld = math.atan(-dy, -dx)
+
+					project.movementPoint1X = project.movementPoint4X
+					project.movementPoint1Y = project.movementPoint4Y
+					project.movementPoint2X = project.movementPoint4X - dx
+					project.movementPoint2Y = project.movementPoint4Y - dy
+					project.movementPoint4X = .8*MOVEMENT_BASE * (2*love.math.random()-1)
+					project.movementPoint4Y = .8*MOVEMENT_BASE * (2*love.math.random()-1)
+
+					dx             = .8*MOVEMENT_BASE * (2*math.lerp(.6, 1, love.math.random())-1)
+					dy             = .8*MOVEMENT_BASE * (2*math.lerp(.6, 1, love.math.random())-1)
+					local angleNew = math.atan(dy, dx)
+
+					if math.angleDistance(angleNew, angleOld) > math.TAU/4 {
+						dx = -dx
+						dy = -dy
+					}
+
+					project.movementPoint3X = project.movementPoint4X + dx
+					project.movementPoint3Y = project.movementPoint4Y + dy
+				}
+
+				local phase    = project.movementPhaseAbs % 1
+				local phaseOld =     math.sin  (phase * math.TAU/4)
+				local phaseNew = 1 - math.cos  (phase * math.TAU/4)
+				local phaseMid = 1 - math.cos01(phase * math.TAU/2)
+
+				moveEmittersTo(
+					project.movementScaleX * math.lerp(
+						math.lerp(project.movementPoint1X, project.movementPoint2X, phaseOld),
+						math.lerp(project.movementPoint3X, project.movementPoint4X, phaseNew),
+						phaseMid
+					),
+					project.movementScaleY * math.lerp(
+						math.lerp(project.movementPoint1Y, project.movementPoint2Y, phaseOld),
+						math.lerp(project.movementPoint3Y, project.movementPoint4Y, phaseNew),
+						phaseMid
+					)
+				)
+		}
+	}
 }
 
 
@@ -523,6 +621,18 @@ export onDraw :: () {
 
 		particleDrawTime = LT.getTime()-time -- Not sure how accurate this actually is. This value is still very low even while the actual FPS is tanking a lot.
 
+		--[[ DEBUG
+		LG.setColor(1, 1, 1, .15)
+		LG.line(project.movementPoint1X, project.movementPoint1Y, project.movementPoint2X, project.movementPoint2Y)
+		LG.line(project.movementPoint2X, project.movementPoint2Y, project.movementPoint3X, project.movementPoint3Y)
+		LG.line(project.movementPoint3X, project.movementPoint3Y, project.movementPoint4X, project.movementPoint4Y)
+		LG.setColor(1, 1, 1, .3)
+		LG.print("1", project.movementPoint1X, project.movementPoint1Y)
+		LG.print("2", project.movementPoint2X, project.movementPoint2Y)
+		LG.print("3", project.movementPoint3X, project.movementPoint3Y)
+		LG.print("4", project.movementPoint4X, project.movementPoint4Y)
+		--]]
+
 		LG.reset()
 	}
 
@@ -553,7 +663,7 @@ export onResize :: (w,h:int) {
 
 export main :: () {
 	!import "utils"
-	local loveTable: table = !foreign lua "love"
+	local loveTable: table : !foreign lua "love"
 
 	loveTable.load          = wrapFunctionInGloaErrorHandler(onLoad)
 	loveTable.keypressed    = wrapFunctionInGloaErrorHandler(onKeyPressed)
