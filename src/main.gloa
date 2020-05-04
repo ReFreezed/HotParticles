@@ -56,6 +56,7 @@ export messageTextTime = -9999.00
 
 export pressedAnythingThisFrame = false
 export isPositioningParticles   = false
+
 export scheduleSaveWorkspace    = false
 export scheduleRecreateCanvases = false
 
@@ -105,7 +106,9 @@ export Project :: struct {
 	panelScrollSource = 0.0,
 	panelScrollTarget = 0,
 
-	displayedName: string,
+	displayedName = "",
+	path          = "",
+	fileIsSaved   = false, -- Saved at least once. It's possible that the file physically don't exist.
 
 	movementPhase    = 0.0,
 	movementPhaseAbs = 0.0,
@@ -205,8 +208,8 @@ export createCanvases :: () {
 	}
 
 	local SETTINGS: LG.CanvasSettings : {msaa=2^2}
-	canvasGui   = LG.newCanvas(ww,                          wh, SETTINGS)
-	canvasWorld = LG.newCanvas(math.max(ww-PANEL_WIDTH, 1), wh)
+	canvasGui   = LG.newCanvas(ww, wh, SETTINGS)
+	canvasWorld = LG.newCanvas(math.max(ww-MAIN_PANEL_WIDTH, 1), wh)
 
 	if openProjects[currentProjectIndex].pixelateWorld {
 		canvasWorld.setFilter!(LG.FilterMode.NEAREST, LG.FilterMode.NEAREST)
@@ -276,9 +279,7 @@ export onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool)
 
 	if key == {
 		case "escape":
-			if contextMenu ~= NULL {
-				contextMenu = NULL
-			} else {
+			if not hideContextMenu() {
 				saveWorkspace()
 				LE.quit(0)
 			}
@@ -332,7 +333,7 @@ export onMousePressed :: (mx,my:int, mbutton:int, isTouch:bool, presses:int) {
 
 	if love.mouse.isGrabbed()  return
 
-	if mx < PANEL_WIDTH or isInsideContextMenu(mx, my)  pressedOnPanelWithMouseButton = mbutton
+	if isInsidePanels(mx, my)  pressedOnPanelWithMouseButton = mbutton
 
 	if mbutton == 1 {
 		if not pressedOnPanelWithMouseButton {
@@ -346,18 +347,15 @@ export onMouseMoved :: (mx,my:int, dx,dy:int, isTouch:bool) {
 	if isPositioningParticles {
 		local project = openProjects[currentProjectIndex]
 
-		local x = (mx - (LG.getWidth()+PANEL_WIDTH)/2) / project.zoom
-		local y = (my - (LG.getHeight()           )/2) / project.zoom
+		local x = (mx - (LG.getWidth()+MAIN_PANEL_WIDTH)/2) / project.zoom
+		local y = (my - (LG.getHeight()                )/2) / project.zoom
 
 		moveEmittersTo(x, y)
 	}
 }
 export onMouseReleased :: (mx,my:int, mbutton:int, isTouch:bool, presses:int) {
 	if mbutton == 1 {
-		if draggedPanelItem {
-			stopDraggingPanelItem()
-			scheduleSaveWorkspace = true
-		}
+		stopDraggingInPanels()
 		isPositioningParticles = false
 		love.mouse.setGrabbed(false)
 	}
@@ -372,13 +370,14 @@ export onMouseWheel :: (dx,dy:int) {
 	}
 	if mod ~= ModifierKey.NONE  return
 
-	local project = openProjects[currentProjectIndex]
+	local mx, my = love.mouse.getPosition()
 
-	if love.mouse.getX() < PANEL_WIDTH {
-		project.panelScrollSource = project.panelScroll
-		project.panelScrollTarget = math.min(project.panelScrollTarget+50*dy, 0)
+	if isInsidePanels(mx, my) {
+		scrollPanels(mx,my, dy)
 
 	} else {
+		local project = openProjects[currentProjectIndex]
+
 		project.zoomLevel  = math.clamp(project.zoomLevel+dy, (project.pixelateWorld ? -1 : -4), 6)
 		project.zoomSource = project.zoom
 		project.zoomTarget = 2^project.zoomLevel
@@ -421,21 +420,6 @@ export onUpdate :: (dt:float) {
 
 	if scheduleSaveWorkspace     saveWorkspace() -- @UX: Maybe wait a little while before saving?
 	if scheduleRecreateCanvases  createCanvases()
-
-	project.zoom = math.moveTowards(
-		project.zoom,
-		project.zoomTarget,
-		math.abs(project.zoomTarget - project.zoomSource) * dt / 0.05
-	)
-	project.panelScroll = math.moveTowards(
-		project.panelScroll,
-		project.panelScrollTarget,
-		math.abs(project.panelScrollTarget - project.panelScrollSource) * dt / 0.05
-	)
-
-	tooltipHoverTime = tooltipRendered ? tooltipHoverTime+dt : .0
-	tooltipOpacity   = math.clamp01((tooltipHoverTime-.30)/0.20)
-	tooltipRendered  = false
 
 	if not isPositioningParticles {
 		local MOVEMENT_BASE :: 250
@@ -510,6 +494,8 @@ export onUpdate :: (dt:float) {
 				)
 		}
 	}
+
+	updatePanels(dt)
 }
 
 
@@ -534,7 +520,7 @@ export onDraw :: () {
 
 			local fontH = fontNormal.getHeight!()
 
-			local x = PANEL_WIDTH+5
+			local x = MAIN_PANEL_WIDTH+5
 			local y = 5
 
 			local r, g, b          = hsvToRgb(project.bgColorH, project.bgColorS, project.bgColorV)
@@ -557,8 +543,8 @@ export onDraw :: () {
 			drawStatsLine("(hide this with F1)")
 		}
 
-		-- Panel.
-		drawPanel()
+		-- Panel(s).
+		drawPanels()
 
 		-- HUD texts.
 		LG.origin()
@@ -566,7 +552,7 @@ export onDraw :: () {
 
 		local visibility = 1 - (LT.getTime() - messageTextTime) / 8.00
 		if visibility > 0 {
-			local x = math.round((ww+PANEL_WIDTH-fontLarge.getWidth!(messageText))/2)
+			local x = math.round((ww+MAIN_PANEL_WIDTH-fontLarge.getWidth!(messageText))/2)
 			local y = math.round(.1*wh)
 			local a = visibility^.5
 			LG.setColor(0, 0, 0, a)
@@ -577,7 +563,7 @@ export onDraw :: () {
 
 		visibility = 1 - (LT.getTime() - actionTextTime) / 0.60
 		if visibility > 0 {
-			local x = math.round((ww+PANEL_WIDTH-fontLarge.getWidth!(actionText))/2)
+			local x = math.round((ww+MAIN_PANEL_WIDTH-fontLarge.getWidth!(actionText))/2)
 			local y = math.round(.1*wh+fontLarge.getHeight!())
 			local a = visibility^.5
 			LG.setColor(0, 0, 0, a)
@@ -606,7 +592,7 @@ export onDraw :: () {
 		local r, g, b = hsvToRgb(project.bgColorH, project.bgColorS, project.bgColorV)
 		LG.clear(r, g, b)
 
-		LG.translate((ww-PANEL_WIDTH)/2, wh/2)
+		LG.translate((ww-MAIN_PANEL_WIDTH)/2, wh/2)
 		if not project.pixelateWorld  LG.scale(project.zoom)
 
 		local time = LT.getTime()
@@ -641,9 +627,9 @@ export onDraw :: () {
 	LG.setBlendMode(LG.BlendMode.ALPHA, LG.BlendAlphaMode.PREMULTIPLIED)
 
 	if project.pixelateWorld {
-		LG.draw(canvasWorld, (ww+PANEL_WIDTH)/2,wh/2, 0, project.zoom,project.zoom, (ww-PANEL_WIDTH)/2, wh/2)
+		LG.draw(canvasWorld, (ww+MAIN_PANEL_WIDTH)/2,wh/2, 0, project.zoom,project.zoom, (ww-MAIN_PANEL_WIDTH)/2, wh/2)
 	} else {
-		LG.draw(canvasWorld, PANEL_WIDTH,0)
+		LG.draw(canvasWorld, MAIN_PANEL_WIDTH,0)
 	}
 
 	LG.draw(canvasGui)

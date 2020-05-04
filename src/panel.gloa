@@ -1,21 +1,31 @@
 --[[============================================================
 --=
---=  GUI panel
+--=  GUI panels
 --=
 --=-------------------------------------------------------------
 --=
 --=  Hot Particles - a particle editor for LÖVE
 --=  by Marcus 'ReFreezed' Thunström
 --=
+--==============================================================
+
+	ContextMenu
+
+	hideContextMenu
+	isInsidePanels
+	scrollPanels
+	stopDraggingInPanels
+	updatePanels, drawPanels
+
 --============================================================]]
 
-export PANEL_WIDTH :: LABEL_WIDTH + 350
+export MAIN_PANEL_WIDTH :: MAIN_LABEL_WIDTH + 350
 
-local LABEL_WIDTH   :: 100
-local LABEL_WIDTH_2 :: 40
-local PANEL_SPACING :: 3
+local MAIN_LABEL_WIDTH  :: 100
+local INNER_LABEL_WIDTH :: 40
+local PANEL_SPACING     :: 3
 
-local GUIDE_LINE_OPACITY           :: .2
+local GUIDE_LINE_OPACITY           :: .14
 local HOVER_OUTLINE_OPACITY        :: .3
 local HOVER_OUTLINE_OPACITY_STRONG :: .5
 
@@ -40,10 +50,10 @@ local BUTTONS_YES_NO: []Button : {
 export pressedOnPanelWithMouseButton = 0
 export shiftScrolledOnPanel          = 0
 
-export draggedPanelItem    = 0
-export draggedPanelSubItem = 0
+local draggedPanelItem    = 0
+local draggedPanelSubItem = 0
 
-export contextMenu: ContextMenu = NULL
+local contextMenu: ContextMenu = NULL
 
 local clipboardScalar: float   = NULL
 local clipboardAngle:  float   = NULL
@@ -52,9 +62,9 @@ local clipboardColor:  []float = NULL -- {h,s,v,a}
 local panelItemForContextMenu = 0
 local contextMenuAction       = 0 -- E.g. "paste the hue" in a color field.
 
-export tooltipRendered  = false
-export tooltipHoverTime = 0.00
-export tooltipOpacity   = 0.0
+local tooltipRendered  = false
+local tooltipHoverTime = 0.00
+local tooltipOpacity   = 0.0
 
 
 
@@ -67,25 +77,56 @@ local Button :: struct {
 	value: any,
 }
 
-local PanelState :: struct {
+local Panel :: struct {
+	baseX: int,
 	baseY: int,
+	width: int,
+	mainLabelWidth: int,
+
 	x: int,
 	y: int,
-	maxPanelItemX = LABEL_WIDTH,
-	maxPanelItemY = 0,
 
-	panelItem: int,
-
-	fontH: int,
+	maxPanelItemX: int,
+	maxPanelItemY: int,
 
 	mx: int,
 	my: int,
 	myScrolled: int,
-	ignoreMouseAboveY = 0,
+
+	hasScrollableSection = false,
+	ignoreMouseAboveY    = 0,
 
 	mod: ModifierKey = NULL,
 
+	panelItem: int,
+
 	showedContextMenuThisFrame = false,
+
+	!call :: (baseX,baseY:int, width:int, mainLabelWidth:int) -> Panel {
+		local mx, my = love.mouse.getPosition()
+		return {
+			baseX          = baseX,
+			baseY          = baseY,
+			width          = width,
+			mainLabelWidth = mainLabelWidth,
+
+			mx  = mx,
+			my  = my,
+			mod = getModifierKey(),
+		}
+	},
+
+	reset :: (panel:Panel) {
+		panel.x = panel.baseX + PANEL_SPACING
+		panel.y = panel.baseY + PANEL_SPACING
+
+		panel.maxPanelItemX = panel.baseX+panel.mainLabelWidth
+		panel.maxPanelItemY = 0
+
+		panel.hasScrollableSection = false
+		panel.ignoreMouseAboveY    = 0
+		panel.myScrolled           = panel.my
+	},
 }
 
 export ContextMenu :: struct {
@@ -118,10 +159,10 @@ local drawCheckerBox :: (x,y,w,h:int) {
 	drawChecker(x, y, w, h)
 }
 
-local drawLabels :: (label1,label2:string, x,y:int) {
+local drawLabels :: (panel:Panel, label1,label2:string, x,y:int) {
 	LG.setColor(1, 1, 1)
 	if label1 {
-		LG.print(label1, PANEL_SPACING, y)
+		LG.print(label1, panel.baseX+PANEL_SPACING, y)
 	}
 	if label2 {
 		LG.setFont(fontSmall)
@@ -154,44 +195,44 @@ local drawTooltip :: (text:string, x,y:int) {
 
 
 
-local drawPanelSeparator :: (state:PanelState, thick=false) {
+local drawPanelSeparator :: (panel:Panel, thick=false) {
 	local w = thick ? 6 : 2
-	LG.setColor(0, 0, 0, .5)
-	LG.rectangle(LG.DrawMode.FILL, 0, state.y, PANEL_WIDTH, w)
+	LG.setColor(0, 0, 0, .3)
+	LG.rectangle(LG.DrawMode.FILL, panel.baseX, panel.y, panel.width, w)
 
-	gotoNextRow(state)
-	occupy(state, PANEL_WIDTH, w)
-	gotoNextRow(state)
+	gotoNextRow(panel)
+	occupy(panel, panel.width, w)
+	gotoNextRow(panel)
 }
 
-local drawPanelDirection :: (state:PanelState, label1,label2:string, angle:float, spreadCcw,spreadCw=0.0) -> (pressedMouseButton:int, angle:float) {
-	state.panelItem += 1
+local drawPanelDirection :: (panel:Panel, label1,label2:string, angle:float, spreadCcw,spreadCw=0.0) -> (pressedMouseButton:int, angle:float) {
+	panel.panelItem += 1
 
 	local RADIUS :: 25
 
-	local x = state.x + RADIUS
-	local y = state.y + RADIUS
+	local x = panel.x + RADIUS
+	local y = panel.y + RADIUS
 
-	local hovered = isHoveringPanelItemCircle(state, x, y, RADIUS)
-	local pressed = hovered ? isPressingOrMayPress(state) : 0
+	local hovered = isHoveringPanelItemCircle(panel, x, y, RADIUS)
+	local pressed = hovered ? isPressingOrMayPress(panel) : 0
 
 	if pressed == 1 {
-		draggedPanelItem = state.panelItem
-		angle            = math.atan(state.myScrolled-y, state.mx-x)
-		if state.mod == ModifierKey.C  angle = math.round(angle * 8/math.TAU) / 8*math.TAU
+		draggedPanelItem = panel.panelItem
+		angle            = math.atan(panel.myScrolled-y, panel.mx-x)
+		if panel.mod == ModifierKey.C  angle = math.round(angle * 8/math.TAU) / 8*math.TAU
 
 	} elseif pressed == 2 {
 		local ITEMS :: {"Copy angle","Paste angle"}
-		local panelItem = state.panelItem
+		local panelItem = panel.panelItem
 
-		showContextMenu(state, ITEMS, [angle,panelItem] (choice:int) {
+		showContextMenu(panel, ITEMS, [angle,panelItem] (choice:int) {
 			if choice == {
 				case 1: clipboardAngle = angle
 				case 2: panelItemForContextMenu, contextMenuAction = panelItem, 0
 			}
 		})
 
-	} elseif state.panelItem == panelItemForContextMenu {
+	} elseif panel.panelItem == panelItemForContextMenu {
 		if clipboardAngle ~= NULL {
 			angle                 = clipboardAngle
 			pressed               = 1
@@ -199,13 +240,13 @@ local drawPanelDirection :: (state:PanelState, label1,label2:string, angle:float
 		}
 
 	} elseif hovered and (keysPressedThisFrame.left or keysPressedThisFrame.right) {
-		local delta = math.TAU * ((state.mod == ModifierKey.S) ? 45/360 : (state.mod == ModifierKey.C) ? 1/360 : 5/360)
+		local delta = math.TAU * ((panel.mod == ModifierKey.S) ? 45/360 : (panel.mod == ModifierKey.C) ? 1/360 : 5/360)
 		angle       = ((keysPressedThisFrame.left ? angle-delta : angle+delta) + math.PI) % math.TAU - math.PI
 		pressed     = 1
 		scheduleSaveWorkspace = true
 	}
 
-	drawLabels(label1, label2, x-RADIUS, math.round(y-state.fontH/2))
+	drawLabels(panel, label1, label2, x-RADIUS, math.round(y-fontNormal.getHeight!()/2))
 
 	LG.setColor(0, 0, 0)
 	LG.circle(LG.DrawMode.FILL, x, y, RADIUS)
@@ -225,7 +266,7 @@ local drawPanelDirection :: (state:PanelState, label1,label2:string, angle:float
 	if showPanelNumbers {
 		local text  = format("%d°", angle*360/math.TAU)
 		local textX = math.round(x-fontSmall.getWidth!(text)/2)
-		local textY = (angle % math.TAU < math.PI) ? state.y+5 : state.y+2*RADIUS-5-fontSmall.getHeight!()
+		local textY = (angle % math.TAU < math.PI) ? panel.y+5 : panel.y+2*RADIUS-5-fontSmall.getHeight!()
 		LG.setFont(fontSmall)
 		LG.setColor(0, 0, 0)
 		LG.print(text, textX+1, textY+1)
@@ -234,7 +275,7 @@ local drawPanelDirection :: (state:PanelState, label1,label2:string, angle:float
 		LG.setFont(fontNormal)
 	}
 
-	occupy(state, 2*RADIUS, 2*RADIUS)
+	occupy(panel, 2*RADIUS, 2*RADIUS)
 	return pressed, angle
 }
 
@@ -259,31 +300,31 @@ local drawSliderValue :: (sliderX,sliderY:float, sliderW,sliderH:float, value:fl
 	}
 }
 
-local drawPanelSlider :: (state:PanelState,
+local drawPanelSlider :: (panel:Panel,
 	label1,label2:string, valueMin,valueMax:float, value:float,
 	readoutMultiplier:float, readoutFormat:string, other:float|none=nil, enableDelete=false, inset=0, width=0
 ) -> (
 	pressedMouseButton:int, value:float, deleted:bool
 ) {
-	state.panelItem += 1
+	panel.panelItem += 1
 
-	local x = state.x + inset
-	local y = state.y
-	local w = width ?: PANEL_WIDTH - PANEL_SPACING - x
-	local h = state.fontH
+	local x = panel.x + inset
+	local y = panel.y
+	local w = width ?: (panel.baseX+panel.width) - PANEL_SPACING - x
+	local h = fontNormal.getHeight!()
 
-	local hovered = isHoveringPanelItemRectangle(state, x, y, w, h)
-	local pressed = hovered ? isPressingOrMayPress(state) : 0
+	local hovered = isHoveringPanelItemRectangle(panel, x, y, w, h)
+	local pressed = hovered ? isPressingOrMayPress(panel) : 0
 
 	local deleted = false
 
 	if pressed == 1 {
-		draggedPanelItem = state.panelItem
-		value            = math.lerp(valueMin, valueMax, math.clamp01((state.mx-x)/w))
-		if state.mod == ModifierKey.C  value = math.lerp(valueMin, valueMax, math.round(math.clamp01((state.mx-x)/w)*16)/16)
+		draggedPanelItem = panel.panelItem
+		value            = math.lerp(valueMin, valueMax, math.clamp01((panel.mx-x)/w))
+		if panel.mod == ModifierKey.C  value = math.lerp(valueMin, valueMax, math.round(math.clamp01((panel.mx-x)/w)*16)/16)
 
 	} elseif pressed == 2 {
-		local panelItem = state.panelItem
+		local panelItem = panel.panelItem
 
 		local items = {
 			"Copy value",
@@ -291,7 +332,7 @@ local drawPanelSlider :: (state:PanelState,
 		}
 		if enableDelete  insert(items, "Delete value")
 
-		showContextMenu(state, items, [value,panelItem] (choice:int) {
+		showContextMenu(panel, items, [value,panelItem] (choice:int) {
 			if choice == {
 				case 1: clipboardScalar = value
 				case 2: panelItemForContextMenu, contextMenuAction = panelItem, ACTION_PASTE_SCALAR
@@ -299,7 +340,7 @@ local drawPanelSlider :: (state:PanelState,
 			}
 		})
 
-	} elseif state.panelItem == panelItemForContextMenu {
+	} elseif panel.panelItem == panelItemForContextMenu {
 		if contextMenuAction == ACTION_PASTE_SCALAR {
 			if clipboardScalar ~= NULL {
 				value                 = math.clamp(clipboardScalar, valueMin, valueMax)
@@ -313,13 +354,13 @@ local drawPanelSlider :: (state:PanelState,
 		}
 
 	} elseif hovered and (keysPressedThisFrame.left or keysPressedThisFrame.right) {
-		local delta           = (valueMax-valueMin) * ((state.mod == ModifierKey.S) ? 1/16 : (state.mod == ModifierKey.C) ? 1/1024 : 1/128)
+		local delta           = (valueMax-valueMin) * ((panel.mod == ModifierKey.S) ? 1/16 : (panel.mod == ModifierKey.C) ? 1/1024 : 1/128)
 		value                 = math.clamp((keysPressedThisFrame.left ? value-delta : value+delta), valueMin, valueMax)
 		pressed               = 1
 		scheduleSaveWorkspace = true
 	}
 
-	drawLabels(label1, label2, x, y)
+	drawLabels(panel, label1, label2, x, y)
 
 	-- Background.
 	LG.setColor(0, 0, 0)
@@ -348,42 +389,42 @@ local drawPanelSlider :: (state:PanelState,
 	-- The actual value.
 	drawSliderValue(x, y, w, h, (value-valueMin)/(valueMax-valueMin), value*readoutMultiplier, readoutFormat)
 
-	occupy(state, inset+w, h)
+	occupy(panel, inset+w, h)
 	return pressed, value, deleted
 }
 
-local drawPanelColor :: (state:PanelState,
+local drawPanelColor :: (panel:Panel,
 	label1,label2:string, hue,saturation,value:float,a:float|none, enableDelete=false, showPreview=true
 ) -> (
 	pressedMouseButton:int, hue,saturation,value,a:float, deleted:bool, pressedComponent:int
 ) {
-	state.panelItem += 1
+	panel.panelItem += 1
 
 	local components = (a == nil ? 3 : 4)
 
-	local x = state.x
-	local y = state.y
-	local w = PANEL_WIDTH - LABEL_WIDTH - COLOR_PREVIEW_WIDTH - 3*PANEL_SPACING
+	local x = panel.x
+	local y = panel.y
+	local w = panel.width - panel.mainLabelWidth - COLOR_PREVIEW_WIDTH - 3*PANEL_SPACING
 	local h = COLOR_SLIDER_HEIGHT * components
 
-	local hovered = isHoveringPanelItemRectangle(state, x, y, w, h)
-	local pressed = hovered ? isPressingOrMayPress(state) : 0
+	local hovered = isHoveringPanelItemRectangle(panel, x, y, w, h)
+	local pressed = hovered ? isPressingOrMayPress(panel) : 0
 
-	local component = math.clamp(math.floor(1+(state.myScrolled-y)/COLOR_SLIDER_HEIGHT), 1, components)
+	local component = math.clamp(math.floor(1+(panel.myScrolled-y)/COLOR_SLIDER_HEIGHT), 1, components)
 
 	local deleted = false
 
 	if pressed == 1 {
-		draggedPanelItem = state.panelItem
+		draggedPanelItem = panel.panelItem
 
 		if not draggedPanelSubItem  draggedPanelSubItem = component
 		component = draggedPanelSubItem
 
-		local theValue = (state.mx-x)/w
+		local theValue = (panel.mx-x)/w
 		local steps    = component == 1 ? 24 : 16
 
-		if state.mod == ModifierKey.C or state.mod == ModifierKey.CS
-			theValue = math.round(math.clamp01((state.mx-x)/w)*steps)/steps
+		if panel.mod == ModifierKey.C or panel.mod == ModifierKey.CS
+			theValue = math.round(math.clamp01((panel.mx-x)/w)*steps)/steps
 
 		theValue = math.clamp01(theValue)
 
@@ -395,7 +436,7 @@ local drawPanelColor :: (state:PanelState,
 		}
 
 	} elseif pressed == 2 {
-		local panelItem = state.panelItem
+		local panelItem = panel.panelItem
 
 		local componentTitle: string = NULL
 		if component == {
@@ -413,7 +454,7 @@ local drawPanelColor :: (state:PanelState,
 		}
 		if enableDelete  insert(items, "Delete color")
 
-		showContextMenu(state, items, [hue,saturation,value,a,panelItem,component] (choice:int) {
+		showContextMenu(panel, items, [hue,saturation,value,a,panelItem,component] (choice:int) {
 			if choice == {
 				case 1:
 					if component == {
@@ -429,7 +470,7 @@ local drawPanelColor :: (state:PanelState,
 			}
 		})
 
-	} elseif state.panelItem == panelItemForContextMenu {
+	} elseif panel.panelItem == panelItemForContextMenu {
 		if contextMenuAction == ACTION_PASTE_COLOR {
 			if clipboardColor ~= NULL {
 				hue        = clipboardColor[1]
@@ -459,7 +500,7 @@ local drawPanelColor :: (state:PanelState,
 		}
 
 	} elseif hovered and (keysPressedThisFrame.left or keysPressedThisFrame.right) {
-		local delta = ((state.mod == ModifierKey.S) ? 16/255 : (state.mod == ModifierKey.C) ? 1/255 : 4/255)
+		local delta = ((panel.mod == ModifierKey.S) ? 16/255 : (panel.mod == ModifierKey.C) ? 1/255 : 4/255)
 		if component == {
 			case 1: hue        = math.clamp01((keysPressedThisFrame.left ? hue            - delta : hue            + delta))
 			case 2: saturation = math.clamp01((keysPressedThisFrame.left ? saturation     - delta : saturation     + delta))
@@ -470,14 +511,14 @@ local drawPanelColor :: (state:PanelState,
 		scheduleSaveWorkspace = true
 	}
 
-	drawLabels(label1, label2, x, y)
-	-- drawLabels(label1, label2, x, math.round(y+(h-state.fontH)/2))
+	drawLabels(panel, label1, label2, x, y)
+	-- drawLabels(panel, label1, label2, x, math.round(y+(h-fontNormal.getHeight!())/2))
 
 	-- Preview.
 	local r, g, b = hsvToRgb(hue, saturation, value)
 
 	if showPreview {
-		local previewX = PANEL_WIDTH - PANEL_SPACING - COLOR_PREVIEW_WIDTH
+		local previewX = panel.baseX + panel.width - PANEL_SPACING - COLOR_PREVIEW_WIDTH
 		drawCheckerBox(previewX, y, COLOR_PREVIEW_WIDTH, h)
 		LG.setColor(r, g, b, (a == nil ? 1.0 : cast(float)a))
 		LG.rectangle(LG.DrawMode.FILL, previewX, y, COLOR_PREVIEW_WIDTH, h)
@@ -529,7 +570,7 @@ local drawPanelColor :: (state:PanelState,
 		}
 	}
 
-	occupy(state, w, h)
+	occupy(panel, w, h)
 
 	return
 		pressed,
@@ -537,7 +578,7 @@ local drawPanelColor :: (state:PanelState,
 		deleted, component
 }
 
-local drawPanelButtons :: (state:PanelState,
+local drawPanelButtons :: (panel:Panel,
 	label1,label2:string, buttons:[]Button, selected=0, style=ButtonStyle.NORMAL,
 	lastButtonWidth=0, showLabel=true, enableDragging=false, inset=0, width=0
 ) -> (
@@ -545,14 +586,14 @@ local drawPanelButtons :: (state:PanelState,
 ) {
 	local IMAGE_SIZE :: 20 -- @UX: Don't stretch the image.
 
-	state.panelItem += 1
+	panel.panelItem += 1
 
 	local highlightAll = (selected == 0)
 
-	local x = showLabel ? state.x+inset : PANEL_SPACING
-	local y = state.y
-	local w = width ?: PANEL_WIDTH - PANEL_SPACING - x
-	local h = state.fontH
+	local x = showLabel ? panel.x+inset : panel.baseX+PANEL_SPACING
+	local y = panel.y
+	local w = width ?: (panel.baseX+panel.width) - PANEL_SPACING - x
+	local h = fontNormal.getHeight!()
 
 	for buttons  if it.image {
 		h = math.max(h, IMAGE_SIZE+2*PANEL_SPACING)
@@ -561,18 +602,18 @@ local drawPanelButtons :: (state:PanelState,
 
 	local buttonW0 = lastButtonWidth ? (w-lastButtonWidth)/(#buttons-1) : w/#buttons
 
-	local hovered = isHoveringPanelItemRectangle(state, x, y, w, h)
-	local pressed = hovered ? isPressingOrMayPress(state) : 0
+	local hovered = isHoveringPanelItemRectangle(panel, x, y, w, h)
+	local pressed = hovered ? isPressingOrMayPress(panel) : 0
 
 	local pressedIndex: int
 	local dragged = false
 
 	if pressed {
-		pressedIndex = math.clamp(math.floor(1+(state.mx-x)/buttonW0), 1, #buttons)
+		pressedIndex = math.clamp(math.floor(1+(panel.mx-x)/buttonW0), 1, #buttons)
 
 		if enableDragging and pressed == 1 {
 			if not draggedPanelItem
-				draggedPanelItem = state.panelItem
+				draggedPanelItem = panel.panelItem
 			else
 				dragged = true
 		} else {
@@ -580,11 +621,11 @@ local drawPanelButtons :: (state:PanelState,
 		}
 	}
 
-	if showLabel  drawLabels(label1, label2, x, y+math.round((h-state.fontH)/2))
+	if showLabel  drawLabels(panel, label1, label2, x, y+math.round((h-fontNormal.getHeight!())/2))
 
 	if style == ButtonStyle.TABS {
 		LG.setColor(1, 1, 1, .3)
-		LG.rectangle(LG.DrawMode.FILL, 0, y+h, PANEL_WIDTH, 2)
+		LG.rectangle(LG.DrawMode.FILL, panel.baseX, y+h, panel.width, 2)
 	}
 
 	for buttons {
@@ -600,7 +641,7 @@ local drawPanelButtons :: (state:PanelState,
 		local padding = style == ButtonStyle.TABS ? 8 : PANEL_SPACING
 		local faded   = not (highlightAll or itIndex == selected)
 
-		local buttonHovered = hovered and state.mx >= buttonX1 and state.mx < buttonX2
+		local buttonHovered = hovered and panel.mx >= buttonX1 and panel.mx < buttonX2
 
 		-- Button background.
 		if buttonHovered
@@ -637,7 +678,7 @@ local drawPanelButtons :: (state:PanelState,
 			local scissorX2 = buttonX2-(padding-1)
 
 			if scissorX2 > scissorX1 {
-				local textY = y + math.round((h-state.fontH)/2)
+				local textY = y + math.round((h-fontNormal.getHeight!())/2)
 				local textX: int
 
 				if it.image {
@@ -660,29 +701,22 @@ local drawPanelButtons :: (state:PanelState,
 		}
 	}
 
-	occupy(state, inset+w, h+(style == ButtonStyle.TABS ? 2 : 0))
+	occupy(panel, inset+w, h+(style == ButtonStyle.TABS ? 2 : 0))
 	return pressed, pressedIndex, dragged
 }
 
-export drawPanel :: () {
-	local state: PanelState = {
-		baseY = PANEL_SPACING,
-		x     = PANEL_SPACING,
-		y     = PANEL_SPACING,
-
-		fontH = fontNormal.getHeight!(),
-
-		mx         = love.mouse.getX(),
-		my         = love.mouse.getY(),
-		myScrolled = love.mouse.getY(),
-
-		mod = getModifierKey(),
-	}
-
+export drawPanels :: () {
 	-- Note: Some things may render incorrectly for one frame if the user does
 	-- something because we handle mouse input here while rendering.
-	LG.setColor(.2, .2, .2)
-	LG.rectangle(LG.DrawMode.FILL, 0, 0, PANEL_WIDTH, LG.getHeight())
+
+	local panel = Panel(0, 0, MAIN_PANEL_WIDTH, MAIN_LABEL_WIDTH)
+
+	local panelStart :: (panel:Panel) {
+		panel.reset!()
+		LG.setColor(.2, .2, .2)
+		LG.rectangle(LG.DrawMode.FILL, panel.baseX, 0, panel.width, LG.getHeight())
+	}
+	panelStart(panel)
 
 	-- Project.
 	local project = openProjects[currentProjectIndex]
@@ -693,7 +727,7 @@ export drawPanel :: () {
 
 		insert(buttons, cast(Button){label="+"})
 
-		local pressed, i, dragged = drawPanelButtons(state, "", "", buttons, selected=currentProjectIndex, style=ButtonStyle.TABS, showLabel=false, lastButtonWidth=32, enableDragging=true) ; gotoNextRow(state)
+		local pressed, i, dragged = drawPanelButtons(panel, "", "", buttons, selected=currentProjectIndex, style=ButtonStyle.TABS, showLabel=false, lastButtonWidth=32, enableDragging=true) ; gotoNextRow(panel)
 		if dragged {
 			if i < #buttons {
 				remove(openProjects, currentProjectIndex)
@@ -708,7 +742,7 @@ export drawPanel :: () {
 				updateParticleImageFilters()
 
 			} else {
-				stopDraggingPanelItem()
+				stopDraggingInPanels()
 				addNewProject()
 				currentProjectIndex      = #openProjects
 				scheduleRecreateCanvases = true
@@ -729,18 +763,26 @@ export drawPanel :: () {
 		}
 	}
 	do {
-		local BUTTONS_SHOW: []Button : {{label="show settings"}}
-		local BUTTONS_HIDE: []Button : {{label="hide settings"}}
-		local pressed, i = drawPanelButtons(state, "", "", (showProjectSettings ? BUTTONS_HIDE : BUTTONS_SHOW), showLabel=false) ; gotoNextRow(state)
+		local BUTTONS_SHOW_SETTINGS: []Button : {{label="save"},{label="save as..."},{label="load..."},{label="show settings"}}
+		local BUTTONS_HIDE_SETTINGS: []Button : {{label="save"},{label="save as..."},{label="load..."},{label="hide settings"}}
+		local pressed, i = drawPanelButtons(panel, "", "", (showProjectSettings ? BUTTONS_HIDE_SETTINGS : BUTTONS_SHOW_SETTINGS), showLabel=false) ; gotoNextRow(panel)
 		if pressed == 1 {
-			showProjectSettings   = not showProjectSettings
-			scheduleSaveWorkspace = true
+			-- @Incomplete!!!
+			local saveProject :: (project:Project) {}
+			local showSaveAsDialog :: () {}
+			local showLoadDialog :: () {}
+			if i == {
+				case 1: if project.fileIsSaved  saveProject(project)  else  showSaveAsDialog()
+				case 2: showSaveAsDialog()
+				case 3: showLoadDialog()
+				case 4: showProjectSettings = not showProjectSettings ; scheduleSaveWorkspace = true
+			}
 		}
 	}
 	if showProjectSettings {
-		drawPanelSeparator(state)
+		drawPanelSeparator(panel)
 		do {
-			local pressed, i = drawPanelButtons(state, "Pixelate", "world", BUTTONS_YES_NO, selected=(project.pixelateWorld ? 1 : 2), width=140) ; gotoNextColumn(state)
+			local pressed, i = drawPanelButtons(panel, "Pixelate", "world", BUTTONS_YES_NO, selected=(project.pixelateWorld ? 1 : 2), width=140) ; gotoNextColumn(panel)
 			if pressed == 1 {
 				project.pixelateWorld    = (i == 1)
 				scheduleRecreateCanvases = true
@@ -753,21 +795,21 @@ export drawPanel :: () {
 			}
 		}
 		do {
-			local pressed, i = drawPanelButtons(state, "", "textures", BUTTONS_YES_NO, selected=(project.pixelateTextures ? 1 : 2), inset=50) ; gotoNextRow(state)
+			local pressed, i = drawPanelButtons(panel, "", "textures", BUTTONS_YES_NO, selected=(project.pixelateTextures ? 1 : 2), inset=50) ; gotoNextRow(panel)
 			if pressed == 1 {
 				project.pixelateTextures = (i == 1)
 				updateParticleImageFilters()
 			}
 		}
-		drawPanelSeparator(state)
+		drawPanelSeparator(panel)
 		do {
-			local pressed, h,s,v = drawPanelColor(state, "Background", "", project.bgColorH, project.bgColorS, project.bgColorV, nil) ; gotoNextRow(state)
+			local pressed, h,s,v = drawPanelColor(panel, "Background", "", project.bgColorH, project.bgColorS, project.bgColorV, nil) ; gotoNextRow(panel)
 
 			if pressed == 1 {
 				project.bgColorH, project.bgColorS, project.bgColorV = h,s,v
 			}
 		}
-		drawPanelSeparator(state)
+		drawPanelSeparator(panel)
 		do {
 			using Movement
 
@@ -779,33 +821,33 @@ export drawPanel :: () {
 			}
 
 			local _, i         = indexWith(BUTTONS, "value", project.movementPreset)
-			local pressed1, ^i = drawPanelButtons(state, "EmitterMovem.", "", BUTTONS, selected=i) ; gotoNextRow(state)
+			local pressed1, ^i = drawPanelButtons(panel, "EmitterMovem.", "", BUTTONS, selected=i) ; gotoNextRow(panel)
 			if pressed1 == 1  project.movementPreset = cast(Movement) BUTTONS[i].value
 		}
 		do {
-			local pressed, scale = drawPanelSlider(state, "", "scale x", 0, 2, project.movementScaleX, 100, "%d%%", width=100) ; gotoNextColumn(state)
+			local pressed, scale = drawPanelSlider(panel, "", "scale x", 0, 2, project.movementScaleX, 100, "%d%%", width=100) ; gotoNextColumn(panel)
 			if pressed == 1  project.movementScaleX = scale
 		}
 		do {
-			local pressed, speed = drawPanelSlider(state, "", "speed", -8, 8, project.movementSpeed, 100, "%d%%", inset=40) ; gotoNextRow(state)
+			local pressed, speed = drawPanelSlider(panel, "", "speed", -8, 8, project.movementSpeed, 100, "%d%%", inset=INNER_LABEL_WIDTH) ; gotoNextRow(panel)
 			if pressed == 1  project.movementSpeed = speed
 		}
 		do {
-			local pressed, scale = drawPanelSlider(state, "", "scale y", 0, 2, project.movementScaleY, 100, "%d%%", width=100) ; gotoNextRow(state)
+			local pressed, scale = drawPanelSlider(panel, "", "scale y", 0, 2, project.movementScaleY, 100, "%d%%", width=100) ; gotoNextRow(panel)
 			if pressed == 1  project.movementScaleY = scale
 		}
 	}
 
 	-- System.
 	local system = project.systems[project.systemIndex]
-	drawPanelSeparator(state, true)
+	drawPanelSeparator(panel, true)
 	do {
 		local buttons: []Button
 		for project.systems  buttons[itIndex] = {label=format((it.visible ? "%d" : "(%d)"), itIndex)}
 
 		insert(buttons, cast(Button){label="+"})
 
-		local pressed, i, dragged = drawPanelButtons(state, "ParticleSystem", "", buttons, selected=project.systemIndex, lastButtonWidth=32, style=ButtonStyle.TABS, enableDragging=true) ; gotoNextRow(state)
+		local pressed, i, dragged = drawPanelButtons(panel, "ParticleSystem", "", buttons, selected=project.systemIndex, lastButtonWidth=32, style=ButtonStyle.TABS, enableDragging=true) ; gotoNextRow(panel)
 		if dragged {
 			if i < #buttons {
 				remove(project.systems, project.systemIndex)
@@ -817,7 +859,7 @@ export drawPanel :: () {
 			if i < #buttons {
 				project.systemIndex = i
 			} else {
-				stopDraggingPanelItem()
+				stopDraggingInPanels()
 				addNewSystem(project)
 				project.systemIndex = #project.systems
 			}
@@ -839,31 +881,36 @@ export drawPanel :: () {
 		}
 	}
 
-	do {
-		local scissorY = state.y-PANEL_SPACING
+	local scrollableSectionStart :: (panel:Panel, panelScroll:float) {
+		local scissorX = panel.baseX
+		local scissorY = panel.y - PANEL_SPACING
+		local scissorW = panel.width
+		local scissorH = LG.getHeight() - scissorY
 
 		LG.push(LG.StackType.ALL)
-		LG.setScissor(0, scissorY, PANEL_WIDTH, LG.getHeight()-scissorY)
-		LG.translate(0, project.panelScroll)
+		if scissorW > 0 and scissorH > 0  LG.setScissor(scissorX, scissorY, scissorW, scissorH)
+		LG.translate(0, panelScroll)
 
-		state.myScrolled        -= math.round(project.panelScroll)
-		state.ignoreMouseAboveY  = scissorY
+		panel.hasScrollableSection  = true
+		panel.ignoreMouseAboveY     = scissorY
+		panel.myScrolled           -= math.round(panelScroll)
 
-		state.y += 5
+		panel.y += 5
 	}
+	scrollableSectionStart(panel, project.panelScroll)
 
 	-- Misc params.
 	local ps = system.particles
 	do {
 		local buttons: []Button = {{value="light",tooltip="light",image="light"},{value="moon",tooltip="moon",image="moon"}} -- @Incomplete: Dynamically create this list.
 		local _, i              = indexWith(buttons, "value", system.textureName)
-		local pressed, ^i       = drawPanelButtons(state, "Texture", "", buttons, selected=i) ; gotoNextRow(state)
+		local pressed, ^i       = drawPanelButtons(panel, "Texture", "", buttons, selected=i) ; gotoNextRow(panel)
 		if pressed == 1 {
 			system.textureName = cast(string)buttons[i].value
 			ps.setTexture!(particleImages[system.textureName]) -- @Incomplete: Update offset if system.useCustomOffset is set.
 		}
 	}
-	drawPanelSeparator(state)
+	drawPanelSeparator(panel)
 	do {
 		using LG.ParticleInsertMode
 
@@ -874,13 +921,13 @@ export drawPanel :: () {
 		}
 
 		local _, i        = indexWith(BUTTONS, "value", ps.getInsertMode!())
-		local pressed, ^i = drawPanelButtons(state, "InsertMode", "", BUTTONS, selected=i) ; gotoNextRow(state)
+		local pressed, ^i = drawPanelButtons(panel, "InsertMode", "", BUTTONS, selected=i) ; gotoNextRow(panel)
 		if pressed == 1  ps.setInsertMode!(cast(LG.ParticleInsertMode) BUTTONS[i].value)
 	}
-	drawPanelSeparator(state)
+	drawPanelSeparator(panel)
 	do {
 		local lifetime = math.max(ps.getEmitterLifetime!(), 0)
-		local pressed, ^lifetime = drawPanelSlider(state, "Lifetime", "emitter", 0, 20, lifetime,other=0, 1, (lifetime > 0 ? "%.2f sec" : "∞")) ; gotoNextRow(state)
+		local pressed, ^lifetime = drawPanelSlider(panel, "Lifetime", "emitter", 0, 20, lifetime,other=0, 1, (lifetime > 0 ? "%.2f sec" : "∞")) ; gotoNextRow(panel)
 		if pressed == 1 {
 			ps.setEmitterLifetime!(lifetime > 0 ? lifetime : -1.0)
 			if lifetime <= 0  ps.start!()
@@ -888,18 +935,18 @@ export drawPanel :: () {
 	}
 	do {
 		local min, max = ps.getParticleLifetime!()
-		local pressedMin, ^min = drawPanelSlider(state, "", "particle min", 0, 20, min,other=max, 1, "%.2f sec") ; gotoNextRow(state)
-		local pressedMax, ^max = drawPanelSlider(state, "", "particle max", 0, 20, max,other=min, 1, "%.2f sec") ; gotoNextRow(state)
+		local pressedMin, ^min = drawPanelSlider(panel, "", "particle min", 0, 20, min,other=max, 1, "%.2f sec") ; gotoNextRow(panel)
+		local pressedMax, ^max = drawPanelSlider(panel, "", "particle max", 0, 20, max,other=min, 1, "%.2f sec") ; gotoNextRow(panel)
 		if pressedMin  max = math.max(min, max)
 		if pressedMax  min = math.min(min, max)
 		if pressedMin == 1 or pressedMax == 1  ps.setParticleLifetime!(min, max)
 	}
-	drawPanelSeparator(state, true)
+	drawPanelSeparator(panel, true)
 	do {
-		local pressed, rate = drawPanelSlider(state, "SpawnRate", "", .1, 1000, ps.getEmissionRate!(),other=0, 1, "%.1f / sec") ; gotoNextRow(state)
+		local pressed, rate = drawPanelSlider(panel, "SpawnRate", "", .1, 1000, ps.getEmissionRate!(),other=0, 1, "%.1f / sec") ; gotoNextRow(panel)
 		if pressed == 1  ps.setEmissionRate!(rate)
 	}
-	drawPanelSeparator(state)
+	drawPanelSeparator(panel)
 	do {
 		using LG.AreaSpreadDistribution
 
@@ -915,19 +962,19 @@ export drawPanel :: () {
 		local distribution, dx,dy, angle, relative = ps.getEmissionArea!()
 
 		local _, i         = indexWith(BUTTONS, "value", distribution)
-		local pressed1, ^i = drawPanelButtons(state, "Area", "distribution", BUTTONS, selected=i) ; gotoNextRow(state)
+		local pressed1, ^i = drawPanelButtons(panel, "Area", "distribution", BUTTONS, selected=i) ; gotoNextRow(panel)
 		if pressed1 == 1  distribution = cast(LG.AreaSpreadDistribution) BUTTONS[i].value
 
 		if distribution == NONE {
 			if pressed1 == 1  ps.setEmissionArea!(distribution, 0,0)
 
 		} else {
-			local pressed2, ^angle = drawPanelDirection(state, "", "angle", angle) ; gotoNextColumn(state)
+			local pressed2, ^angle = drawPanelDirection(panel, "", "angle", angle) ; gotoNextColumn(panel)
 
-			local pressed3, ^dx = drawPanelSlider(state, "", "dx", 0, 1000, dx,other=0, 1, "%d", inset=LABEL_WIDTH_2)
-			local pressed4, ^dy = drawPanelSlider(state, "", "dy", 0, 1000, dy,other=0, 1, "%d", inset=LABEL_WIDTH_2)
+			local pressed3, ^dx = drawPanelSlider(panel, "", "dx", 0, 1000, dx,other=0, 1, "%d", inset=INNER_LABEL_WIDTH)
+			local pressed4, ^dy = drawPanelSlider(panel, "", "dy", 0, 1000, dy,other=0, 1, "%d", inset=INNER_LABEL_WIDTH)
 
-			local pressed5, ^i = drawPanelButtons(state, "", "dir relative to center", BUTTONS_YES_NO, selected=(relative ? 1 : 2), inset=LABEL_WIDTH_2+69) ; gotoNextRow(state)
+			local pressed5, ^i = drawPanelButtons(panel, "", "dir relative to center", BUTTONS_YES_NO, selected=(relative ? 1 : 2), inset=INNER_LABEL_WIDTH+69) ; gotoNextRow(panel)
 			if pressed5 == 1  relative = (i == 1)
 
 			if pressed1 == 1 or pressed2 == 1 or pressed3 == 1 or pressed4 == 1 or pressed5 == 1 {
@@ -935,33 +982,33 @@ export drawPanel :: () {
 			}
 		}
 	}
-	drawPanelSeparator(state)
+	drawPanelSeparator(panel)
 	do {
-		local pressed, angle = drawPanelDirection(state, "Direction", "", ps.getDirection!(), spreadCcw=ps.getSpread!()/2,spreadCw=ps.getSpread!()/2) ; gotoNextColumn(state)
+		local pressed, angle = drawPanelDirection(panel, "Direction", "", ps.getDirection!(), spreadCcw=ps.getSpread!()/2,spreadCw=ps.getSpread!()/2) ; gotoNextColumn(panel)
 		if pressed == 1  ps.setDirection!(angle)
 	}
 	do {
-		local pressed, angle = drawPanelSlider(state, "", "spread", 0, math.TAU, ps.getSpread!(),other=0, 360/math.TAU, "%d°", inset=LABEL_WIDTH_2) ; gotoNextRow(state)
+		local pressed, angle = drawPanelSlider(panel, "", "spread", 0, math.TAU, ps.getSpread!(),other=0, 360/math.TAU, "%d°", inset=INNER_LABEL_WIDTH) ; gotoNextRow(panel)
 		if pressed == 1  ps.setSpread!(angle)
 	}
-	drawPanelSeparator(state, true)
+	drawPanelSeparator(panel, true)
 	do {
 		local min, max = ps.getSpeed!()
-		local pressedMin, ^min = drawPanelSlider(state, "Speed", "min", -2000, 2000, min,other=max, 1, "%d / sec") ; gotoNextRow(state)
-		local pressedMax, ^max = drawPanelSlider(state, "",      "max", -2000, 2000, max,other=min, 1, "%d / sec") ; gotoNextRow(state)
+		local pressedMin, ^min = drawPanelSlider(panel, "Speed", "min", -2000, 2000, min,other=max, 1, "%d / sec") ; gotoNextRow(panel)
+		local pressedMax, ^max = drawPanelSlider(panel, "",      "max", -2000, 2000, max,other=min, 1, "%d / sec") ; gotoNextRow(panel)
 		if pressedMin == 1 or pressedMax == 1 {
 			if pressedMin  max = math.max(min, max)
 			if pressedMax  min = math.min(min, max)
 			ps.setSpeed!(min, max)
 		}
 	}
-	drawPanelSeparator(state)
+	drawPanelSeparator(panel)
 	do {
 		local xmin,ymin, xmax,ymax = ps.getLinearAcceleration!()
-		local pressedXmin, ^xmin = drawPanelSlider(state, "AccLinear", "xmin", -10000, 10000, xmin,other=xmax, 1, "%d / sec²") ; gotoNextRow(state)
-		local pressedXmax, ^xmax = drawPanelSlider(state, "",          "xmax", -10000, 10000, xmax,other=xmin, 1, "%d / sec²") ; gotoNextRow(state)
-		local pressedYmin, ^ymin = drawPanelSlider(state, "",          "ymin", -10000, 10000, ymin,other=ymax, 1, "%d / sec²") ; gotoNextRow(state)
-		local pressedYmax, ^ymax = drawPanelSlider(state, "",          "ymax", -10000, 10000, ymax,other=ymin, 1, "%d / sec²") ; gotoNextRow(state)
+		local pressedXmin, ^xmin = drawPanelSlider(panel, "AccLinear", "xmin", -10000, 10000, xmin,other=xmax, 1, "%d / sec²") ; gotoNextRow(panel)
+		local pressedXmax, ^xmax = drawPanelSlider(panel, "",          "xmax", -10000, 10000, xmax,other=xmin, 1, "%d / sec²") ; gotoNextRow(panel)
+		local pressedYmin, ^ymin = drawPanelSlider(panel, "",          "ymin", -10000, 10000, ymin,other=ymax, 1, "%d / sec²") ; gotoNextRow(panel)
+		local pressedYmax, ^ymax = drawPanelSlider(panel, "",          "ymax", -10000, 10000, ymax,other=ymin, 1, "%d / sec²") ; gotoNextRow(panel)
 		if pressedXmin == 1 or pressedXmax == 1 or pressedYmin == 1 or pressedYmax == 1 {
 			if pressedXmin  xmax = math.max(xmin, xmax)
 			if pressedXmax  xmin = math.min(xmin, xmax)
@@ -970,44 +1017,44 @@ export drawPanel :: () {
 			ps.setLinearAcceleration!(xmin,ymin, xmax,ymax)
 		}
 	}
-	drawPanelSeparator(state)
+	drawPanelSeparator(panel)
 	do {
 		local min, max = ps.getRadialAcceleration!()
-		local pressedMin, ^min = drawPanelSlider(state, "AccRadial", "min", -20000, 20000, min,other=max, 1, "%d / sec²") ; gotoNextRow(state)
-		local pressedMax, ^max = drawPanelSlider(state, "",          "max", -20000, 20000, max,other=min, 1, "%d / sec²") ; gotoNextRow(state)
+		local pressedMin, ^min = drawPanelSlider(panel, "AccRadial", "min", -20000, 20000, min,other=max, 1, "%d / sec²") ; gotoNextRow(panel)
+		local pressedMax, ^max = drawPanelSlider(panel, "",          "max", -20000, 20000, max,other=min, 1, "%d / sec²") ; gotoNextRow(panel)
 		if pressedMin == 1 or pressedMax == 1 {
 			if pressedMin  max = math.max(min, max)
 			if pressedMax  min = math.min(min, max)
 			ps.setRadialAcceleration!(min, max)
 		}
 	}
-	drawPanelSeparator(state)
+	drawPanelSeparator(panel)
 	do {
 		local min, max = ps.getTangentialAcceleration!()
-		local pressedMin, ^min = drawPanelSlider(state, "AccTangent", "min", -20000, 20000, min,other=max, 1, "%d / sec²") ; gotoNextRow(state)
-		local pressedMax, ^max = drawPanelSlider(state, "",           "max", -20000, 20000, max,other=min, 1, "%d / sec²") ; gotoNextRow(state)
+		local pressedMin, ^min = drawPanelSlider(panel, "AccTangent", "min", -20000, 20000, min,other=max, 1, "%d / sec²") ; gotoNextRow(panel)
+		local pressedMax, ^max = drawPanelSlider(panel, "",           "max", -20000, 20000, max,other=min, 1, "%d / sec²") ; gotoNextRow(panel)
 		if pressedMin == 1 or pressedMax == 1 {
 			if pressedMin  max = math.max(min, max)
 			if pressedMax  min = math.min(min, max)
 			ps.setTangentialAcceleration!(min, max)
 		}
 	}
-	drawPanelSeparator(state)
+	drawPanelSeparator(panel)
 	do {
 		local min, max = ps.getLinearDamping!()
-		local pressedMin, ^min = drawPanelSlider(state, "DampLinear", "min", -50, 50, min,other=max, 1, "%.2f") ; gotoNextRow(state)
-		local pressedMax, ^max = drawPanelSlider(state, "",           "max", -50, 50, max,other=min, 1, "%.2f") ; gotoNextRow(state)
+		local pressedMin, ^min = drawPanelSlider(panel, "DampLinear", "min", -50, 50, min,other=max, 1, "%.2f") ; gotoNextRow(panel)
+		local pressedMax, ^max = drawPanelSlider(panel, "",           "max", -50, 50, max,other=min, 1, "%.2f") ; gotoNextRow(panel)
 		if pressedMin == 1 or pressedMax == 1 {
 			if pressedMin  max = math.max(min, max)
 			if pressedMax  min = math.min(min, max)
 			ps.setLinearDamping!(min, max)
 		}
 	}
-	drawPanelSeparator(state, true)
+	drawPanelSeparator(panel, true)
 	do {
 		local min, max = ps.getRotation!()
-		local pressedMin, ^min = drawPanelDirection(state, "Rotation", "min/max", min, spreadCw=max-min)  ; gotoNextColumn(state)
-		local pressedMax, ^max = drawPanelDirection(state, "",         "",        max, spreadCcw=max-min) ; gotoNextColumn(state)
+		local pressedMin, ^min = drawPanelDirection(panel, "Rotation", "min/max", min, spreadCw=max-min)  ; gotoNextColumn(panel)
+		local pressedMax, ^max = drawPanelDirection(panel, "",         "",        max, spreadCcw=max-min) ; gotoNextColumn(panel)
 		if pressedMin == 1 or pressedMax == 1 {
 			-- if pressedMin  max = math.max(min, max)
 			-- if pressedMax  min = math.min(min, max)
@@ -1015,18 +1062,18 @@ export drawPanel :: () {
 		}
 	}
 	do {
-		local pressed, i = drawPanelButtons(state, "", "relative", BUTTONS_YES_NO, selected=(ps.hasRelativeRotation!() ? 1 : 2), inset=LABEL_WIDTH_2) ; gotoNextRow(state)
+		local pressed, i = drawPanelButtons(panel, "", "relative", BUTTONS_YES_NO, selected=(ps.hasRelativeRotation!() ? 1 : 2), inset=INNER_LABEL_WIDTH) ; gotoNextRow(panel)
 		if pressed == 1  ps.setRelativeRotation!(i == 1)
 	}
-	drawPanelSeparator(state)
+	drawPanelSeparator(panel)
 	do {
 		local min, max = ps.getSpin!()
-		local pressedMin, ^min = drawPanelSlider(state, "Spin", "at start", -8*math.TAU, 8*math.TAU, min,other=max, 1/math.TAU, "%.2f turns / sec") ; gotoNextRow(state)
-		local pressedMax, ^max = drawPanelSlider(state, "",     "at end",   -8*math.TAU, 8*math.TAU, max,other=min, 1/math.TAU, "%.2f turns / sec") ; gotoNextRow(state)
+		local pressedMin, ^min = drawPanelSlider(panel, "Spin", "at start", -8*math.TAU, 8*math.TAU, min,other=max, 1/math.TAU, "%.2f turns / sec") ; gotoNextRow(panel)
+		local pressedMax, ^max = drawPanelSlider(panel, "",     "at end",   -8*math.TAU, 8*math.TAU, max,other=min, 1/math.TAU, "%.2f turns / sec") ; gotoNextRow(panel)
 		if pressedMin == 1 or pressedMax == 1  ps.setSpin!(min, max)
 	}
 	do {
-		local pressed, variation = drawPanelSlider(state, "", "variation", 0, 1, ps.getSpinVariation!(),other=0, 100, "%d%%") ; gotoNextRow(state)
+		local pressed, variation = drawPanelSlider(panel, "", "variation", 0, 1, ps.getSpinVariation!(),other=0, 100, "%d%%") ; gotoNextRow(panel)
 		if pressed == 1  ps.setSpinVariation!(variation)
 	}
 	--[[
@@ -1037,12 +1084,12 @@ export drawPanel :: () {
 	]]
 
 	-- Sizes.
-	drawPanelSeparator(state, true)
+	drawPanelSeparator(panel, true)
 	do {
 		local sizes = {ps.getSizesAsVararg!()}
 		local buttons: []Button = {{label="+"}}
 
-		local pressed, i = drawPanelButtons(state, "Size", "", buttons) ; gotoNextRow(state)
+		local pressed, i = drawPanelButtons(panel, "Size", "", buttons) ; gotoNextRow(panel)
 
 		if pressed == 1 and sizes[8] == NULL {
 			insert(sizes, sizes[#sizes])
@@ -1051,21 +1098,21 @@ export drawPanel :: () {
 	}
 	do {
 		local sizes   = {ps.getSizesAsVararg!()}
-		local moveAll = state.mod == ModifierKey.S or state.mod == ModifierKey.CS
+		local moveAll = panel.mod == ModifierKey.S or panel.mod == ModifierKey.CS
 
 		local anyPressed    = false
 		local indexToDelete = 0
 		local indexToShift  = 0
 
 		for i = 1, #sizes {
-			local y1 = state.y
+			local y1 = panel.y
 
-			local pressed, size, deleted = drawPanelSlider(state, "", format("#%d", i), 0, 8, sizes[i],other=0, 1, "%.2f", enableDelete=true) ; gotoNextRow(state)
+			local pressed, size, deleted = drawPanelSlider(panel, "", format("#%d", i), 0, 8, sizes[i],other=0, 1, "%.2f", enableDelete=true) ; gotoNextRow(panel)
 			anyPressed                   = anyPressed or pressed == 1
 
-			local y2 = state.y-PANEL_SPACING
+			local y2 = panel.y-PANEL_SPACING
 
-			if shiftScrolledOnPanel and state.myScrolled > y1 and state.myScrolled < y2 {
+			if shiftScrolledOnPanel and panel.myScrolled > y1 and panel.myScrolled < y2 {
 				indexToShift = i
 			} elseif deleted {
 				indexToDelete = i
@@ -1082,10 +1129,10 @@ export drawPanel :: () {
 		if indexToShift {
 			if shiftScrolledOnPanel < 0 and indexToShift > 1 {
 				sizes[indexToShift], sizes[indexToShift-1] = sizes[indexToShift-1], sizes[indexToShift]
-				love.mouse.setPosition(state.mx, state.my-state.fontH-PANEL_SPACING)
+				love.mouse.setPosition(panel.mx, panel.my - fontNormal.getHeight!() - PANEL_SPACING)
 			} elseif shiftScrolledOnPanel > 0 and indexToShift < #sizes {
 				sizes[indexToShift], sizes[indexToShift+1] = sizes[indexToShift+1], sizes[indexToShift]
-				love.mouse.setPosition(state.mx, state.my+state.fontH+PANEL_SPACING)
+				love.mouse.setPosition(panel.mx, panel.my + fontNormal.getHeight!() + PANEL_SPACING)
 			}
 
 			scheduleSaveWorkspace = true
@@ -1101,16 +1148,16 @@ export drawPanel :: () {
 		}
 	}
 	do {
-		local pressed, variation = drawPanelSlider(state, "", "variation", 0, 1, ps.getSizeVariation!(),other=0, 100, "%d%%") ; gotoNextRow(state)
+		local pressed, variation = drawPanelSlider(panel, "", "variation", 0, 1, ps.getSizeVariation!(),other=0, 100, "%d%%") ; gotoNextRow(panel)
 		if pressed == 1  ps.setSizeVariation!(variation)
 	}
 
 	-- Colors + blend mode.
-	drawPanelSeparator(state)
+	drawPanelSeparator(panel)
 	do {
 		local BUTTONS: []Button : {{label="+"}}
 		local colors     = system.colors
-		local pressed, i = drawPanelButtons(state, "Color", "", BUTTONS) ; gotoNextRow(state)
+		local pressed, i = drawPanelButtons(panel, "Color", "", BUTTONS) ; gotoNextRow(panel)
 
 		if pressed == 1 and colors[8*4] == NULL {
 			local lastColorIndex = (#colors//4)*4-3
@@ -1120,23 +1167,23 @@ export drawPanel :: () {
 	}
 	do {
 		local colors  = system.colors
-		local moveAll = state.mod == ModifierKey.S or state.mod == ModifierKey.CS
+		local moveAll = panel.mod == ModifierKey.S or panel.mod == ModifierKey.CS
 
 		local anyPressed         = false
 		local colorIndexToShift  = 0
 		local colorIndexToDelete = 0
 
-		local previewY1 = state.y
+		local previewY1 = panel.y
 
 		for i = 1, #colors, 4 {
-			local y1 = state.y
+			local y1 = panel.y
 
-			local pressed, h,s,v,a, deleted, component = drawPanelColor(state, "", format("#%d", (i+3)//4), colors[i],colors[i+1],colors[i+2],colors[i+3], enableDelete=true, showPreview=(colors[5]==NULL)) ; gotoNextRow(state)
+			local pressed, h,s,v,a, deleted, component = drawPanelColor(panel, "", format("#%d", (i+3)//4), colors[i],colors[i+1],colors[i+2],colors[i+3], enableDelete=true, showPreview=(colors[5]==NULL)) ; gotoNextRow(panel)
 			anyPressed = anyPressed or pressed == 1
 
-			local y2 = state.y-PANEL_SPACING
+			local y2 = panel.y-PANEL_SPACING
 
-			if shiftScrolledOnPanel and state.myScrolled > y1 and state.myScrolled < y2 {
+			if shiftScrolledOnPanel and panel.myScrolled > y1 and panel.myScrolled < y2 {
 				colorIndexToShift = i
 			} elseif deleted {
 				colorIndexToDelete = i
@@ -1154,8 +1201,8 @@ export drawPanel :: () {
 		local colorCount = #colors//4
 
 		if colors[5] ~= NULL {
-			local previewX  = PANEL_WIDTH - PANEL_SPACING - COLOR_PREVIEW_WIDTH
-			local previewY2 = state.y-PANEL_SPACING
+			local previewX  = panel.baseX + panel.width - PANEL_SPACING - COLOR_PREVIEW_WIDTH
+			local previewY2 = panel.y - PANEL_SPACING
 
 			static shader: LG.Shader = NULL
 			if shader == NULL  shader = LG.newShader("src/particleColorPreview.glsl")
@@ -1195,10 +1242,10 @@ export drawPanel :: () {
 
 			if shiftScrolledOnPanel < 0 and colorIndexToShift > 1 {
 				swap(colors, colorIndexToShift, colorIndexToShift-4)
-				love.mouse.setPosition(state.mx, state.my-4*COLOR_SLIDER_HEIGHT-PANEL_SPACING)
+				love.mouse.setPosition(panel.mx, panel.my-4*COLOR_SLIDER_HEIGHT-PANEL_SPACING)
 			} elseif shiftScrolledOnPanel > 0 and colorIndexToShift < colorCount*4-3 {
 				swap(colors, colorIndexToShift, colorIndexToShift+4)
-				love.mouse.setPosition(state.mx, state.my+4*COLOR_SLIDER_HEIGHT+PANEL_SPACING)
+				love.mouse.setPosition(panel.mx, panel.my+4*COLOR_SLIDER_HEIGHT+PANEL_SPACING)
 			}
 
 			scheduleSaveWorkspace = true
@@ -1228,7 +1275,7 @@ export drawPanel :: () {
 			[LG.BlendMode.SUBTRACT] = 3,
 			[LG.BlendMode.SCREEN]   = 4,
 		}
-		local pressed, i = drawPanelButtons(state, "", "blend mode", BUTTONS, selected=BLEND_MODE_TO_INDEX[system.blendMode]) ; gotoNextRow(state)
+		local pressed, i = drawPanelButtons(panel, "", "blend mode", BUTTONS, selected=BLEND_MODE_TO_INDEX[system.blendMode]) ; gotoNextRow(panel)
 		if pressed == 1  if i == {
 			case 1: system.blendMode = LG.BlendMode.ALPHA
 			case 2: system.blendMode = LG.BlendMode.ADD
@@ -1236,29 +1283,25 @@ export drawPanel :: () {
 			case 4: system.blendMode = LG.BlendMode.SCREEN
 		}
 	}
-	drawPanelSeparator(state, true)
 
-	do {
-		-- Reset these here after the target panel item has handled the action.
-		panelItemForContextMenu = 0
-		contextMenuAction       = 0
-	}
+	local panelEnd :: (panel:Panel, panelScroll:float) {
+		drawPanelSeparator(panel, true)
 
-	LG.pop()
+		if panel.hasScrollableSection  LG.pop()
 
-	do {
-		local h = (project.panelScroll ? 30 : 10)
-
+		-- Shadow at top of scollable part.
+		local h          = panelScroll ? 30 : 10
 		local iw, ih     = imageGradient.getDimensions!()
 		local gradientSx = h/ih
-		local gradientSy = PANEL_WIDTH/iw
+		local gradientSy = panel.width/iw
 
-		LG.setColor(0, 0, 0, (project.panelScroll ? 1.0 : .3))
-		LG.draw(imageGradient, 0, state.ignoreMouseAboveY+h, -math.TAU/4, gradientSx, gradientSy)
+		LG.setColor(0, 0, 0, (panelScroll ? 1.0 : .3))
+		LG.draw(imageGradient, panel.baseX, panel.ignoreMouseAboveY+h, -math.TAU/4, gradientSx, gradientSy)
 	}
+	panelEnd(panel, project.panelScroll)
 
 	if contextMenu ~= NULL {
-		local itemHeight  = state.fontH + 2*CONTEXT_MENU_PADDING_Y
+		local itemHeight  = fontNormal.getHeight!() + 2*CONTEXT_MENU_PADDING_Y
 		local pressedItem = 0
 
 		LG.setColor(.6, .6, .6)
@@ -1268,8 +1311,8 @@ export drawPanel :: () {
 			local x = contextMenu.x
 			local y = contextMenu.y + (itIndex-1)*itemHeight
 
-			if isInside(state.mx, state.my, x, y, contextMenu.width, itemHeight) {
-				if not state.showedContextMenuThisFrame and pressedOnPanelWithMouseButton == 1
+			if isInside(panel.mx, panel.my, x, y, contextMenu.width, itemHeight) {
+				if not panel.showedContextMenuThisFrame and pressedOnPanelWithMouseButton == 1
 					pressedItem = itIndex
 
 				LG.setColor(.8, .8, .8)
@@ -1285,9 +1328,15 @@ export drawPanel :: () {
 			contextMenu        = NULL
 			_contextMenu.callback(pressedItem)
 
-		} elseif pressedAnythingThisFrame and not (state.showedContextMenuThisFrame or isInsideContextMenu(state.mx, state.my)) {
+		} elseif pressedAnythingThisFrame and not (panel.showedContextMenuThisFrame or isInsideContextMenu(panel.mx, panel.my)) {
 			contextMenu = NULL
 		}
+	}
+
+	do {
+		-- Reset these here after the target panel item has handled the action.
+		panelItemForContextMenu = 0
+		contextMenuAction       = 0
 	}
 
 	pressedOnPanelWithMouseButton = 0
@@ -1296,7 +1345,7 @@ export drawPanel :: () {
 
 
 
-local showContextMenu :: (state:PanelState, items:[]string, cb:type_of(ContextMenu.callback)) {
+local showContextMenu :: (panel:Panel, items:[]string, cb:type_of(ContextMenu.callback)) {
 	local w = 0
 	local h = #items * (fontNormal.getHeight!() + 2*CONTEXT_MENU_PADDING_Y)
 
@@ -1317,69 +1366,118 @@ local showContextMenu :: (state:PanelState, items:[]string, cb:type_of(ContextMe
 		items    = items,
 		callback = cb,
 	}
-	state.showedContextMenuThisFrame = true
+	panel.showedContextMenuThisFrame = true
 }
 
+export hideContextMenu :: () -> (success:bool) {
+	if contextMenu == NULL  return false
+	contextMenu = NULL
+	return true
+}
 
-
-export isInsideContextMenu :: (mx,my:int) -> bool {
+local isInsideContextMenu :: (x,y:int) -> bool {
 	return contextMenu ~= NULL
-		and mx >= contextMenu.x
-		and my >= contextMenu.y
-		and mx <  contextMenu.x + contextMenu.width
-		and my <  contextMenu.y + contextMenu.height
+		and x >= contextMenu.x
+		and y >= contextMenu.y
+		and x <  contextMenu.x + contextMenu.width
+		and y <  contextMenu.y + contextMenu.height
 }
 
 
 
-local isHoveringPanelItemRectangle :: (state:PanelState, x,y,w,h:int) -> bool {
-	if draggedPanelItem == state.panelItem      return true
+local isHoveringPanelItemRectangle :: (panel:Panel, x,y,w,h:int) -> bool {
+	if draggedPanelItem == panel.panelItem      return true
 	if draggedPanelItem > 0                     return false
-	if state.my < state.ignoreMouseAboveY       return false
-	if isInsideContextMenu(state.mx, state.my)  return false
-	return isInside(state.mx, state.myScrolled, x, y, w, h)
+	if panel.my < panel.ignoreMouseAboveY       return false
+	if isInsideContextMenu(panel.mx, panel.my)  return false
+	return isInside(panel.mx, panel.myScrolled, x, y, w, h)
 }
-local isHoveringPanelItemCircle :: (state:PanelState, x,y,radius:int) -> bool {
-	if draggedPanelItem == state.panelItem      return true
+local isHoveringPanelItemCircle :: (panel:Panel, x,y,radius:int) -> bool {
+	if draggedPanelItem == panel.panelItem      return true
 	if draggedPanelItem > 0                     return false
-	if state.my < state.ignoreMouseAboveY       return false
-	if isInsideContextMenu(state.mx, state.my)  return false
-	return math.distance(state.mx,state.myScrolled, x,y) <= radius
+	if panel.my < panel.ignoreMouseAboveY       return false
+	if isInsideContextMenu(panel.mx, panel.my)  return false
+	return math.distance(panel.mx,panel.myScrolled, x,y) <= radius
 }
 
 
 
-local isPressingOrMayPress :: (state:PanelState) -> (pressedMouseButton:int) {
-	if state.panelItem == draggedPanelItem  return 1
+local isPressingOrMayPress :: (panel:Panel) -> (pressedMouseButton:int) {
+	if panel.panelItem == draggedPanelItem  return 1
 	return (draggedPanelItem or panelItemForContextMenu) ? 0 : pressedOnPanelWithMouseButton
 }
 
 
 
-export stopDraggingPanelItem :: () {
-	draggedPanelItem    = 0
-	draggedPanelSubItem = 0
+export stopDraggingInPanels :: () {
+	if not draggedPanelItem  return
+
+	draggedPanelItem      = 0
+	draggedPanelSubItem   = 0
+	scheduleSaveWorkspace = true
 }
 
 
 
 
-local occupy :: (state:PanelState, w,h:int) {
-	state.maxPanelItemX  = math.max(state.maxPanelItemX, state.x+w)
-	state.maxPanelItemY  = math.max(state.maxPanelItemY, state.y+h)
-	state.y             += h + PANEL_SPACING
+local occupy :: (panel:Panel, w,h:int) {
+	panel.maxPanelItemX  = math.max(panel.maxPanelItemX, panel.x+w)
+	panel.maxPanelItemY  = math.max(panel.maxPanelItemY, panel.y+h)
+	panel.y             += h + PANEL_SPACING
 }
 
-local gotoNextColumn :: (state:PanelState) {
-	state.x = state.maxPanelItemX + PANEL_SPACING
-	state.y = state.baseY
+local gotoNextColumn :: (panel:Panel) {
+	panel.x = panel.maxPanelItemX + PANEL_SPACING
+	panel.y = panel.baseY + PANEL_SPACING
 }
 
-local gotoNextRow :: (state:PanelState) {
-	state.baseY         = state.maxPanelItemY + PANEL_SPACING
-	state.x             = LABEL_WIDTH + PANEL_SPACING
-	state.y             = state.baseY
-	state.maxPanelItemX = LABEL_WIDTH
+local gotoNextRow :: (panel:Panel) {
+	panel.baseY         = panel.maxPanelItemY
+	panel.x             = panel.baseX + panel.mainLabelWidth + PANEL_SPACING
+	panel.y             = panel.baseY + PANEL_SPACING
+	panel.maxPanelItemX = panel.mainLabelWidth
+}
+
+
+
+export isInsidePanels :: (x,y:int) -> bool {
+	if x < MAIN_PANEL_WIDTH       return true
+	if isInsideContextMenu(x, y)  return true
+	return false
+}
+
+
+
+export updatePanels :: (dt:float) {
+	local project = openProjects[currentProjectIndex]
+
+	project.zoom = math.moveTowards(
+		project.zoom,
+		project.zoomTarget,
+		math.abs(project.zoomTarget - project.zoomSource) * dt / 0.05
+	)
+	project.panelScroll = math.moveTowards(
+		project.panelScroll,
+		project.panelScrollTarget,
+		math.abs(project.panelScrollTarget - project.panelScrollSource) * dt / 0.05
+	)
+
+	tooltipHoverTime = tooltipRendered ? tooltipHoverTime+dt : .0
+	tooltipOpacity   = math.clamp01((tooltipHoverTime-.30)/0.20)
+	tooltipRendered  = false
+}
+
+export scrollPanels :: (focusX,focusY:int, amount:int) {
+	if isInsideContextMenu(focusX, focusY)  return
+
+	if false {--isInsideAuxPanel {
+		-- auxPanelScrollSource = auxPanelScroll
+		-- auxPanelScrollTarget = math.min(auxPanelScrollTarget+50*amount, 0)
+	} else {
+		local project             = openProjects[currentProjectIndex]
+		project.panelScrollSource = project.panelScroll
+		project.panelScrollTarget = math.min(project.panelScrollTarget+50*amount, 0)
+	}
 }
 
 
