@@ -12,16 +12,18 @@ local MAX_BUFFER_SIZE :: 16000 -- Default buffer size for ParticleSystem is 1000
 export !import "basic"
 export !import "color"
 export !import "string"
-export io   :: !import "io"
-export math :: !import "math"
+export io     :: !import "io"
+export math   :: !import "math"
+export physfs :: !import "love/physfs"
 
 export love :: !import "love"
 export LD :: love.data
-export LE :: love.event
 export LF :: love.filesystem
 export LG :: love.graphics
 export LK :: love.keyboard
+export LM :: love.mouse
 export LT :: love.timer
+local  LE :: love.event
 
 export !self
 export !load "src/misc"
@@ -49,13 +51,17 @@ export particleImages: struct { !key:string, !value:LG.Image }
 local canvasGui:   LG.Canvas = NULL
 local canvasWorld: LG.Canvas = NULL
 
-export actionText      = ""
-export actionTextTime  = -9999.00
-export messageText     = ""
-export messageTextTime = -9999.00
+local actionText          = ""
+local actionTextTime      = -9999.00
+local actionTextDuration :: 0.60
+local messageText         = ""
+local messageTextTime     = -9999.00
+local messageTextDuration = 1.00
 
-export pressedAnythingThisFrame = false
-export isPositioningParticles   = false
+export pressedAnythingThisFrame    = false
+export pressCountValueForThisFrame = 0
+
+export isPositioningParticles = false
 
 export scheduleSaveWorkspace    = false
 export scheduleRecreateCanvases = false
@@ -64,6 +70,8 @@ export keysPressedThisFrame: struct { !key:LK.KeyConstant, !value:bool }
 
 local particleUpdateTime = 0.00
 local particleDrawTime   = 0.00
+
+local defaultSearchPaths: []string = NULL
 
 -- Saved settings.
 export openProjects: []Project
@@ -108,7 +116,7 @@ export Project :: struct {
 
 	displayedName = "",
 	path          = "",
-	fileIsSaved   = false, -- Saved at least once. It's possible that the file physically don't exist.
+	fileIsSaved   = false, -- Saved at least once (or loaded from a saved file). It's possible that the file physically don't exist (maybe deleted or moved).
 
 	movementPhase    = 0.0,
 	movementPhaseAbs = 0.0,
@@ -209,7 +217,7 @@ export createCanvases :: () {
 
 	local SETTINGS: LG.CanvasSettings : {msaa=2^2}
 	canvasGui   = LG.newCanvas(ww, wh, SETTINGS)
-	canvasWorld = LG.newCanvas(math.max(ww-MAIN_PANEL_WIDTH, 1), wh)
+	canvasWorld = LG.newCanvas(math.max(ww-PROJECT_PANEL_WIDTH, 1), wh)
 
 	if openProjects[currentProjectIndex].pixelateWorld {
 		canvasWorld.setFilter!(LG.FilterMode.NEAREST, LG.FilterMode.NEAREST)
@@ -228,6 +236,42 @@ export moveEmittersTo :: (x,y:float) {
 	for openProjects[currentProjectIndex].systems  it.particles.moveTo!(x, y)
 }
 
+export pushQuitEvent :: () {
+	saveWorkspace()
+	LE.quit(0)
+}
+
+export connectToRemoteDirectory :: (dir:string) -> (success:bool) {
+	if not physfs.setWriteDirectory(dir)  return false
+
+	for physfs.getSearchPaths()  assert(physfs.unmountReadDirectory(it))
+
+	assert(physfs.mountReadDirectory(dir)) -- If we can write then we should be able to read too.
+	return true
+}
+export disconnectFromRemoteDirectory :: () {
+	for physfs.getSearchPaths()  assert(physfs.unmountReadDirectory(it))
+	for defaultSearchPaths       assert(physfs.mountReadDirectory(it, true))
+
+	assert(physfs.setWriteDirectory(LF.getSaveDirectory()))
+}
+
+export setActionText :: (s:string, ...:int|float|string) {
+	actionText     = format(s, ...)
+	actionTextTime = LT.getTime()
+	messageText    = "" -- Good?
+}
+export setMessageText :: (s:string, ...:int|float|string) {
+	messageText         = format(s, ...)
+	messageTextTime     = LT.getTime()
+	messageTextDuration = 3.00
+}
+export setErrorText :: (s:string, ...:int|float|string) {
+	messageText         = format("Error: "..s, ...)
+	messageTextTime     = LT.getTime()
+	messageTextDuration = 8.00
+}
+
 
 
 export onLoad :: (args:[]string, argsRaw:[]string) {
@@ -236,8 +280,9 @@ export onLoad :: (args:[]string, argsRaw:[]string) {
 
 	print("Running Hot Particles")
 
-	LF.setIdentity("Hot Particles")
 	LK.setKeyRepeat(true)
+
+	defaultSearchPaths = physfs.getSearchPaths()
 
 	fontSmall  = LG.newFont(10)
 	fontNormal = LG.newFont(12)
@@ -256,10 +301,7 @@ export onLoad :: (args:[]string, argsRaw:[]string) {
 		openProjects        = projects
 		currentProjectIndex = 1
 	} else {
-		if gotError {
-			messageText     = "Could not load previous workspace"
-			messageTextTime = LT.getTime()
-		}
+		if gotError  setErrorText("Could not load previous workspace")
 		addNewProject()
 	}
 
@@ -270,20 +312,50 @@ export onLoad :: (args:[]string, argsRaw:[]string) {
 
 
 export onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool) {
-	if love.mouse.isGrabbed()  return
+	if LM.isGrabbed()  return
 
 	keysPressedThisFrame[key] = true
 
 	local mod     = getModifierKey()
 	local project = openProjects[currentProjectIndex]
 
+	-- Global keys.
 	if key == {
 		case "escape":
-			if not hideContextMenu() {
-				saveWorkspace()
-				LE.quit(0)
+			if hasFocus() {
+				-- blurFocus() -- No, we handle this in panel code instead!
+			} elseif not (hideContextMenu() or popAuxPanel()) {
+				pushAuxPanel(AuxPanel.EXIT)
+			}
+			return
+
+		-- case "return": !through
+		-- case "kpenter":
+		-- 	if hasFocus() {
+		-- 		blurFocus()
+		-- 		return
+		-- 	}
+
+		case "q":
+			if mod == {
+				case ModifierKey.C: pushQuitEvent() ; return
 			}
 
+		case "f10":
+			if mod == {
+				case ModifierKey.C:
+					saveWorkspace()
+					LE.restart()
+					return
+			}
+	}
+
+	if hasFocus() and focus.field.keypressed!(key, scancode, isRepeat)  return
+
+	if isAuxPanelVisible()  return
+
+	-- Keys in normal view.
+	if key == {
 		case "tab":
 			if mod == {
 				case ModifierKey.NONE: project.systemIndex = (project.systemIndex-0) % #project.systems + 1 ; scheduleRecreateCanvases = true
@@ -305,6 +377,17 @@ export onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool)
 					system.visible = not system.visible
 			}
 
+		case "s":
+			if mod == {
+				case ModifierKey.C:  if project.fileIsSaved  saveProject(project, overwrite=true)  else  pushAuxPanel(AuxPanel.SAVE_PROJECT_AS)
+				case ModifierKey.CS: pushAuxPanel(AuxPanel.SAVE_PROJECT_AS)
+			}
+
+		case "o":
+			if mod == {
+				case ModifierKey.C: pushAuxPanel(AuxPanel.OPEN_PROJECT)
+			}
+
 		case "f1":
 			if mod == {
 				case ModifierKey.NONE:
@@ -318,20 +401,22 @@ export onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool)
 					showPanelNumbers      = not showPanelNumbers
 					scheduleSaveWorkspace = true
 			}
-
-		case "f10":
-			if mod == {
-				case ModifierKey.C:
-					saveWorkspace()
-					LE.restart()
-			}
 	}
+}
+export onTextInput :: (text:string) {
+	if hasFocus()  focus.field.textinput!(text)
 }
 
 export onMousePressed :: (mx,my:int, mbutton:int, isTouch:bool, presses:int) {
-	pressedAnythingThisFrame = true
+	pressedAnythingThisFrame    = true
+	pressCountValueForThisFrame = presses
 
-	if love.mouse.isGrabbed()  return
+	if LM.isGrabbed()  return
+
+	if hasFocus() and isInside(mx, my, focus.x, focus.y, focus.width, focus.height) and focus.field.mousepressed!(mx-focus.valueX, my, mbutton, presses) {
+		focus.isPressing = true
+		return
+	}
 
 	if isInsidePanels(mx, my)  pressedOnPanelWithMouseButton = mbutton
 
@@ -340,28 +425,35 @@ export onMousePressed :: (mx,my:int, mbutton:int, isTouch:bool, presses:int) {
 			isPositioningParticles = true
 			onMouseMoved(mx,my, 0,0, isTouch)
 		}
-		love.mouse.setGrabbed(true)
+		LM.setGrabbed(true)
 	}
 }
 export onMouseMoved :: (mx,my:int, dx,dy:int, isTouch:bool) {
 	if isPositioningParticles {
 		local project = openProjects[currentProjectIndex]
 
-		local x = (mx - (LG.getWidth()+MAIN_PANEL_WIDTH)/2) / project.zoom
+		local x = (mx - (LG.getWidth()+PROJECT_PANEL_WIDTH)/2) / project.zoom
 		local y = (my - (LG.getHeight()                )/2) / project.zoom
 
 		moveEmittersTo(x, y)
 	}
+
+	if hasFocus() and focus.isPressing  focus.field.mousemoved!(mx-focus.valueX, my)
 }
 export onMouseReleased :: (mx,my:int, mbutton:int, isTouch:bool, presses:int) {
 	if mbutton == 1 {
 		stopDraggingInPanels()
 		isPositioningParticles = false
-		love.mouse.setGrabbed(false)
+		LM.setGrabbed(false)
+	}
+
+	if hasFocus() and focus.isPressing and mbutton == 1 {
+		focus.field.mousereleased!(mx, my, mbutton)
+		focus.isPressing = false
 	}
 }
 export onMouseWheel :: (dx,dy:int) {
-	if love.mouse.isGrabbed()  return
+	if LM.isGrabbed()  return
 
 	local mod = getModifierKey()
 	if mod == ModifierKey.S {
@@ -370,7 +462,7 @@ export onMouseWheel :: (dx,dy:int) {
 	}
 	if mod ~= ModifierKey.NONE  return
 
-	local mx, my = love.mouse.getPosition()
+	local mx, my = LM.getPosition()
 
 	if isInsidePanels(mx, my) {
 		scrollPanels(mx,my, dy)
@@ -382,8 +474,7 @@ export onMouseWheel :: (dx,dy:int) {
 		project.zoomSource = project.zoom
 		project.zoomTarget = 2^project.zoomLevel
 
-		actionText     = format("Zoom: %d%%", project.zoomTarget*100)
-		actionTextTime = LT.getTime()
+		setMessageText("Zoom: %d%%", project.zoomTarget*100)
 	}
 }
 
@@ -392,7 +483,7 @@ export onMouseWheel :: (dx,dy:int) {
 export onUpdate :: (dt:float) {
 	local project = openProjects[currentProjectIndex]
 
-	do {
+	if not isAuxPanelVisible() {
 		local systemsActive = false
 
 		local time = LT.getTime()
@@ -407,9 +498,7 @@ export onUpdate :: (dt:float) {
 
 			if ps.getCount!() > bufferSize-10 and bufferSize < MAX_BUFFER_SIZE {
 				ps.setBufferSize!(2*bufferSize)
-
-				actionText     = "Increased buffer size"
-				actionTextTime = LT.getTime()
+				setMessageText("Increased buffer size")
 			}
 		}
 
@@ -520,7 +609,7 @@ export onDraw :: () {
 
 			local fontH = fontNormal.getHeight!()
 
-			local x = MAIN_PANEL_WIDTH+5
+			local x = PROJECT_PANEL_WIDTH+5
 			local y = 5
 
 			local r, g, b          = hsvToRgb(project.bgColorH, project.bgColorS, project.bgColorV)
@@ -546,35 +635,41 @@ export onDraw :: () {
 		-- Panel(s).
 		drawPanels()
 
-		-- HUD texts.
+		-- GUI texts.
+		local drawGuiText :: (text:string, time:float, duration:float, y:int) {
+			local PADDING_X :: 15
+			local PADDING_Y :: 3
+
+			local visibility = 1 - (LT.getTime() - time) / duration
+			if visibility <= 0  return
+
+			local auxPanelIsVisible = isAuxPanelVisible()
+
+			local w = fontLarge.getWidth!(text)
+			local x = math.round((LG.getWidth() + (auxPanelIsVisible ? 0 : PROJECT_PANEL_WIDTH) - w) / 2)
+			local a = visibility^.5
+
+			if auxPanelIsVisible {
+				LG.setColor(.1, .1, .1, a)
+				LG.rectangle(LG.DrawMode.FILL, x-PADDING_X, y-PADDING_Y, w+2*PADDING_X, fontLarge.getHeight!()+2*PADDING_Y, 3)
+			} else {
+				LG.setColor(0, 0, 0, a)
+				LG.print(text, x+1, y+1)
+			}
+
+			LG.setColor(1, 1, 1, a)
+			LG.print(text, x, y)
+		}
+
 		LG.origin()
 		LG.setFont(fontLarge)
 
-		local visibility = 1 - (LT.getTime() - messageTextTime) / 8.00
-		if visibility > 0 {
-			local x = math.round((ww+MAIN_PANEL_WIDTH-fontLarge.getWidth!(messageText))/2)
-			local y = math.round(.1*wh)
-			local a = visibility^.5
-			LG.setColor(0, 0, 0, a)
-			LG.print(messageText, x+1, y+1)
-			LG.setColor(1, 1, 1, a)
-			LG.print(messageText, x, y)
-		}
-
-		visibility = 1 - (LT.getTime() - actionTextTime) / 0.60
-		if visibility > 0 {
-			local x = math.round((ww+MAIN_PANEL_WIDTH-fontLarge.getWidth!(actionText))/2)
-			local y = math.round(.1*wh+fontLarge.getHeight!())
-			local a = visibility^.5
-			LG.setColor(0, 0, 0, a)
-			LG.print(actionText, x+1, y+1)
-			LG.setColor(1, 1, 1, a)
-			LG.print(actionText, x, y)
-		}
+		drawGuiText(messageText, messageTextTime, messageTextDuration, math.round(.1*wh))
+		drawGuiText(actionText,  actionTextTime,  actionTextDuration,  math.round(.1*wh+fontLarge.getHeight!()))
 
 		-- Mouse stuff.
 		--[[
-		local mx, my = love.mouse.getPosition()
+		local mx, my = LM.getPosition()
 		if isPositioningParticles {
 			LG.setColor(1, 0, 0)
 			LG.line(mx-50, my, mx+50, my)
@@ -592,7 +687,7 @@ export onDraw :: () {
 		local r, g, b = hsvToRgb(project.bgColorH, project.bgColorS, project.bgColorV)
 		LG.clear(r, g, b)
 
-		LG.translate((ww-MAIN_PANEL_WIDTH)/2, wh/2)
+		LG.translate((ww-PROJECT_PANEL_WIDTH)/2, wh/2)
 		if not project.pixelateWorld  LG.scale(project.zoom)
 
 		local time = LT.getTime()
@@ -627,16 +722,17 @@ export onDraw :: () {
 	LG.setBlendMode(LG.BlendMode.ALPHA, LG.BlendAlphaMode.PREMULTIPLIED)
 
 	if project.pixelateWorld {
-		LG.draw(canvasWorld, (ww+MAIN_PANEL_WIDTH)/2,wh/2, 0, project.zoom,project.zoom, (ww-MAIN_PANEL_WIDTH)/2, wh/2)
+		LG.draw(canvasWorld, (ww+PROJECT_PANEL_WIDTH)/2,wh/2, 0, project.zoom,project.zoom, (ww-PROJECT_PANEL_WIDTH)/2, wh/2)
 	} else {
-		LG.draw(canvasWorld, MAIN_PANEL_WIDTH,0)
+		LG.draw(canvasWorld, PROJECT_PANEL_WIDTH,0)
 	}
 
 	LG.draw(canvasGui)
 
 	-- We have to reset these here instead of in onUpdate() as a bunch of update stuff happen while we draw things.
-	keysPressedThisFrame     = {}
-	pressedAnythingThisFrame = false
+	keysPressedThisFrame        = {}
+	pressedAnythingThisFrame    = false
+	pressCountValueForThisFrame = 0
 }
 
 
@@ -653,6 +749,7 @@ export main :: () {
 
 	loveTable.load          = wrapFunctionInGloaErrorHandler(onLoad)
 	loveTable.keypressed    = wrapFunctionInGloaErrorHandler(onKeyPressed)
+	loveTable.textinput     = wrapFunctionInGloaErrorHandler(onTextInput)
 	loveTable.mousepressed  = wrapFunctionInGloaErrorHandler(onMousePressed)
 	loveTable.mousemoved    = wrapFunctionInGloaErrorHandler(onMouseMoved)
 	loveTable.mousereleased = wrapFunctionInGloaErrorHandler(onMouseReleased)

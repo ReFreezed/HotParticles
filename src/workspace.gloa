@@ -42,6 +42,99 @@ local writeValues :: (buffer:[]string, v1,v2:$T, eol=false) {
 	writeValue(buffer, v2, eol=eol)
 }
 
+local writeProject :: (buffer:[]string, project:Project) {
+	insert(buffer, ":project\n")
+	insert(buffer, "bgColor")          ; writeValue(buffer, eol=true, {project.bgColorH, project.bgColorS, project.bgColorV})
+	insert(buffer, "pixelateWorld")    ; writeValue(buffer, eol=true, project.pixelateWorld)
+	insert(buffer, "pixelateTextures") ; writeValue(buffer, eol=true, project.pixelateTextures)
+	insert(buffer, "zoom")             ; writeValue(buffer, eol=true, project.zoomLevel)
+
+	insert(buffer, "movement")
+	writeValue(buffer, cast(int) project.movementPreset)
+	writeValue(buffer, project.movementScaleX)
+	writeValue(buffer, project.movementScaleY)
+	writeValue(buffer, project.movementSpeed)
+	insert(buffer, "\n")
+
+	for system: project.systems {
+		insert(buffer, ":system\n")
+		insert(buffer, "colors")    ; writeValue(buffer, eol=true, system.colors)
+		insert(buffer, "blendMode") ; writeValue(buffer, eol=true, cast(string) system.blendMode)
+		insert(buffer, "texture")   ; writeValue(buffer, eol=true, system.textureName)
+
+		local ps = system.particles
+		insert(buffer, "bufferSize")       ; writeValue(buffer, eol=true, ps.getBufferSize!())
+		insert(buffer, "direction")        ; writeValue(buffer, eol=true, ps.getDirection!())
+		insert(buffer, "emissionRate")     ; writeValue(buffer, eol=true, ps.getEmissionRate!())
+		insert(buffer, "emitterLifetime")  ; writeValue(buffer, eol=true, (ps.getEmitterLifetime!() <= 0) ? .0 : ps.getEmitterLifetime!())
+		insert(buffer, "insertMode")       ; writeValue(buffer, eol=true, cast(string) ps.getInsertMode!())
+		insert(buffer, "relativeRotation") ; writeValue(buffer, eol=true, ps.hasRelativeRotation!())
+		insert(buffer, "sizes")            ; writeValue(buffer, eol=true, {ps.getSizesAsVararg!()})
+		insert(buffer, "sizeVariation")    ; writeValue(buffer, eol=true, ps.getSizeVariation!())
+		insert(buffer, "spinVariation")    ; writeValue(buffer, eol=true, ps.getSpinVariation!())
+		insert(buffer, "spread")           ; writeValue(buffer, eol=true, ps.getSpread!())
+		do {
+			local min, max = ps.getLinearDamping!()
+			insert(buffer, "linearDamping")
+			writeValues(buffer, eol=true, min, max)
+		}
+		do {
+			local min, max = ps.getParticleLifetime!()
+			insert(buffer, "particleLifetime")
+			writeValues(buffer, eol=true, min, max)
+		}
+		do {
+			local min, max = ps.getRadialAcceleration!()
+			insert(buffer, "radialAcceleration")
+			writeValues(buffer, eol=true, min, max)
+		}
+		do {
+			local min, max = ps.getRotation!()
+			insert(buffer, "rotation")
+			writeValues(buffer, eol=true, min, max)
+		}
+		do {
+			local min, max = ps.getSpeed!()
+			insert(buffer, "speed")
+			writeValues(buffer, eol=true, min, max)
+		}
+		do {
+			local min, max = ps.getSpin!()
+			insert(buffer, "spin")
+			writeValues(buffer, eol=true, min, max)
+		}
+		do {
+			local min, max = ps.getTangentialAcceleration!()
+			insert(buffer, "tangentialAcceleration")
+			writeValues(buffer, eol=true, min, max)
+		}
+		if system.useCustomOffset {
+			local x, y = ps.getOffset!()
+			insert(buffer, "offset")
+			writeValues(buffer, eol=true, x, y)
+		}
+		do {
+			local distribution, dx, dy, angle, relative = ps.getEmissionArea!()
+			insert(buffer, "emissionArea")
+			writeValue(buffer, cast(string) distribution)
+			writeValue(buffer, dx)
+			writeValue(buffer, dy)
+			writeValue(buffer, angle)
+			writeValue(buffer, relative)
+			insert(buffer, "\n")
+		}
+		do {
+			local xmin,ymin, xmax,ymax = ps.getLinearAcceleration!()
+			insert(buffer, "linearAcceleration")
+			writeValue(buffer, xmin)
+			writeValue(buffer, ymin)
+			writeValue(buffer, xmax)
+			writeValue(buffer, ymax)
+			insert(buffer, "\n")
+		}
+	}
+}
+
 export saveWorkspace :: () {
 	if not scheduleSaveWorkspace  return
 	scheduleSaveWorkspace = false
@@ -55,110 +148,47 @@ export saveWorkspace :: () {
 	insert(buffer, "showPanelNumbers")    ; writeValue(buffer, eol=true, showPanelNumbers)
 	insert(buffer, "project")             ; writeValue(buffer, eol=true, currentProjectIndex)
 
-	for project: openProjects {
-		insert(buffer, ":project\n")
-		insert(buffer, "bgColor")          ; writeValue(buffer, eol=true, {project.bgColorH, project.bgColorS, project.bgColorV})
-		insert(buffer, "pixelateWorld")    ; writeValue(buffer, eol=true, project.pixelateWorld)
-		insert(buffer, "pixelateTextures") ; writeValue(buffer, eol=true, project.pixelateTextures)
-		insert(buffer, "zoom")             ; writeValue(buffer, eol=true, project.zoomLevel)
-
-		insert(buffer, "movement")
-		writeValue(buffer, cast(int) project.movementPreset)
-		writeValue(buffer, project.movementScaleX)
-		writeValue(buffer, project.movementScaleY)
-		writeValue(buffer, project.movementSpeed)
-		insert(buffer, "\n")
-
-		for system: project.systems {
-			insert(buffer, ":system\n")
-			insert(buffer, "colors")    ; writeValue(buffer, eol=true, system.colors)
-			insert(buffer, "blendMode") ; writeValue(buffer, eol=true, cast(string) system.blendMode)
-			insert(buffer, "texture")   ; writeValue(buffer, eol=true, system.textureName)
-
-			local ps = system.particles
-			insert(buffer, "bufferSize")       ; writeValue(buffer, eol=true, ps.getBufferSize!())
-			insert(buffer, "direction")        ; writeValue(buffer, eol=true, ps.getDirection!())
-			insert(buffer, "emissionRate")     ; writeValue(buffer, eol=true, ps.getEmissionRate!())
-			insert(buffer, "emitterLifetime")  ; writeValue(buffer, eol=true, (ps.getEmitterLifetime!() <= 0) ? .0 : ps.getEmitterLifetime!())
-			insert(buffer, "insertMode")       ; writeValue(buffer, eol=true, cast(string) ps.getInsertMode!())
-			insert(buffer, "relativeRotation") ; writeValue(buffer, eol=true, ps.hasRelativeRotation!())
-			insert(buffer, "sizes")            ; writeValue(buffer, eol=true, {ps.getSizesAsVararg!()})
-			insert(buffer, "sizeVariation")    ; writeValue(buffer, eol=true, ps.getSizeVariation!())
-			insert(buffer, "spinVariation")    ; writeValue(buffer, eol=true, ps.getSpinVariation!())
-			insert(buffer, "spread")           ; writeValue(buffer, eol=true, ps.getSpread!())
-			do {
-				local min, max = ps.getLinearDamping!()
-				insert(buffer, "linearDamping")
-				writeValues(buffer, eol=true, min, max)
-			}
-			do {
-				local min, max = ps.getParticleLifetime!()
-				insert(buffer, "particleLifetime")
-				writeValues(buffer, eol=true, min, max)
-			}
-			do {
-				local min, max = ps.getRadialAcceleration!()
-				insert(buffer, "radialAcceleration")
-				writeValues(buffer, eol=true, min, max)
-			}
-			do {
-				local min, max = ps.getRotation!()
-				insert(buffer, "rotation")
-				writeValues(buffer, eol=true, min, max)
-			}
-			do {
-				local min, max = ps.getSpeed!()
-				insert(buffer, "speed")
-				writeValues(buffer, eol=true, min, max)
-			}
-			do {
-				local min, max = ps.getSpin!()
-				insert(buffer, "spin")
-				writeValues(buffer, eol=true, min, max)
-			}
-			do {
-				local min, max = ps.getTangentialAcceleration!()
-				insert(buffer, "tangentialAcceleration")
-				writeValues(buffer, eol=true, min, max)
-			}
-			if system.useCustomOffset {
-				local x, y = ps.getOffset!()
-				insert(buffer, "offset")
-				writeValues(buffer, eol=true, x, y)
-			}
-			do {
-				local distribution, dx, dy, angle, relative = ps.getEmissionArea!()
-				insert(buffer, "emissionArea")
-				writeValue(buffer, cast(string) distribution)
-				writeValue(buffer, dx)
-				writeValue(buffer, dy)
-				writeValue(buffer, angle)
-				writeValue(buffer, relative)
-				insert(buffer, "\n")
-			}
-			do {
-				local xmin,ymin, xmax,ymax = ps.getLinearAcceleration!()
-				insert(buffer, "linearAcceleration")
-				writeValue(buffer, xmin)
-				writeValue(buffer, ymin)
-				writeValue(buffer, xmax)
-				writeValue(buffer, ymax)
-				insert(buffer, "\n")
-			}
-		}
-	}
+	for project: openProjects  writeProject(buffer, project)
 
 	local ok, err = LF.write("workspace", concatinate(buffer))
-	if not ok {
-		messageText     = format("Could not save workspace: %s", err)
-		messageTextTime = LT.getTime()
+	if not ok  setErrorText("Could not save workspace: %s", err)
+}
+
+export saveProject :: (project:Project, overwrite=false) -> (success:bool, fileExists:bool) {
+	local setErrorMessage :: (fileExists:bool, s:string, ...:int|float|string) -> (success:bool, fileExists:bool) {
+		setErrorText(s, ...)
+		return false, fileExists
 	}
+
+	local ok, dir, filename = matchPattern(project.path, "^(.+)/([^/]+)$")
+	if not ok  return setErrorMessage(false, "Invalid path '%s'", project.path)
+
+	ok = connectToRemoteDirectory(cast(string)dir)
+	if not ok  return setErrorMessage(false, "Could not access directory '%s'", dir)
+	defer disconnectFromRemoteDirectory()
+
+	if not overwrite {
+		local info = LF.getInfo(cast(string)filename)
+		if info ~= nil  return false, true--setErrorMessage(true, "File already exists: %s", project.path)
+	}
+
+	local buffer: []string
+	insert(buffer, format("%d\n", LAST_FILE_VERSION))
+
+	writeProject(buffer, project)
+
+	local ^ok, err = LF.write(cast(string)filename, concatinate(buffer))
+	if not ok  return setErrorMessage(false, "Could not write project to file: %s", err)
+
+	project.fileIsSaved = true
+	setMessageText("Project saved")
+	return true, false
 }
 
 
 
-local parsingError :: (ln:int, s:string, ...:int|float|string) -> (success:bool, gotError:bool, projects:[]Project) {
-	printf("Error: workspace:%d: "..s, ln, ...)
+local parsingError :: (path:string, ln:int, s:string, ...:int|float|string) -> (success:bool, gotError:bool, projects:[]Project) {
+	printf("Error: %s:%d: "..s, path, ln, ...)
 	return false, true, NULL
 }
 
@@ -232,7 +262,8 @@ local readFloatArray :: (line:string, ptr:int) -> (success:bool, ptr:int, arr:[]
 }
 
 export loadWorkspace :: () -> (success:bool, gotError:bool, projects:[]Project) {
-	local file, err = LF.newFile("workspace", LF.FileMode.READ)
+	local FILENAME :: "workspace"
+	local file, err = LF.newFile(FILENAME, LF.FileMode.READ)
 	if file == NULL  return false, false, NULL
 
 	local projects: []Project
@@ -248,12 +279,12 @@ export loadWorkspace :: () -> (success:bool, gotError:bool, projects:[]Project) 
 	local version: int
 	do {
 		local line1 = iter(nil, nil)
-		if line1 == nil  return parsingError(ln, "Missing file version.")
+		if line1 == nil  return parsingError(FILENAME, ln, "Missing file version.")
 
 		local ok, ^version = stringToInt(cast(string) line1)
-		if not ok                       return parsingError(ln, "Invalid version line format.")
-		if version < 1                  return parsingError(ln, "Invalid version number '%d'.", version)
-		if version > LAST_FILE_VERSION  return parsingError(ln, "Unsupported version number '%d'.", version)
+		if not ok                       return parsingError(FILENAME, ln, "Invalid version line format.")
+		if version < 1                  return parsingError(FILENAME, ln, "Invalid version number '%d'.", version)
+		if version > LAST_FILE_VERSION  return parsingError(FILENAME, ln, "Unsupported version number '%d'.", version)
 	}
 
 	for line in iter, nil, nil {
@@ -270,100 +301,100 @@ export loadWorkspace :: () -> (success:bool, gotError:bool, projects:[]Project) 
 					insert(projects, project)
 
 				case "system":
-					if project == NULL  return parsingError(ln, "Unexpected 'system' label.")
+					if project == NULL  return parsingError(FILENAME, ln, "Unexpected 'system' label.")
 					system = System()
 					ps     = system.particles
 					insert(project.systems, system)
 
 				case:
-					return parsingError(ln, "Unknown label '%s'.", label)
+					return parsingError(FILENAME, ln, "Unknown label '%s'.", label)
 			}
 
 			continue
 		}
 
 		local ok, param, ptr = matchPattern(line, "(%S+)()")
-		if not ok  return parsingError(ln, "Bad parameter line format: %s", line)
+		if not ok  return parsingError(FILENAME, ln, "Bad parameter line format: %s", line)
 
 		if project == NULL {
 			if param == {
 				case "stats":
-					local ^ok, ^ptr, flag = readBool(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
-					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
+					local ^ok, ^ptr, flag = readBool(line, cast(int)ptr) ; if not ok  return parsingError(FILENAME, ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(FILENAME, ln, "Garbage after values: %s", line)
 					showStats = flag
 
 				case "showProjectSettings":
-					local ^ok, ^ptr, flag = readBool(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
-					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
+					local ^ok, ^ptr, flag = readBool(line, cast(int)ptr) ; if not ok  return parsingError(FILENAME, ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(FILENAME, ln, "Garbage after values: %s", line)
 					showProjectSettings = flag
 
 				case "showPanelNumbers":
-					local ^ok, ^ptr, flag = readBool(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
-					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
+					local ^ok, ^ptr, flag = readBool(line, cast(int)ptr) ; if not ok  return parsingError(FILENAME, ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(FILENAME, ln, "Garbage after values: %s", line)
 					showPanelNumbers = flag
 
 				case "project":
-					local ^ok, ^ptr, i = readInt(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
-					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
+					local ^ok, ^ptr, i = readInt(line, cast(int)ptr) ; if not ok  return parsingError(FILENAME, ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(FILENAME, ln, "Garbage after values: %s", line)
 					currentProjectIndex = i
 
 				case:
-					return parsingError(ln, "Unknown program parameter '%s'.", param)
+					return parsingError(FILENAME, ln, "Unknown program parameter '%s'.", param)
 			}
 
 		} elseif system == NULL {
 			if param == {
 				case "bgColor":
-					local ^ok, ^ptr, h = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
-					local ^ok, ^ptr, s = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
-					local ^ok, ^ptr, v = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
-					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
+					local ^ok, ^ptr, h = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(FILENAME, ln, "Bad value format: %s", line)
+					local ^ok, ^ptr, s = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(FILENAME, ln, "Bad value format: %s", line)
+					local ^ok, ^ptr, v = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(FILENAME, ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(FILENAME, ln, "Garbage after values: %s", line)
 					if version < 2  h, s, v = rgbToHsv(h, s, v)
 					project.bgColorH = h
 					project.bgColorS = s
 					project.bgColorV = v
 
 				case "pixelateWorld":
-					local ^ok, ^ptr, flag = readBool(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
-					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
+					local ^ok, ^ptr, flag = readBool(line, cast(int)ptr) ; if not ok  return parsingError(FILENAME, ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(FILENAME, ln, "Garbage after values: %s", line)
 					project.pixelateWorld = flag
 				case "pixelateTextures":
-					local ^ok, ^ptr, flag = readBool(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
-					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
+					local ^ok, ^ptr, flag = readBool(line, cast(int)ptr) ; if not ok  return parsingError(FILENAME, ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(FILENAME, ln, "Garbage after values: %s", line)
 					project.pixelateTextures = flag
 
 				case "zoom":
-					local ^ok, ^ptr, zoomLevel = readInt(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
-					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
+					local ^ok, ^ptr, zoomLevel = readInt(line, cast(int)ptr) ; if not ok  return parsingError(FILENAME, ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(FILENAME, ln, "Garbage after values: %s", line)
 					project.zoomLevel  = zoomLevel
 					project.zoom       = 2^zoomLevel
 					project.zoomSource = project.zoom
 					project.zoomTarget = project.zoom
 
 				case "movement":
-					local ^ok, ^ptr, preset = readInt  (line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
-					local ^ok, ^ptr, sx     = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
-					local ^ok, ^ptr, sy     = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
-					local ^ok, ^ptr, speed  = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
-					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
+					local ^ok, ^ptr, preset = readInt  (line, cast(int)ptr) ; if not ok  return parsingError(FILENAME, ln, "Bad value format: %s", line)
+					local ^ok, ^ptr, sx     = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(FILENAME, ln, "Bad value format: %s", line)
+					local ^ok, ^ptr, sy     = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(FILENAME, ln, "Bad value format: %s", line)
+					local ^ok, ^ptr, speed  = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(FILENAME, ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(FILENAME, ln, "Garbage after values: %s", line)
 					project.movementPreset = cast(Movement) preset -- @Robustness: Validate enum value.
 					project.movementScaleX = sx
 					project.movementScaleY = sy
 					project.movementSpeed  = speed
 
 				case:
-					return parsingError(ln, "Unknown project parameter '%s'.", param)
+					return parsingError(FILENAME, ln, "Unknown project parameter '%s'.", param)
 			}
 
 		} else {
 			if param == {
 				case "colors":
 					local ^ok, ^ptr, colors = readFloatArray(line, cast(int)ptr)
-					if not ok                 return parsingError(ln, "Bad value format: %s", line)
-					if #colors % 4   ~= 0     return parsingError(ln, "Bad color array format: %s", line)
-					if colors[1]     == NULL  return parsingError(ln, "No colors.")
-					if colors[8*4+1] ~= NULL  return parsingError(ln, "Too many colors. (Max is 8, got %d)", #colors // 4)
-					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
+					if not ok                 return parsingError(FILENAME, ln, "Bad value format: %s", line)
+					if #colors % 4   ~= 0     return parsingError(FILENAME, ln, "Bad color array format: %s", line)
+					if colors[1]     == NULL  return parsingError(FILENAME, ln, "No colors.")
+					if colors[8*4+1] ~= NULL  return parsingError(FILENAME, ln, "Too many colors. (Max is 8, got %d)", #colors // 4)
+					if cast(int)ptr <= #line  return parsingError(FILENAME, ln, "Garbage after values: %s", line)
 					if version < 2 {
 						for i = 1, #colors, 4 {
 							colors[i], colors[i+1], colors[i+2] = rgbToHsv(colors[i], colors[i+1], colors[i+2])
@@ -373,147 +404,147 @@ export loadWorkspace :: () -> (success:bool, gotError:bool, projects:[]Project) 
 					updateParticleColors(ps, colors)
 
 				case "blendMode":
-					local ^ok, ^ptr, blendMode = readString(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
-					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
+					local ^ok, ^ptr, blendMode = readString(line, cast(int)ptr) ; if not ok  return parsingError(FILENAME, ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(FILENAME, ln, "Garbage after values: %s", line)
 					system.blendMode = cast(LG.BlendMode) blendMode -- @Robustness: Validate enum value.
 
 				case "texture":
-					local ^ok, ^ptr, textureName = readString(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
-					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
+					local ^ok, ^ptr, textureName = readString(line, cast(int)ptr) ; if not ok  return parsingError(FILENAME, ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(FILENAME, ln, "Garbage after values: %s", line)
 					system.textureName = textureName
 					ps.setTexture!(particleImages[textureName]) -- @Incomplete: Update offset (preliminary here, or after reading the file).
 
 				case "bufferSize":
-					local ^ok, ^ptr, size = readInt(line, cast(int)ptr)  if not ok  return parsingError(ln, "Bad value format: %s", line)
-					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
+					local ^ok, ^ptr, size = readInt(line, cast(int)ptr)  if not ok  return parsingError(FILENAME, ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(FILENAME, ln, "Garbage after values: %s", line)
 					ps.setBufferSize!(size)
 
 				case "direction":
-					local ^ok, ^ptr, dir = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
-					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
+					local ^ok, ^ptr, dir = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(FILENAME, ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(FILENAME, ln, "Garbage after values: %s", line)
 					ps.setDirection!(dir)
 
 				case "emissionRate":
-					local ^ok, ^ptr, rate = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
-					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
+					local ^ok, ^ptr, rate = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(FILENAME, ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(FILENAME, ln, "Garbage after values: %s", line)
 					ps.setEmissionRate!(rate)
 
 				case "emitterLifetime":
-					local ^ok, ^ptr, lifetime = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
-					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
+					local ^ok, ^ptr, lifetime = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(FILENAME, ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(FILENAME, ln, "Garbage after values: %s", line)
 					ps.setEmitterLifetime!(lifetime <= 0 ? -1.0 : lifetime)
 
 				case "insertMode":
-					local ^ok, ^ptr, mode = readString(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
-					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
+					local ^ok, ^ptr, mode = readString(line, cast(int)ptr) ; if not ok  return parsingError(FILENAME, ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(FILENAME, ln, "Garbage after values: %s", line)
 					ps.setInsertMode!(cast(LG.ParticleInsertMode) mode) -- @Robustness: Validate enum value.
 
 				case "relativeRotation":
-					local ^ok, ^ptr, relative = readBool(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
-					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
+					local ^ok, ^ptr, relative = readBool(line, cast(int)ptr) ; if not ok  return parsingError(FILENAME, ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(FILENAME, ln, "Garbage after values: %s", line)
 					ps.setRelativeRotation!(relative)
 
 				case "sizes":
 					local ^ok, ^ptr, sizes = readFloatArray(line, cast(int)ptr)
-					if not ok                 return parsingError(ln, "Bad value format: %s", line)
-					if sizes[1]   == NULL     return parsingError(ln, "No sizes.")
-					if sizes[8+1] ~= NULL     return parsingError(ln, "Too many sizes. (Max is 8, got %d)", #sizes)
-					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
+					if not ok                 return parsingError(FILENAME, ln, "Bad value format: %s", line)
+					if sizes[1]   == NULL     return parsingError(FILENAME, ln, "No sizes.")
+					if sizes[8+1] ~= NULL     return parsingError(FILENAME, ln, "Too many sizes. (Max is 8, got %d)", #sizes)
+					if cast(int)ptr <= #line  return parsingError(FILENAME, ln, "Garbage after values: %s", line)
 					ps.setSizes!(sizes)
 
 				case "sizeVariation":
 					local ^ok, ^ptr, variation = readFloat(line, cast(int)ptr)
-					if not ok                 return parsingError(ln, "Bad value format: %s", line)
-					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
+					if not ok                 return parsingError(FILENAME, ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(FILENAME, ln, "Garbage after values: %s", line)
 					ps.setSizeVariation!(variation)
 
 				case "spinVariation":
 					local ^ok, ^ptr, variation = readFloat(line, cast(int)ptr)
-					if not ok                 return parsingError(ln, "Bad value format: %s", line)
-					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
+					if not ok                 return parsingError(FILENAME, ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(FILENAME, ln, "Garbage after values: %s", line)
 					ps.setSpinVariation!(variation)
 
 				case "spread":
 					local ^ok, ^ptr, spread = readFloat(line, cast(int)ptr)
-					if not ok                 return parsingError(ln, "Bad value format: %s", line)
-					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
+					if not ok                 return parsingError(FILENAME, ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(FILENAME, ln, "Garbage after values: %s", line)
 					ps.setSpread!(spread)
 
 				case "linearDamping":
-					local ^ok, ^ptr, min = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
-					local ^ok, ^ptr, max = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
-					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
+					local ^ok, ^ptr, min = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(FILENAME, ln, "Bad value format: %s", line)
+					local ^ok, ^ptr, max = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(FILENAME, ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(FILENAME, ln, "Garbage after values: %s", line)
 					ps.setLinearDamping!(min, max)
 
 				case "particleLifetime":
-					local ^ok, ^ptr, min = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
-					local ^ok, ^ptr, max = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
-					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
+					local ^ok, ^ptr, min = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(FILENAME, ln, "Bad value format: %s", line)
+					local ^ok, ^ptr, max = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(FILENAME, ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(FILENAME, ln, "Garbage after values: %s", line)
 					ps.setParticleLifetime!(min, max)
 
 				case "radialAcceleration":
-					local ^ok, ^ptr, min = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
-					local ^ok, ^ptr, max = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
-					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
+					local ^ok, ^ptr, min = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(FILENAME, ln, "Bad value format: %s", line)
+					local ^ok, ^ptr, max = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(FILENAME, ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(FILENAME, ln, "Garbage after values: %s", line)
 					ps.setRadialAcceleration!(min, max)
 
 				case "rotation":
-					local ^ok, ^ptr, min = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
-					local ^ok, ^ptr, max = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
-					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
+					local ^ok, ^ptr, min = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(FILENAME, ln, "Bad value format: %s", line)
+					local ^ok, ^ptr, max = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(FILENAME, ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(FILENAME, ln, "Garbage after values: %s", line)
 					ps.setRotation!(min, max)
 
 				case "speed":
-					local ^ok, ^ptr, min = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
-					local ^ok, ^ptr, max = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
-					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
+					local ^ok, ^ptr, min = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(FILENAME, ln, "Bad value format: %s", line)
+					local ^ok, ^ptr, max = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(FILENAME, ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(FILENAME, ln, "Garbage after values: %s", line)
 					ps.setSpeed!(min, max)
 
 				case "spin":
-					local ^ok, ^ptr, min = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
-					local ^ok, ^ptr, max = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
-					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
+					local ^ok, ^ptr, min = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(FILENAME, ln, "Bad value format: %s", line)
+					local ^ok, ^ptr, max = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(FILENAME, ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(FILENAME, ln, "Garbage after values: %s", line)
 					ps.setSpin!(min, max)
 
 				case "tangentialAcceleration":
-					local ^ok, ^ptr, min = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
-					local ^ok, ^ptr, max = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
-					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
+					local ^ok, ^ptr, min = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(FILENAME, ln, "Bad value format: %s", line)
+					local ^ok, ^ptr, max = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(FILENAME, ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(FILENAME, ln, "Garbage after values: %s", line)
 					ps.setTangentialAcceleration!(min, max)
 
 				case "offset":
-					local ^ok, ^ptr, x = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
-					local ^ok, ^ptr, y = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
-					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
+					local ^ok, ^ptr, x = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(FILENAME, ln, "Bad value format: %s", line)
+					local ^ok, ^ptr, y = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(FILENAME, ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(FILENAME, ln, "Garbage after values: %s", line)
 					system.useCustomOffset = true
 					ps.setOffset!(x, y)
 
 				case "emissionArea":
-					local ^ok, ^ptr, distribution = readString(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
-					local ^ok, ^ptr, dx           = readFloat (line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
-					local ^ok, ^ptr, dy           = readFloat (line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
-					local ^ok, ^ptr, angle        = readFloat (line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
-					local ^ok, ^ptr, relative     = readBool  (line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
-					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
+					local ^ok, ^ptr, distribution = readString(line, cast(int)ptr) ; if not ok  return parsingError(FILENAME, ln, "Bad value format: %s", line)
+					local ^ok, ^ptr, dx           = readFloat (line, cast(int)ptr) ; if not ok  return parsingError(FILENAME, ln, "Bad value format: %s", line)
+					local ^ok, ^ptr, dy           = readFloat (line, cast(int)ptr) ; if not ok  return parsingError(FILENAME, ln, "Bad value format: %s", line)
+					local ^ok, ^ptr, angle        = readFloat (line, cast(int)ptr) ; if not ok  return parsingError(FILENAME, ln, "Bad value format: %s", line)
+					local ^ok, ^ptr, relative     = readBool  (line, cast(int)ptr) ; if not ok  return parsingError(FILENAME, ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(FILENAME, ln, "Garbage after values: %s", line)
 					ps.setEmissionArea!(cast(LG.AreaSpreadDistribution)distribution, dx, dy, angle, relative) -- @Robustness: Validate enum value.
 
 				case "linearAcceleration":
-					local ^ok, ^ptr, xmin = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
-					local ^ok, ^ptr, ymin = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
-					local ^ok, ^ptr, xmax = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
-					local ^ok, ^ptr, ymax = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(ln, "Bad value format: %s", line)
-					if cast(int)ptr <= #line  return parsingError(ln, "Garbage after values: %s", line)
+					local ^ok, ^ptr, xmin = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(FILENAME, ln, "Bad value format: %s", line)
+					local ^ok, ^ptr, ymin = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(FILENAME, ln, "Bad value format: %s", line)
+					local ^ok, ^ptr, xmax = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(FILENAME, ln, "Bad value format: %s", line)
+					local ^ok, ^ptr, ymax = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(FILENAME, ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(FILENAME, ln, "Garbage after values: %s", line)
 					ps.setLinearAcceleration!(xmin,ymin, xmax,ymax)
 
 				case:
-					return parsingError(ln, "Unknown project parameter '%s'.", param)
+					return parsingError(FILENAME, ln, "Unknown project parameter '%s'.", param)
 			}
 		}
 	}
 
-	if not projects  return parsingError(ln, "No projects.")
+	if not projects  return parsingError(FILENAME, ln, "No projects.")
 	for projects {
-		if not project.systems  return parsingError(ln, "Missing systems for at least one project.")
+		if not project.systems  return parsingError(FILENAME, ln, "Missing systems for at least one project.")
 	}
 
 	return true, false, projects

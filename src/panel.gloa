@@ -11,17 +11,22 @@
 
 	ContextMenu
 
+	blurFocus
 	hideContextMenu
 	isInsidePanels
 	scrollPanels
+	pushAuxPanel, popAuxPanel, isAuxPanelVisible
 	stopDraggingInPanels
 	updatePanels, drawPanels
 
 --============================================================]]
 
-export MAIN_PANEL_WIDTH :: MAIN_LABEL_WIDTH + 350
+export PROJECT_PANEL_WIDTH :: PROJECT_MAIN_LABEL_WIDTH + 350
+export     AUX_PANEL_WIDTH ::     AUX_MAIN_LABEL_WIDTH + 350
 
-local MAIN_LABEL_WIDTH  :: 100
+local PROJECT_MAIN_LABEL_WIDTH  :: 100
+local     AUX_MAIN_LABEL_WIDTH  :: 80
+
 local INNER_LABEL_WIDTH :: 40
 local PANEL_SPACING     :: 3
 
@@ -50,6 +55,7 @@ local BUTTONS_YES_NO: []Button : {
 export pressedOnPanelWithMouseButton = 0
 export shiftScrolledOnPanel          = 0
 
+local focusedPanelItem    = 0
 local draggedPanelItem    = 0
 local draggedPanelSubItem = 0
 
@@ -66,8 +72,28 @@ local tooltipRendered  = false
 local tooltipHoverTime = 0.00
 local tooltipOpacity   = 0.0
 
+local auxPanelStack: []AuxPanel
+local auxPanel = AuxPanel.NONE
+local auxPanelData: any
+local auxPanelScroll       = 0.0
+local auxPanelScrollSource = 0.0
+local auxPanelScrollTarget = 0
+
+export focus: struct {
+	x: int,
+	y: int,
+	width: int,
+	height: int,
+	valueX: int,
+	isPressing = false,
+	field: InputField = NULL,
+} = NULL
 
 
+
+export AuxPanel :: enum { NONE::0, EXIT, SAVE_PROJECT_AS, OPEN_PROJECT, CONFIRM_OVERWRITE_FILE }
+
+local Align       :: enum { LEFT, RIGHT, CENTER }
 local ButtonStyle :: enum { NORMAL, TABS }
 
 local Button :: struct {
@@ -82,6 +108,8 @@ local Panel :: struct {
 	baseY: int,
 	width: int,
 	mainLabelWidth: int,
+
+	isAux: bool,
 
 	x: int,
 	y: int,
@@ -101,26 +129,29 @@ local Panel :: struct {
 	panelItem: int,
 
 	showedContextMenuThisFrame = false,
+	isHoveringInput            = false,
 
-	!call :: (baseX,baseY:int, width:int, mainLabelWidth:int) -> Panel {
-		local mx, my = love.mouse.getPosition()
+	!call :: () -> Panel {
+		local mx, my = LM.getPosition()
 		return {
-			baseX          = baseX,
-			baseY          = baseY,
-			width          = width,
-			mainLabelWidth = mainLabelWidth,
-
 			mx  = mx,
 			my  = my,
 			mod = getModifierKey(),
 		}
 	},
 
-	reset :: (panel:Panel) {
-		panel.x = panel.baseX + PANEL_SPACING
-		panel.y = panel.baseY + PANEL_SPACING
+	reset :: (panel:Panel, baseX,baseY:int, width:int, mainLabelWidth:int, isAux:bool) {
+		panel.baseX          = baseX
+		panel.baseY          = baseY
+		panel.width          = width
+		panel.mainLabelWidth = mainLabelWidth
 
-		panel.maxPanelItemX = panel.baseX+panel.mainLabelWidth
+		panel.isAux = isAux
+
+		panel.x = baseX + mainLabelWidth + PANEL_SPACING
+		panel.y = baseY + PANEL_SPACING
+
+		panel.maxPanelItemX = baseX + mainLabelWidth
 		panel.maxPanelItemY = 0
 
 		panel.hasScrollableSection = false
@@ -136,6 +167,67 @@ export ContextMenu :: struct {
 	height:   int,
 	items:    []string,
 	callback: (choice:int) = NULL,
+}
+
+export InputField :: !foreign struct {
+	Alignment :: enum {
+		LEFT  :: "left",
+		RIGHT :: "right",
+	},
+	Side :: enum {
+		START :: "start",
+		END   :: "end",
+	},
+
+	!call :: (initialText="") -> InputField !foreign lua "require'src.InputField'",
+
+	update                 :: (self:InputField, dt:float) !foreign method "update",
+	getBlinkPhase          :: (self:InputField) -> float !foreign method "getBlinkPhase",
+	resetBlinking          :: (self:InputField) !foreign method "resetBlinking",
+	getCursor              :: (self:InputField) -> int !foreign method "getCursor",
+	setCursor              :: (self:InputField, pos:int)                        !foreign method "setCursor",
+	setCursor              :: (self:InputField, pos:int,    selSideAnchor:Side) !foreign method "setCursor",
+	moveCursor             :: (self:InputField, amount:int)                     !foreign method "moveCursor",
+	moveCursor             :: (self:InputField, amount:int, selSideAnchor:Side) !foreign method "moveCursor",
+	getCursorSelectionSide :: (self:InputField) -> Side !foreign method "getCursorSelectionSide",
+	getAnchorSelectionSide :: (self:InputField) -> Side !foreign method "getAnchorSelectionSide",
+	getFont                :: (self:InputField) -> LG.Font !foreign method "getFont",
+	setFont                :: (self:InputField, font:LG.Font) !foreign method "setFont",
+	getScroll              :: (self:InputField) -> (scroll:int) !foreign method "getScroll",
+	setScroll              :: (self:InputField, scroll:int) !foreign method "setScroll",
+	getSelection           :: (self:InputField) -> (from,to:int) !foreign method "getSelection",
+	setSelection           :: (self:InputField, from,to:int, cursorAlign=Alignment.RIGHT) !foreign method "setSelection",
+	selectAll              :: (self:InputField) !foreign method "selectAll",
+	getSelectedText        :: (self:InputField) -> string !foreign method "getSelectedText",
+	getSelectedVisibleText :: (self:InputField) -> string !foreign method "getSelectedVisibleText",
+	getText                :: (self:InputField) -> string !foreign method "getText",
+	setText                :: (self:InputField, text:string, replaceLastHistoryEntry=false) !foreign method "setText",
+	getVisibleText         :: (self:InputField) -> string !foreign method "getVisibleText",
+	getTextLength          :: (self:InputField) -> int !foreign method "getTextLength",
+	getTextOffset          :: (self:InputField) -> int !foreign method "getTextOffset",
+	getCursorOffset        :: (self:InputField) -> int !foreign method "getCursorOffset",
+	getSelectionOffset     :: (self:InputField) -> int, int !foreign method "getSelectionOffset",
+	getWidth               :: (self:InputField) -> int !foreign method "getWidth",
+	setWidth               :: (self:InputField, width:int) !foreign method "setWidth",
+	insert                 :: (self:InputField, newText:string) !foreign method "insert",
+	replace                :: (self:InputField, newText:string) !foreign method "replace",
+	isFontFilteringActive  :: (self:InputField) -> bool !foreign method "isFontFilteringActive",
+	setFontFilteringActive :: (self:InputField, state:bool) !foreign method "setFontFilteringActive",
+	isPasswordActive       :: (self:InputField) -> bool !foreign method "isPasswordActive",
+	setPasswordActive      :: (self:InputField, state:bool) !foreign method "setPasswordActive",
+	isEditable             :: (self:InputField) -> bool !foreign method "isEditable",
+	setEditable            :: (self:InputField, state:bool) !foreign method "setEditable",
+	CharacterFilter        :: (char:string) -> (filterOut:bool),
+	getFilter              :: (self:InputField) -> (filter:CharacterFilter) !foreign method "getFilter",
+	setFilter              :: (self:InputField, filter:CharacterFilter)     !foreign method "setFilter",
+	setFilter              :: (self:InputField)                             !foreign method "setFilter",
+	clearHistory           :: (self:InputField) !foreign method "clearHistory",
+	mousepressed           :: (self:InputField, mx,my:int, mbutton:int)              -> (wasHandled:bool) !foreign method "mousepressed",
+	mousepressed           :: (self:InputField, mx,my:int, mbutton:int, presses:int) -> (wasHandled:bool) !foreign method "mousepressed",
+	mousemoved             :: (self:InputField, mx,my:int) -> (wasHandled:bool) !foreign method "mousemoved",
+	mousereleased          :: (self:InputField, mx,my:int, mbutton:int) -> (wasHandled:bool) !foreign method "mousereleased",
+	keypressed             :: (self:InputField, key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool) -> (wasHandled:bool, wasEdited:bool) !foreign method "keypressed",
+	textinput              :: (self:InputField, text:string) -> (wasHandled:bool, wasEdited:bool) !foreign method "textinput",
 }
 
 
@@ -159,16 +251,17 @@ local drawCheckerBox :: (x,y,w,h:int) {
 	drawChecker(x, y, w, h)
 }
 
-local drawLabels :: (panel:Panel, label1,label2:string, x,y:int) {
+local drawLabels :: (panel:Panel, label1,label2:string, x,y:int, large=false) {
 	LG.setColor(1, 1, 1)
 	if label1 {
+		if large  LG.setFont(fontLarge)
 		LG.print(label1, panel.baseX+PANEL_SPACING, y)
 	}
 	if label2 {
 		LG.setFont(fontSmall)
 		LG.print(label2, x-PANEL_SPACING-fontSmall.getWidth!(label2), y+1)
-		LG.setFont(fontNormal)
 	}
+	LG.setFont(fontNormal)
 }
 
 local drawTooltip :: (text:string, x,y:int) {
@@ -180,7 +273,7 @@ local drawTooltip :: (text:string, x,y:int) {
 	x = math.min(x, LG.getWidth()-w)
 	y = y-h-1
 
-	LG.push(LG.StackType.ALL)
+	LG.pushAll()
 	LG.setScissor()
 
 	LG.setColor(.8, .8, .8, tooltipOpacity)
@@ -196,13 +289,19 @@ local drawTooltip :: (text:string, x,y:int) {
 
 
 local drawPanelSeparator :: (panel:Panel, thick=false) {
-	local w = thick ? 6 : 2
-	LG.setColor(0, 0, 0, .3)
+	local w = thick ? 5 : 1
+
+	LG.setColor(0, 0, 0, (thick ? .3 : .2))
 	LG.rectangle(LG.DrawMode.FILL, panel.baseX, panel.y, panel.width, w)
 
 	gotoNextRow(panel)
 	occupy(panel, panel.width, w)
 	gotoNextRow(panel)
+}
+
+local drawPanelLabel :: (panel:Panel, label:string, small=false) {
+	drawLabels(panel, label, "", panel.x, panel.y, large=(not small))
+	occupy(panel, panel.width, (small ? fontNormal : fontLarge).getHeight!())
 }
 
 local drawPanelDirection :: (panel:Panel, label1,label2:string, angle:float, spreadCcw,spreadCw=0.0) -> (pressedMouseButton:int, angle:float) {
@@ -580,7 +679,7 @@ local drawPanelColor :: (panel:Panel,
 
 local drawPanelButtons :: (panel:Panel,
 	label1,label2:string, buttons:[]Button, selected=0, style=ButtonStyle.NORMAL,
-	lastButtonWidth=0, showLabel=true, enableDragging=false, inset=0, width=0
+	lastButtonWidth=0, showLabels=true, enableDragging=false, inset=0, width=0, height=0, align=Align.CENTER
 ) -> (
 	pressedMouseButton:int, pressedIndex:int, dragged:bool
 ) {
@@ -590,10 +689,10 @@ local drawPanelButtons :: (panel:Panel,
 
 	local highlightAll = (selected == 0)
 
-	local x = showLabel ? panel.x+inset : panel.baseX+PANEL_SPACING
+	local x = showLabels ? panel.x+inset : panel.baseX+PANEL_SPACING
 	local y = panel.y
-	local w = width ?: (panel.baseX+panel.width) - PANEL_SPACING - x
-	local h = fontNormal.getHeight!()
+	local w = width  ?: (panel.baseX+panel.width) - PANEL_SPACING - x
+	local h = height ?: fontNormal.getHeight!() + 4
 
 	for buttons  if it.image {
 		h = math.max(h, IMAGE_SIZE+2*PANEL_SPACING)
@@ -621,7 +720,7 @@ local drawPanelButtons :: (panel:Panel,
 		}
 	}
 
-	if showLabel  drawLabels(panel, label1, label2, x, y+math.round((h-fontNormal.getHeight!())/2))
+	if showLabels  drawLabels(panel, label1, label2, x, y+math.round((h-fontNormal.getHeight!())/2))
 
 	if style == ButtonStyle.TABS {
 		LG.setColor(1, 1, 1, .3)
@@ -684,10 +783,15 @@ local drawPanelButtons :: (panel:Panel,
 				if it.image {
 					textX = buttonX1 + padding + IMAGE_SIZE + PANEL_SPACING
 				} else {
-					textX = buttonX1 + math.max(math.round((buttonW-fontNormal.getWidth!(it.label))/2), padding)
+					using align
+					if align == {
+						case LEFT:   textX = buttonX1 + padding
+						case RIGHT:  textX = buttonX1 + math.max(math.round(buttonW-padding-fontNormal.getWidth!(it.label)), padding)
+						case CENTER: textX = buttonX1 + math.max(math.round((buttonW-fontNormal.getWidth!(it.label))/2), padding)
+					}
 				}
 
-				LG.push(LG.StackType.ALL)
+				LG.pushAll()
 				LG.intersectScissor(scissorX1, 0, scissorX2-scissorX1, LG.getHeight())
 				LG.setColor(1, 1, 1, (faded ? .6 : 1.0))
 				LG.print(it.label, textX, textY)
@@ -705,18 +809,129 @@ local drawPanelButtons :: (panel:Panel,
 	return pressed, pressedIndex, dragged
 }
 
+local drawPanelInput :: (panel:Panel, label1,label2:string, value:string, width=0, showLabels=true) -> (value:string, submitted,cancelled:bool) {
+	panel.panelItem += 1
+
+	local x = showLabels ? panel.x : panel.baseX+PANEL_SPACING
+	local y = panel.y
+	local w = width ?: (panel.baseX+panel.width) - PANEL_SPACING - x
+	local h = fontNormal.getHeight!() + 2*PANEL_SPACING
+
+	local valueX = x+PANEL_SPACING
+
+	local hovered = isHoveringPanelItemRectangle(panel, x, y, w, h)
+	local pressed = hovered ? isPressingOrMayPress(panel) : 0
+
+	if hovered  panel.isHoveringInput = true
+
+	if pressed == 1 or pressed == 2 {
+		if not hasFocus(panel.panelItem)  setFocus(panel.panelItem, value, x, y, w-2*PANEL_SPACING, h, valueX)
+		if pressedAnythingThisFrame  focus.field.mousepressed!(panel.mx-valueX, panel.my, pressed, pressCountValueForThisFrame)
+	}
+
+	local submitted = false
+	local cancelled = false
+
+	local focused = hasFocus(panel.panelItem)
+	if focused {
+		value = focus.field.getText!()
+		if keysPressedThisFrame.\return or keysPressedThisFrame.kpenter {
+			submitted = true
+			focused   = false
+			blurFocus()
+		} elseif keysPressedThisFrame.escape {
+			cancelled = true
+			focused   = false
+			blurFocus()
+		}
+	}
+
+	if showLabels  drawLabels(panel, label1, label2, x, y+math.round((h-fontNormal.getHeight!())/2))
+
+	-- Background.
+	LG.setColor(0, 0, 0)
+	LG.rectangle(LG.DrawMode.FILL, x, y, w, h, 3)
+
+	LG.pushAll()
+	LG.intersectScissor(x, 0, w, LG.getHeight())
+
+	-- Selection.
+	if focused {
+		local x1, x2 = focus.field.getSelectionOffset!()
+		if x2 > x1 {
+			LG.setColor(1, 1, 0, .5)
+			LG.rectangle(LG.DrawMode.FILL, valueX+x1, y, x2-x1, h)
+		}
+		LG.setColor(1, 1, 1, math.lerp(.3, .9, math.cos01(focus.field.getBlinkPhase!()*math.TAU/1.00)))
+		LG.rectangle(LG.DrawMode.FILL, valueX+focus.field.getCursorOffset!(), y, 1, h)
+	}
+
+	-- Value.
+	local textOffset = focused ? focus.field.getTextOffset!() : 0
+	LG.setColor(1, 1, 1)
+	LG.print(value, valueX+textOffset, y+PANEL_SPACING)
+
+	-- Cursor.
+	if focused {
+		LG.setColor(1, 1, 1, math.lerp(.3, .9, math.cos01(focus.field.getBlinkPhase!()*math.TAU/1.00)))
+		LG.rectangle(LG.DrawMode.FILL, valueX+focus.field.getCursorOffset!(), y, 1, h)
+	}
+
+	LG.pop()
+
+	-- Hover/focus effect.
+	if hovered or focused {
+		LG.setColor(1, 1, 1, HOVER_OUTLINE_OPACITY)
+		LG.rectangle(LG.DrawMode.LINE, x-.5, y-.5, w+1, h+1, 3)
+	}
+
+	occupy(panel, w, h)
+	return value, submitted, cancelled
+}
+
+local panelStart :: (panel:Panel, baseX,baseY:int, width:int, mainLabelWidth:int, isAux:bool) {
+	panel.reset!(baseX,baseY, width, mainLabelWidth, isAux)
+	LG.setColor(.2, .2, .2)
+	LG.rectangle(LG.DrawMode.FILL, panel.baseX, 0, panel.width, LG.getHeight())
+}
+local scrollableSectionStart :: (panel:Panel, panelScroll:float) {
+	local scissorX = panel.baseX
+	local scissorY = panel.y - PANEL_SPACING
+	local scissorW = panel.width
+	local scissorH = LG.getHeight() - scissorY
+
+	LG.pushAll()
+	if scissorW > 0 and scissorH > 0  LG.setScissor(scissorX, scissorY, scissorW, scissorH)
+	LG.translate(0, panelScroll)
+
+	panel.hasScrollableSection  = true
+	panel.ignoreMouseAboveY     = scissorY
+	panel.myScrolled           -= math.round(panelScroll)
+
+	panel.y += 5
+}
+local panelEnd :: (panel:Panel, panelScroll:float) {
+	if not panel.hasScrollableSection  return
+
+	LG.pop()
+
+	-- Shadow at top of the scrollable section.
+	local h          = panelScroll ? 30 : 10
+	local iw, ih     = imageGradient.getDimensions!()
+	local gradientSx = h/ih
+	local gradientSy = panel.width/iw
+
+	LG.setColor(0, 0, 0, (panelScroll ? 1.0 : .3))
+	LG.draw(imageGradient, panel.baseX, panel.ignoreMouseAboveY+h, -math.TAU/4, gradientSx, gradientSy)
+}
+
 export drawPanels :: () {
 	-- Note: Some things may render incorrectly for one frame if the user does
 	-- something because we handle mouse input here while rendering.
 
-	local panel = Panel(0, 0, MAIN_PANEL_WIDTH, MAIN_LABEL_WIDTH)
+	local panel = Panel()
 
-	local panelStart :: (panel:Panel) {
-		panel.reset!()
-		LG.setColor(.2, .2, .2)
-		LG.rectangle(LG.DrawMode.FILL, panel.baseX, 0, panel.width, LG.getHeight())
-	}
-	panelStart(panel)
+	panelStart(panel, 0, 0, PROJECT_PANEL_WIDTH, PROJECT_MAIN_LABEL_WIDTH, false)
 
 	-- Project.
 	local project = openProjects[currentProjectIndex]
@@ -727,7 +942,7 @@ export drawPanels :: () {
 
 		insert(buttons, cast(Button){label="+"})
 
-		local pressed, i, dragged = drawPanelButtons(panel, "", "", buttons, selected=currentProjectIndex, style=ButtonStyle.TABS, showLabel=false, lastButtonWidth=32, enableDragging=true) ; gotoNextRow(panel)
+		local pressed, i, dragged = drawPanelButtons(panel, "", "", buttons, selected=currentProjectIndex, style=ButtonStyle.TABS, showLabels=false, lastButtonWidth=32, enableDragging=true) ; gotoNextRow(panel)
 		if dragged {
 			if i < #buttons {
 				remove(openProjects, currentProjectIndex)
@@ -763,18 +978,14 @@ export drawPanels :: () {
 		}
 	}
 	do {
-		local BUTTONS_SHOW_SETTINGS: []Button : {{label="save"},{label="save as..."},{label="load..."},{label="show settings"}}
-		local BUTTONS_HIDE_SETTINGS: []Button : {{label="save"},{label="save as..."},{label="load..."},{label="hide settings"}}
-		local pressed, i = drawPanelButtons(panel, "", "", (showProjectSettings ? BUTTONS_HIDE_SETTINGS : BUTTONS_SHOW_SETTINGS), showLabel=false) ; gotoNextRow(panel)
+		local BUTTONS_SHOW_SETTINGS: []Button : {{label="save"},{label="save as..."},{label="open..."},{label="show settings"}}
+		local BUTTONS_HIDE_SETTINGS: []Button : {{label="save"},{label="save as..."},{label="open..."},{label="hide settings"}}
+		local pressed, i = drawPanelButtons(panel, "", "", (showProjectSettings ? BUTTONS_HIDE_SETTINGS : BUTTONS_SHOW_SETTINGS), showLabels=false) ; gotoNextRow(panel)
 		if pressed == 1 {
-			-- @Incomplete!!!
-			local saveProject :: (project:Project) {}
-			local showSaveAsDialog :: () {}
-			local showLoadDialog :: () {}
 			if i == {
-				case 1: if project.fileIsSaved  saveProject(project)  else  showSaveAsDialog()
-				case 2: showSaveAsDialog()
-				case 3: showLoadDialog()
+				case 1: if project.fileIsSaved  saveProject(project, overwrite=true)  else  pushAuxPanel(AuxPanel.SAVE_PROJECT_AS)
+				case 2: pushAuxPanel(AuxPanel.SAVE_PROJECT_AS)
+				case 3: pushAuxPanel(AuxPanel.OPEN_PROJECT)
 				case 4: showProjectSettings = not showProjectSettings ; scheduleSaveWorkspace = true
 			}
 		}
@@ -881,22 +1092,6 @@ export drawPanels :: () {
 		}
 	}
 
-	local scrollableSectionStart :: (panel:Panel, panelScroll:float) {
-		local scissorX = panel.baseX
-		local scissorY = panel.y - PANEL_SPACING
-		local scissorW = panel.width
-		local scissorH = LG.getHeight() - scissorY
-
-		LG.push(LG.StackType.ALL)
-		if scissorW > 0 and scissorH > 0  LG.setScissor(scissorX, scissorY, scissorW, scissorH)
-		LG.translate(0, panelScroll)
-
-		panel.hasScrollableSection  = true
-		panel.ignoreMouseAboveY     = scissorY
-		panel.myScrolled           -= math.round(panelScroll)
-
-		panel.y += 5
-	}
 	scrollableSectionStart(panel, project.panelScroll)
 
 	-- Misc params.
@@ -1079,7 +1274,6 @@ export drawPanels :: () {
 	--[[
 	-- @Incomplete:
 	ps.setQuads!(quad1,quad2)
-	ps.setTexture!(texture)
 	ps.setOffset!(x,y)
 	]]
 
@@ -1129,10 +1323,10 @@ export drawPanels :: () {
 		if indexToShift {
 			if shiftScrolledOnPanel < 0 and indexToShift > 1 {
 				sizes[indexToShift], sizes[indexToShift-1] = sizes[indexToShift-1], sizes[indexToShift]
-				love.mouse.setPosition(panel.mx, panel.my - fontNormal.getHeight!() - PANEL_SPACING)
+				LM.setPosition(panel.mx, panel.my - fontNormal.getHeight!() - PANEL_SPACING)
 			} elseif shiftScrolledOnPanel > 0 and indexToShift < #sizes {
 				sizes[indexToShift], sizes[indexToShift+1] = sizes[indexToShift+1], sizes[indexToShift]
-				love.mouse.setPosition(panel.mx, panel.my + fontNormal.getHeight!() + PANEL_SPACING)
+				LM.setPosition(panel.mx, panel.my + fontNormal.getHeight!() + PANEL_SPACING)
 			}
 
 			scheduleSaveWorkspace = true
@@ -1242,10 +1436,10 @@ export drawPanels :: () {
 
 			if shiftScrolledOnPanel < 0 and colorIndexToShift > 1 {
 				swap(colors, colorIndexToShift, colorIndexToShift-4)
-				love.mouse.setPosition(panel.mx, panel.my-4*COLOR_SLIDER_HEIGHT-PANEL_SPACING)
+				LM.setPosition(panel.mx, panel.my-4*COLOR_SLIDER_HEIGHT-PANEL_SPACING)
 			} elseif shiftScrolledOnPanel > 0 and colorIndexToShift < colorCount*4-3 {
 				swap(colors, colorIndexToShift, colorIndexToShift+4)
-				love.mouse.setPosition(panel.mx, panel.my+4*COLOR_SLIDER_HEIGHT+PANEL_SPACING)
+				LM.setPosition(panel.mx, panel.my+4*COLOR_SLIDER_HEIGHT+PANEL_SPACING)
 			}
 
 			scheduleSaveWorkspace = true
@@ -1268,37 +1462,31 @@ export drawPanels :: () {
 		}
 	}
 	do {
-		local BUTTONS: []Button : {{label="alpha"},{label="add"},{label="subtract"},{label="screen"}}
-		local BLEND_MODE_TO_INDEX: struct { !key:LG.BlendMode, !value:int } = {
-			[LG.BlendMode.ALPHA]    = 1,
-			[LG.BlendMode.ADD]      = 2,
-			[LG.BlendMode.SUBTRACT] = 3,
-			[LG.BlendMode.SCREEN]   = 4,
+		using LG.BlendMode
+
+		local BUTTONS: []Button : {
+			{value=ALPHA,    label="alpha"},
+			{value=ADD,      label="add"},
+			{value=SUBTRACT, label="subtract"},
+			{value=SCREEN,   label="screen"},
 		}
-		local pressed, i = drawPanelButtons(panel, "", "blend mode", BUTTONS, selected=BLEND_MODE_TO_INDEX[system.blendMode]) ; gotoNextRow(panel)
-		if pressed == 1  if i == {
-			case 1: system.blendMode = LG.BlendMode.ALPHA
-			case 2: system.blendMode = LG.BlendMode.ADD
-			case 3: system.blendMode = LG.BlendMode.SUBTRACT
-			case 4: system.blendMode = LG.BlendMode.SCREEN
-		}
+
+		local _, i        = indexWith(BUTTONS, "value", system.blendMode)
+		local pressed, ^i = drawPanelButtons(panel, "", "blend mode", BUTTONS, selected=i) ; gotoNextRow(panel)
+		if pressed == 1  system.blendMode = cast(LG.BlendMode) BUTTONS[i].value
 	}
+	drawPanelSeparator(panel, true)
 
-	local panelEnd :: (panel:Panel, panelScroll:float) {
-		drawPanelSeparator(panel, true)
-
-		if panel.hasScrollableSection  LG.pop()
-
-		-- Shadow at top of scollable part.
-		local h          = panelScroll ? 30 : 10
-		local iw, ih     = imageGradient.getDimensions!()
-		local gradientSx = h/ih
-		local gradientSy = panel.width/iw
-
-		LG.setColor(0, 0, 0, (panelScroll ? 1.0 : .3))
-		LG.draw(imageGradient, panel.baseX, panel.ignoreMouseAboveY+h, -math.TAU/4, gradientSx, gradientSy)
-	}
 	panelEnd(panel, project.panelScroll)
+
+	if auxPanel ~= AuxPanel.NONE {
+		LG.setColor(.15, .15, .15, .9)
+		LG.rectangle(LG.DrawMode.FILL, 0, 0, LG.getWidth(), LG.getHeight())
+
+		panelStart(panel, (LG.getWidth()-AUX_PANEL_WIDTH)//2, 0, AUX_PANEL_WIDTH, AUX_MAIN_LABEL_WIDTH, true)
+		drawAuxPanel[auxPanel](panel, project)
+		panelEnd(panel, auxPanelScroll)
+	}
 
 	if contextMenu ~= NULL {
 		local itemHeight  = fontNormal.getHeight!() + 2*CONTEXT_MENU_PADDING_Y
@@ -1333,6 +1521,11 @@ export drawPanels :: () {
 		}
 	}
 
+	if panel.isHoveringInput
+		LM.setCursor(LM.getSystemCursor(LM.CursorType.I_BEAM))
+	else
+		LM.setCursor()
+
 	do {
 		-- Reset these here after the target panel item has handled the action.
 		panelItemForContextMenu = 0
@@ -1343,6 +1536,249 @@ export drawPanels :: () {
 	shiftScrolledOnPanel          = 0
 }
 
+local drawAuxPanel: struct { !key:AuxPanel, !value:(panel:Panel, project:Project) } = {
+	[AuxPanel.EXIT] = (panel:Panel, project:Project) {
+		panel.y = LG.getHeight() // 2 - 10
+
+		local BUTTONS: []Button : {{label="exit"},{label="cancel"}}
+		local pressed, i = drawPanelButtons(panel, "", "", BUTTONS, showLabels=false, height=30) ; gotoNextRow(panel)
+
+		if pressed ~= 1 {
+			-- void
+		} elseif i == 1 {
+			pushQuitEvent()
+		} else {
+			popAuxPanel()
+		}
+	},
+
+	[AuxPanel.SAVE_PROJECT_AS] = (panel:Panel, project:Project) {
+		local data = cast(struct {
+			editedDir:      string,
+			editedFilename: string,
+			dir:         string,
+			dirFallback: string,
+			filename:    string,
+		}) auxPanelData
+
+		if data == NULL {
+			local path              = project.path
+			local ok, dir, filename = matchPattern(path, "^(.+)/([^/]+)$")
+
+			if not ok {
+				dir      = LF.getSaveDirectory()
+				filename = "my.hotparticles"
+			}
+
+			data = {
+				editedDir      = cast(string) dir,
+				editedFilename = cast(string) filename,
+				dir            = cast(string) dir,
+				dirFallback    = LF.getSaveDirectory(),
+				filename       = cast(string) filename,
+			}
+			auxPanelData = data
+		}
+
+		drawPanelLabel(panel, "Save as") ; gotoNextRow(panel)
+
+		-- Directory.
+		do {
+			local dir, submitted, cancelled = drawPanelInput(panel, "", "", data.editedDir, showLabels=false) ; gotoNextRow(panel)
+			data.editedDir = dir
+
+			if submitted {
+				data.editedDir = normalizeDirectoryPath(data.editedDir)
+				data.dir       = data.editedDir
+			} elseif cancelled {
+				data.editedDir = data.dir
+			}
+		}
+
+		LG.setColor(1, 1, 1, .3)
+		LG.rectangle(LG.DrawMode.FILL, panel.baseX, panel.y, panel.width, 2)
+		panel.y += 2+PANEL_SPACING
+
+		scrollableSectionStart(panel, auxPanelScroll)
+
+		-- "Got up one dir" button.
+		local buttons: []Button : {{}}
+		do {
+			buttons[1].label = "../"
+			local pressed = drawPanelButtons(panel, "", "", buttons, align=Align.LEFT, showLabels=false) ; gotoNextRow(panel)
+			if pressed == 1 {
+				-- @Robustness: Handle "C:/foo" becoming "C:" or "/foo" becoming "". (Maybe it doesn't matter in practice?)
+				data.dir             = replacePattern(data.dir, "/[^/]+$", "")
+				data.editedDir       = data.dir
+				auxPanelScroll       = 0
+				auxPanelScrollSource = 0
+				auxPanelScrollTarget = 0
+			}
+		}
+
+		-- Files and folders in CWD.
+		if not connectToRemoteDirectory(data.dir) {
+			data.dir = data.dirFallback
+			if not connectToRemoteDirectory(data.dir) {
+				data.dir = LF.getSaveDirectory()
+				if not connectToRemoteDirectory(data.dir) {
+					data.dir = LF.getWorkingDirectory()
+					assert(connectToRemoteDirectory(data.dir))
+				}
+			}
+			data.editedDir = data.dir
+		}
+		defer disconnectFromRemoteDirectory()
+		data.dirFallback = data.dir
+
+		local dirs:      []string
+		local filenames: []string
+
+		for LF.getDirectoryItems("") {
+			static info: LF.FileInfo
+
+			if LF.getInfo(it, info) == nil {
+				-- void  The file may be a system file or something.
+			} if info.type == LF.FileType.DIRECTORY {
+				if not findPattern(it, "^%$")  insert(dirs, it)
+			} elseif info.type == LF.FileType.FILE {
+				if findPattern(it, "%.hotparticles$")  insert(filenames, it)
+			}
+		}
+
+		local comparer :: (a,b:string) -> bool {
+			for 1, math.min(#a, #b) {
+				local aByte = a[it]
+				local bByte = b[it]
+
+				-- Case-insensitive ASCII.
+				if aByte >= !char "a" and aByte <= !char "z"  aByte = aByte - !char "a" + !char "A"
+				if bByte >= !char "a" and bByte <= !char "z"  bByte = bByte - !char "a" + !char "A"
+
+				if aByte ~= bByte {
+					local aIsDigit          = (aByte >= !char "0" and aByte <= !char "9")
+					local bIsDigit          = (bByte >= !char "0" and bByte <= !char "9")
+					local aIsAlphaOrUnicode = aIsDigit or (aByte >= !char "a" and aByte <= !char "z") or aByte >= 128
+					local bIsAlphaOrUnicode = bIsDigit or (bByte >= !char "a" and bByte <= !char "z") or bByte >= 128
+
+					if aIsAlphaOrUnicode ~= bIsAlphaOrUnicode  return bIsAlphaOrUnicode
+
+					-- Natural sorting for numbers.
+					if aIsDigit and bIsDigit {
+						local _, aIntStr = matchPattern(a, "^%d+", it)
+						local _, bIntStr = matchPattern(b, "^%d+", it)
+						local _, aInt    = stringToInt(cast(string)aIntStr)
+						local _, bInt    = stringToInt(cast(string)bIntStr)
+						return aInt < bInt
+					}
+
+					return toLower(getSubstring(a, it, it)) < toLower(getSubstring(b, it, it))
+				}
+			}
+			return toLower(a) < toLower(b)
+		}
+
+		sort(dirs,      comparer)
+		sort(filenames, comparer)
+
+		for dir: dirs {
+			-- @Incomplete: Folder icon on the buttons.
+			buttons[1].label = dir.."/"
+			local pressed = drawPanelButtons(panel, "", "", buttons, align=Align.LEFT, showLabels=false) ; gotoNextRow(panel)
+			if pressed == 1 {
+				-- Note: Beware of one-frame delay!
+				data.dir             = data.dir.."/"..dir
+				data.editedDir       = data.dir
+				auxPanelScroll       = 0
+				auxPanelScrollSource = 0
+				auxPanelScrollTarget = 0
+			}
+		}
+		for filename: filenames {
+			buttons[1].label = filename
+			local pressed = drawPanelButtons(panel, "", "", buttons, align=Align.LEFT, showLabels=false) ; gotoNextRow(panel)
+			if pressed == 1 {
+				data.editedFilename = filename
+				data.filename       = filename
+			}
+		}
+
+		-- Filename.
+		do {
+			local filename, submitted, cancelled = drawPanelInput(panel, "Filename", "", data.editedFilename) ; gotoNextRow(panel)
+			data.editedFilename = filename
+
+			if submitted {
+				-- @Incomplete: Validate editedFilename.
+				data.filename = data.editedFilename
+			} elseif cancelled {
+				data.editedFilename = data.filename
+			}
+		}
+
+		-- Actions.
+		do {
+			local BUTTONS: []Button : {{label="save"},{label="cancel"}}
+			local pressed, i = drawPanelButtons(panel, "", "", BUTTONS, showLabels=false) ; gotoNextRow(panel)
+
+			if pressed ~= 1 {
+				-- void
+
+			} elseif i ~= 1 {
+				popAuxPanel()
+
+			} elseif not data.filename {
+				setErrorText("Filename is empty")
+
+			} else {
+				if not findPattern(data.filename, "%.hotparticles$")  data.filename = data.filename..".hotparticles"
+
+				project.path = data.dir.."/"..data.filename
+
+				local ok, fileExists = saveProject(project)
+				if ok {
+					popAuxPanel()
+
+				} elseif fileExists {
+					local BUTTONS2: []Button : {{label="overwrite"},{label="cancel"}}
+					confirmOverwriteFile_buttons = BUTTONS2
+
+					confirmOverwriteFile_cb = [data,project] (i:int) {
+						if i ~= 1  return
+
+						if saveProject(project, overwrite=true)  popAuxPanel()
+					}
+					pushAuxPanel(AuxPanel.CONFIRM_OVERWRITE_FILE)
+
+				} else {
+					-- void  Stay in the dialog.
+				}
+			}
+		}
+	},
+
+	[AuxPanel.OPEN_PROJECT] = (panel:Panel, project:Project) {
+		drawPanelLabel(panel, "Open project") ; gotoNextRow(panel)
+		-- @Incomplete
+	},
+
+	[AuxPanel.CONFIRM_OVERWRITE_FILE] = (panel:Panel, project:Project) {scrollableSectionStart(panel, project.panelScroll)
+		drawPanelLabel(panel, "Overwrite file") ; gotoNextRow(panel)
+
+		do {
+			local pressed, i = drawPanelButtons(panel, "", "", confirmOverwriteFile_buttons, showLabels=false) ; gotoNextRow(panel)
+
+			if pressed == 1 {
+				popAuxPanel()
+				confirmOverwriteFile_cb(i)
+			}
+		}
+	},
+}
+
+local confirmOverwriteFile_buttons: []Button = NULL
+local confirmOverwriteFile_cb: (choice:int)  = NULL
+
 
 
 local showContextMenu :: (panel:Panel, items:[]string, cb:type_of(ContextMenu.callback)) {
@@ -1352,10 +1788,9 @@ local showContextMenu :: (panel:Panel, items:[]string, cb:type_of(ContextMenu.ca
 	for items  w = math.max(w, fontNormal.getWidth!(it))
 	w = math.max(w+2*CONTEXT_MENU_PADDING_X, CONTEXT_MENU_MIN_WIDTH)
 
-	local x, y  = love.mouse.getPosition()
-	y          += 2
+	local x = math.min(panel.mx, LG.getWidth() - w)
+	local y = panel.my + 2
 
-	x = math.min(x, LG.getWidth()-w)
 	if y+h > LG.getHeight()  y -= h+4
 
 	contextMenu = {
@@ -1385,18 +1820,20 @@ local isInsideContextMenu :: (x,y:int) -> bool {
 
 
 
+local isHoveringHelper :: (panel:Panel) -> bool|none {
+	if draggedPanelItem == panel.panelItem            return true
+	if draggedPanelItem > 0                           return false
+	if auxPanel ~= AuxPanel.NONE and not panel.isAux  return false
+	if panel.my < panel.ignoreMouseAboveY             return false
+	if isInsideContextMenu(panel.mx, panel.my)        return false
+	return nil
+}
 local isHoveringPanelItemRectangle :: (panel:Panel, x,y,w,h:int) -> bool {
-	if draggedPanelItem == panel.panelItem      return true
-	if draggedPanelItem > 0                     return false
-	if panel.my < panel.ignoreMouseAboveY       return false
-	if isInsideContextMenu(panel.mx, panel.my)  return false
+	local hovered = isHoveringHelper(panel) ; if hovered ~= nil  return cast(bool) hovered
 	return isInside(panel.mx, panel.myScrolled, x, y, w, h)
 }
 local isHoveringPanelItemCircle :: (panel:Panel, x,y,radius:int) -> bool {
-	if draggedPanelItem == panel.panelItem      return true
-	if draggedPanelItem > 0                     return false
-	if panel.my < panel.ignoreMouseAboveY       return false
-	if isInsideContextMenu(panel.mx, panel.my)  return false
+	local hovered = isHoveringHelper(panel) ; if hovered ~= nil  return cast(bool) hovered
 	return math.distance(panel.mx,panel.myScrolled, x,y) <= radius
 }
 
@@ -1435,15 +1872,57 @@ local gotoNextRow :: (panel:Panel) {
 	panel.baseY         = panel.maxPanelItemY
 	panel.x             = panel.baseX + panel.mainLabelWidth + PANEL_SPACING
 	panel.y             = panel.baseY + PANEL_SPACING
-	panel.maxPanelItemX = panel.mainLabelWidth
+	panel.maxPanelItemX = panel.baseX + panel.mainLabelWidth
 }
 
 
 
 export isInsidePanels :: (x,y:int) -> bool {
-	if x < MAIN_PANEL_WIDTH       return true
+	if x < PROJECT_PANEL_WIDTH    return true
+	if auxPanel ~= AuxPanel.NONE  return true
 	if isInsideContextMenu(x, y)  return true
 	return false
+}
+
+
+
+local isInsideAuxPanel :: (x,y:int) -> bool {
+	if auxPanel == AuxPanel.NONE  return false
+
+	local auxPanelX = (LG.getWidth()-AUX_PANEL_WIDTH)//2
+	return x >= auxPanelX and x < auxPanelX+AUX_PANEL_WIDTH
+}
+
+export pushAuxPanel :: (_auxPanel:AuxPanel) {
+	assert(_auxPanel ~= AuxPanel.NONE)
+
+	insert(auxPanelStack, auxPanel)
+
+	auxPanel             = _auxPanel
+	auxPanelData         = nil
+	auxPanelScroll       = 0
+	auxPanelScrollSource = 0
+	auxPanelScrollTarget = 0
+}
+
+export popAuxPanel :: () -> (success:bool) {
+	if auxPanel == AuxPanel.NONE  return false
+
+	blurFocus()
+
+	_, auxPanel = remove(auxPanelStack)
+	if auxPanel == NULL  auxPanel = AuxPanel.NONE
+
+	auxPanelData         = nil
+	auxPanelScroll       = 0
+	auxPanelScrollSource = 0
+	auxPanelScrollTarget = 0
+
+	return true
+}
+
+export isAuxPanelVisible :: () -> bool {
+	return auxPanel ~= AuxPanel.NONE
 }
 
 
@@ -1461,23 +1940,63 @@ export updatePanels :: (dt:float) {
 		project.panelScrollTarget,
 		math.abs(project.panelScrollTarget - project.panelScrollSource) * dt / 0.05
 	)
+	auxPanelScroll = math.moveTowards(
+		auxPanelScroll,
+		auxPanelScrollTarget,
+		math.abs(auxPanelScrollTarget - auxPanelScrollSource) * dt / 0.05
+	)
 
 	tooltipHoverTime = tooltipRendered ? tooltipHoverTime+dt : .0
 	tooltipOpacity   = math.clamp01((tooltipHoverTime-.30)/0.20)
 	tooltipRendered  = false
+
+	if hasFocus()  focus.field.update!(dt)
 }
 
-export scrollPanels :: (focusX,focusY:int, amount:int) {
-	if isInsideContextMenu(focusX, focusY)  return
+export scrollPanels :: (mx,my:int, amount:int) {
+	if isInsideContextMenu(mx, my)  return
 
-	if false {--isInsideAuxPanel {
-		-- auxPanelScrollSource = auxPanelScroll
-		-- auxPanelScrollTarget = math.min(auxPanelScrollTarget+50*amount, 0)
-	} else {
+	if isInsideAuxPanel(mx, my) {
+		auxPanelScrollSource = auxPanelScroll
+		auxPanelScrollTarget = math.min(auxPanelScrollTarget+50*amount, 0)
+
+	} elseif auxPanel == AuxPanel.NONE {
 		local project             = openProjects[currentProjectIndex]
 		project.panelScrollSource = project.panelScroll
 		project.panelScrollTarget = math.min(project.panelScrollTarget+50*amount, 0)
 	}
+}
+
+
+
+export hasFocus :: () -> bool {
+	return focusedPanelItem > 0
+}
+export hasFocus :: (panelItem:int) -> bool {
+	return focusedPanelItem == panelItem
+}
+
+local setFocus :: (panelItem:int, value:string, x,y,w,h:int, valueX:int) {
+	blurFocus()
+	focusedPanelItem = panelItem
+
+	focus = {
+		x          = x,
+		y          = y,
+		width      = w,
+		height     = h,
+		valueX     = valueX,
+		isPressing = true,
+		field      = InputField(value),
+	}
+
+	focus.field.setFont!(fontNormal)
+	focus.field.setWidth!(w)
+}
+
+export blurFocus :: () {
+	focus            = NULL
+	focusedPanelItem = 0
 }
 
 

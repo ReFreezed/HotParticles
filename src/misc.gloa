@@ -29,3 +29,34 @@ export getModifierKey :: () -> ModifierKey {
 export isInside :: (x,y:int, areaX,areaY,areaW,areaH:int) -> bool {
 	return x >= areaX and y >= areaY and x < areaX+areaW and y < areaY+areaH
 }
+
+export normalizeDirectoryPath :: (path:string) -> (path:string) {
+	path = replace(path, "\\", "/")
+
+	-- Note: Network paths or weird paths ("C:foo.png") are not supported.
+	local      ok, drive, root, dir =     matchPattern(path, "^(%a:)(/)(.*)")
+	if not ok  ok, drive, root, dir =     matchPattern(path, "^(~)(/)(.*)")
+	if not ok  drive, ok, root, dir = "", matchPattern(path, "^(/?)(.*)")
+
+	local segments: []string
+	for segment in eachPatternMatch(cast(string)dir, "[^/]+") {
+		insert(segments, cast(string)segment)
+	}
+	for #segments, 1, -1 {
+		if segments[it] == "."  remove(segments, it)
+	}
+
+	local i = 1
+	while segments[i] ~= NULL {
+		if segments[i+1] == ".." and segments[i] ~= ".." {
+			remove(segments, i+1)
+			remove(segments, i)
+			i = math.max(i-1, 1)
+		} else {
+			i = i+1
+		}
+	}
+
+	if segments[1] == NULL  segments[1] = "." -- Prevent an empty string or a trailing slash so it's easy to append stuff to the resulting path.
+	return cast(string)drive .. cast(string)root .. concatinate(segments, "/")
+}
