@@ -1,0 +1,1468 @@
+--[[============================================================
+--=
+--=  Retained-mode GUI
+--=
+--=-------------------------------------------------------------
+--=
+--=  Hot Particles - a particle editor for LÖVE
+--=  by Marcus 'ReFreezed' Thunström
+--=
+--==============================================================
+
+	State
+
+	Buttons, Radio, Tabs
+	Checkbox
+	Frame
+	Hbox, Vbox
+	InputText
+	Scrollable
+	Section
+	Slider, Color, ColorPreview
+	Direction
+	Text
+	Separator
+
+	draw
+	getElementAt, getWidgetAt
+	isInsideElement, isOverGui
+	onKeyPressed, onKeyReleased, onTextInput
+	onMousePressed, onMouseMoved, onMouseReleased, onMouseWheel
+	setActive
+
+--============================================================]]
+
+local DRAW_DEBUG_INFO :: 1==1
+
+local SPACING       :: 3
+local SPACING_LARGE :: 10
+
+local BUTTON_PADDING_Y :: 2
+
+local SCROLLABLE_PADDING   :: 5 -- Vertical.
+local SCROLLBAR_WIDTH      :: 8
+local SCROLLBAR_MIN_LENGTH :: 30
+
+local SECTION_LABEL_WIDTH :: 100
+
+local SLIDER_WIDTH        :: 12
+local SLIDER_MIN_LENGTH   :: 70
+local COLOR_PREVIEW_WIDTH :: 24
+
+local INPUT_MIN_WIDTH :: 50
+
+local CHECKBOX_SIZE :: 14 -- @Temp until we have an image.
+
+local DIRECTION_RADIUS :: 25
+
+local BUTTON_IMAGE_MAX_SIZE :: 20
+local SPECIAL_TAB_WIDTH     :: 32
+
+local HOVER_OUTLINE_OPACITY        :: .3
+local HOVER_OUTLINE_OPACITY_STRONG :: .5
+
+
+
+export State :: struct {
+	frames:      []Frame,
+	scrollables: []Scrollable,
+
+	elementsById:   struct { !key: int,    !value: Element },
+	elementsByName: struct { !key: string, !value: Element },
+
+	nextId       = 1,
+	hoveredId    = 0,
+	hoveredSubid = 0,
+	activeId     = 0,
+	activeSubid  = 0,
+
+	layoutNeedsUpdate = true,
+
+	extraScrollableSpace = 0,
+
+	onAction: struct { !key: string, !value: (widget:Widget, i:int) },
+
+	buttons      :: (state:State, el:Buttons)      -> type_of(el) { return cast(type_of(el)) register(state, el, type_of(el)) },
+	checkbox     :: (state:State, el:Checkbox)     -> type_of(el) { return cast(type_of(el)) register(state, el, type_of(el)) },
+	color        :: (state:State, el:Color)        -> type_of(el) { return cast(type_of(el)) register(state, el, type_of(el)) },
+	colorPreview :: (state:State, el:ColorPreview) -> type_of(el) { return cast(type_of(el)) register(state, el, type_of(el)) },
+	direction    :: (state:State, el:Direction)    -> type_of(el) { return cast(type_of(el)) register(state, el, type_of(el)) },
+	frame        :: (state:State, el:Frame)        -> type_of(el) { return cast(type_of(el)) register(state, el, type_of(el)) },
+	hbox         :: (state:State, el:Hbox)         -> type_of(el) { return cast(type_of(el)) register(state, el, type_of(el)) },
+	inputText    :: (state:State, el:InputText)    -> type_of(el) { return cast(type_of(el)) register(state, el, type_of(el)) },
+	radio        :: (state:State, el:Radio)        -> type_of(el) { return cast(type_of(el)) register(state, el, type_of(el)) },
+	scrollable   :: (state:State, el:Scrollable)   -> type_of(el) { return cast(type_of(el)) register(state, el, type_of(el)) },
+	section      :: (state:State, el:Section)      -> type_of(el) { return cast(type_of(el)) register(state, el, type_of(el)) },
+	separator    :: (state:State, el:Separator)    -> type_of(el) { return cast(type_of(el)) register(state, el, type_of(el)) },
+	slider       :: (state:State, el:Slider)       -> type_of(el) { return cast(type_of(el)) register(state, el, type_of(el)) },
+	tabs         :: (state:State, el:Tabs)         -> type_of(el) { return cast(type_of(el)) register(state, el, type_of(el)) },
+	text         :: (state:State, el:Text)         -> type_of(el) { return cast(type_of(el)) register(state, el, type_of(el)) },
+	vbox         :: (state:State, el:Vbox)         -> type_of(el) { return cast(type_of(el)) register(state, el, type_of(el)) },
+}
+
+local register :: (state:State, el:Element, T:Type) -> Element {
+	el.type = T
+	el.id   = state.nextId
+
+	state.elementsById[el.id] = el
+	if el.name  state.elementsByName[el.name] = el
+
+	if T == Scrollable  insert(state.scrollables, cast(Scrollable) el)
+
+	state.nextId += 1
+	return el
+}
+
+
+
+export Element :: struct {
+	active    = true,
+	name      = "",
+	label     = "",
+	labelLeft = "",
+	tooltip   = "",
+	weight    = 0,
+	inset     = 0,
+
+	type: Type = NULL,
+	id:   int  = NULL,
+
+	parent: Element = NULL,
+	!value: Element, -- Children.
+
+	layoutX: int,
+	layoutY: int,
+	layoutHeight: int,
+	layoutWidth:  int,
+}
+
+export Widget :: struct {
+	using Element,
+}
+
+
+
+export Layout :: enum { DOCKED, FLOATING }
+
+export Frame :: struct {
+	using Element,
+
+	layout = Layout.DOCKED,
+	width: int,
+}
+
+
+
+local Scrollable :: struct {
+	using Widget,
+
+	height = 0, -- Non-positive means distance from the bottom of the screen.
+
+	contentHeight: int,
+
+	scroll       = 0.0,
+	scrollSource = 0.0,
+	scrollTarget = 0,
+}
+
+local Section :: struct {
+	using Element,
+}
+
+local Box :: struct {
+	-- expandChildren = true,
+
+	using Element,
+}
+local Hbox :: struct {
+	using Box,
+}
+local Vbox :: struct {
+	using Box,
+}
+
+
+
+local Text :: struct {
+	using Element,
+
+	text = "",
+}
+
+local Separator :: struct {
+	using Element,
+
+	thick = false,
+}
+
+
+
+export Button :: struct {
+	label   = "",
+	image   = "",
+	tooltip = "",
+	value: any,
+}
+
+export Alignment :: enum { CENTER, LEFT, RIGHT }
+
+local Buttons :: struct {
+	using Widget,
+
+	buttons: []Button,
+	align = Alignment.CENTER,
+
+	buttonWidth: float, -- Round when necessary!
+}
+
+local Radio :: struct {
+	using Buttons,
+
+	index = 1,
+}
+
+local Tabs :: struct {
+	using Radio,
+
+	specialLastTab = false,
+	reorder        = false,
+}
+
+
+
+local Checkbox :: struct {
+	using Widget,
+
+	checked = false,
+}
+
+
+
+local Slider :: struct {
+	using Widget,
+
+	value = 0.0,
+	min   = 0.0,
+	max   = 1.0,
+	steps = 16,
+
+	readoutMulti = 1.0,
+	readout      = "",
+	readoutZero  = "",
+}
+
+local Color :: struct {
+	using Widget,
+
+	alpha = true,
+	color: []float = {0,0,1,1}, -- {r,g,b,a}
+}
+
+
+
+local ColorPreview :: struct {
+	using Widget,
+
+	linkColors: []string,
+}
+
+
+
+local Direction :: struct {
+	using Widget,
+
+	angle = 0.0,
+
+	linkOther  = "",
+	linkSpread = "",
+}
+
+
+
+local InputText :: struct {
+	using Widget,
+
+	value = "",
+
+	inputField: InputField = NULL,
+}
+
+
+
+export onKeyPressed :: (state:State, key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool) -> (handled:bool) {
+	if state.activeId and (key == "lctrl" or key == "rctrl" or key == "lshift" or key == "rshift" or key == "lalt" or key == "ralt") {
+		local mx, my = LM.getPosition()
+		onMouseMoved(state, mx, my, 0, 0, false)
+	}
+	return false
+}
+
+export onKeyReleased :: (state:State, key:LK.KeyConstant, scancode:LK.Scancode) {
+	if state.activeId and (key == "lctrl" or key == "rctrl" or key == "lshift" or key == "rshift" or key == "lalt" or key == "ralt") {
+		local mx, my = LM.getPosition()
+		onMouseMoved(state, mx, my, 0, 0, false)
+	}
+}
+
+export onTextInput :: (state:State, text:string) -> (handled:bool) {
+	return false
+}
+
+export onMousePressed :: (state:State, mx,my:int, mbutton:int, isTouch:bool, presses:int) -> (handled:bool) {
+	updateLayoutIfNeeded(state)
+
+	for state.frames  if isInsideElement(state, mx, my, it) {
+		if mbutton == 1 and state.hoveredId {
+			state.activeId    = state.hoveredId
+			state.activeSubid = state.hoveredSubid
+			LM.setGrabbed(true)
+			onMouseMoved(state, mx, my, 0, 0, isTouch)
+		}
+		return true
+	}
+
+	return state.activeId > 0
+}
+
+export onMouseMoved :: (state:State, mx,my:int, dx,dy:int, isTouch:bool) {
+	updateLayoutIfNeeded(state)
+
+	local found, widget = getWidgetAt(state, mx, my)
+
+	state.hoveredId    = 0
+	state.hoveredSubid = 0
+
+	if found {
+		if not state.activeId or widget.id == state.activeId {
+			state.hoveredId = widget.id
+		}
+
+		local hoveredSubid = 0
+
+		if state.hoveredId  if widget.type == {
+			case Tabs:  !through
+			case Radio: !through
+			case Buttons:
+				local buttons = cast(Buttons) widget
+				hoveredSubid  = math.clamp(math.floor(1+(mx-buttons.layoutX)/buttons.buttonWidth), 1, #buttons.buttons)
+
+			case Color:
+				local colorEl = cast(Color) widget
+				local iFloat  = 1 + (my - (colorEl.layoutY + getScrollOffset(colorEl))) / SLIDER_WIDTH
+				hoveredSubid  = math.clamp(math.floor(iFloat), 1, (colorEl.alpha ? 4 : 3))
+		}
+
+		if not state.activeId or hoveredSubid == state.activeSubid {
+			state.hoveredSubid = hoveredSubid
+		} else {
+			state.hoveredId = 0
+		}
+	}
+
+	widget = cast(Widget) state.elementsById[state.activeId]
+
+	if widget ~= NULL  if widget.type == {
+		case Slider:
+			local slider = cast(Slider) widget
+			local x1     = slider.layoutX +                      SLIDER_WIDTH // 2
+			local x2     = slider.layoutX + slider.layoutWidth - SLIDER_WIDTH // 2
+			local value  = (mx-x1) / (x2-x1)
+
+			if getModifierKey() == ModifierKey.C {
+				value = math.round(value * slider.steps) / slider.steps
+			}
+
+			value = math.lerp(slider.min, slider.max, math.clamp01(value))
+
+			if value ~= slider.value {
+				slider.value = value
+				if state.onAction[slider.name] ~= NULL  state.onAction[slider.name](slider, 0)
+			}
+
+		case Color:
+			local colorEl   = cast(Color) widget
+			local component = state.activeSubid
+			local value     = (mx-colorEl.layoutX) / colorEl.layoutWidth
+
+			if getModifierKey() == ModifierKey.C {
+				local steps = component == 1 ? 24 : 16
+				value       = math.round(value*steps)/steps
+			}
+
+			value = math.clamp01(value)
+
+			if value ~= colorEl.color[component] {
+				colorEl.color[component] = value
+				if state.onAction[colorEl.name] ~= NULL  state.onAction[colorEl.name](colorEl, component)
+			}
+
+		case Direction:
+			local r :: DIRECTION_RADIUS
+			local direction = cast(Direction) widget
+			local angle     = math.atan(my - (direction.layoutY + getScrollOffset(direction) + r), mx - (direction.layoutX + r))
+
+			if getModifierKey() == ModifierKey.C  angle = math.round(angle * 16/math.TAU) / 16*math.TAU
+
+			if angle ~= direction.angle {
+				direction.angle = angle
+				if state.onAction[direction.name] ~= NULL  state.onAction[direction.name](direction, 0)
+			}
+
+		case Scrollable:
+			local scrollable = cast(Scrollable) widget
+			local handlePos, handleLen, handlePosMax = getScrollbarHandle(scrollable, visual=false)
+
+			local visibleH = scrollable.layoutHeight
+			local paddedH  = visibleH - 2*SPACING
+
+			-- @Polish: Don't snap the handle to the mouse if pressing on the handle.
+			scrollable.scrollTarget = -math.round((my-handlePosMax/2-scrollable.layoutY) / (visibleH-handlePosMax) * paddedH)
+			limitScrollTarget(scrollable)
+			scrollable.scroll = scrollable.scrollTarget
+	}
+}
+
+export onMouseReleased :: (state:State, mx,my:int, mbutton:int, isTouch:bool, presses:int) {
+	if mbutton == 1 and state.activeId {
+		if state.hoveredId {
+			local widget = cast(Widget) state.elementsById[state.activeId]
+
+			if widget ~= NULL  if widget.type == {
+				case Buttons:
+					local buttons = cast(Buttons) widget
+					if state.onAction[buttons.name] ~= NULL  state.onAction[buttons.name](buttons, state.activeSubid)
+
+				case Radio:
+					local radio = cast(Radio) widget
+
+					if radio.index ~= state.hoveredSubid {
+						radio.index = state.hoveredSubid
+						if state.onAction[radio.name] ~= NULL  state.onAction[radio.name](radio, state.activeSubid)
+					}
+
+				case Tabs:
+					local tabs = cast(Tabs) widget
+
+					if tabs.specialLastTab and state.hoveredSubid == #tabs.buttons {
+						if state.onAction[tabs.name] ~= NULL  state.onAction[tabs.name](tabs, state.activeSubid)
+					} elseif tabs.index ~= state.hoveredSubid {
+						tabs.index = state.hoveredSubid
+						if state.onAction[tabs.name] ~= NULL  state.onAction[tabs.name](tabs, state.activeSubid)
+					}
+
+				case Checkbox:
+					local checkbox   = cast(Checkbox) widget
+					checkbox.checked = not checkbox.checked
+
+					if state.onAction[checkbox.name] ~= NULL  state.onAction[checkbox.name](checkbox, 0)
+			}
+		}
+
+		state.activeId    = 0
+		state.activeSubid = 0
+		LM.setGrabbed(false)
+		onMouseMoved(state, mx, my, 0, 0, isTouch)
+	}
+}
+
+export onMouseWheel :: (state:State, dx,dy:int) -> (handled:bool) {
+	if state.activeId  return true
+
+	updateLayoutIfNeeded(state)
+
+	local mx, my = LM.getPosition()
+
+	local found, el = getElementAt(state, mx, my)
+	while not (el == NULL or el.type == Scrollable) {
+		el = el.parent
+	}
+
+	if el ~= NULL {
+		local scrollable        = cast(Scrollable) el
+		scrollable.scrollSource = scrollable.scroll
+		scrollable.scrollTarget = scrollable.scrollTarget + 50*dy
+		limitScrollTarget(scrollable)
+		return true
+	}
+
+	return false
+}
+
+
+
+local calculateNaturalSize :: (state:State, el:Element) {
+	for el  if it.active {
+		it.parent = el -- Eh, no other better place to do this really.
+		calculateNaturalSize(state, it)
+	}
+
+	if el.type == {
+		case Frame:
+			local frame    = cast(Frame) el
+			local contentW = 0
+			local contentH = 0
+
+			for frame  if it.active {
+				contentW  = math.max(contentW, it.layoutWidth)
+				contentH += it.layoutHeight + SPACING
+			}
+
+			frame.layoutWidth  = frame.width ?: contentW + 2*SPACING
+			frame.layoutHeight = contentH + SPACING
+
+		case Scrollable:
+			local scrollable = cast(Scrollable) el
+			local contentH   = 0
+
+			for scrollable  if it.active {
+				contentH += it.layoutHeight + SPACING
+			}
+
+			scrollable.layoutWidth   = SCROLLBAR_WIDTH
+			scrollable.contentHeight = contentH - SPACING + 2*SCROLLABLE_PADDING
+
+			if scrollable.height > 0 {
+				scrollable.layoutHeight = scrollable.height
+			} else {
+				scrollable.layoutHeight     = math.max(state.extraScrollableSpace + scrollable.height, 0)
+				state.extraScrollableSpace -= scrollable.layoutHeight
+			}
+
+		case Section:
+			local section  = cast(Section) el
+			local contentW = 0
+			local contentH = 0
+
+			for section  if it.active {
+				contentW  = math.max(contentW, it.layoutWidth)
+				contentH += it.layoutHeight + SPACING
+			}
+
+			section.layoutWidth  = SECTION_LABEL_WIDTH + contentW
+			section.layoutHeight = contentH - SPACING
+
+		case Hbox:
+			local hbox     = cast(Hbox) el
+			local contentW = 0
+			local contentH = 0
+
+			for hbox  if it.active {
+				contentW += it.layoutWidth + SPACING
+				contentH  = math.max(contentH, it.layoutHeight)
+			}
+
+			hbox.layoutWidth  = contentW - SPACING
+			hbox.layoutHeight = contentH
+
+		case Vbox:
+			local vbox     = cast(Vbox) el
+			local contentW = 0
+			local contentH = 0
+
+			for vbox  if it.active {
+				contentW  = math.max(contentW, it.layoutWidth)
+				contentH += it.layoutHeight + SPACING
+			}
+
+			vbox.layoutWidth  = contentW
+			vbox.layoutHeight = contentH - SPACING
+
+		case Text:
+			local textEl        = cast(Text) el
+			textEl.layoutWidth  = fontNormal.getWidth!(textEl.text)
+			textEl.layoutHeight = fontNormal.getHeight!()
+
+		case Separator:
+			local separator        = cast(Separator) el
+			separator.layoutWidth  = 0
+			separator.layoutHeight = separator.thick ? 5 : 1
+
+		case Tabs:  !through
+		case Radio: !through
+		case Buttons:
+			local buttons    = cast(Buttons) el
+			local buttonMaxW = 0
+			local contentH   = 0
+
+			for buttons.buttons {
+				local w: int = NULL
+				local h: int = NULL
+
+				if it.label and it.image {
+					w = BUTTON_IMAGE_MAX_SIZE + SPACING + fontNormal.getWidth!(it.label)
+					h = math.max(BUTTON_IMAGE_MAX_SIZE, fontNormal.getHeight!())
+				} elseif it.image {
+					w = BUTTON_IMAGE_MAX_SIZE
+					h = BUTTON_IMAGE_MAX_SIZE
+				} else {
+					w = fontNormal.getWidth!(it.label)
+					h = fontNormal.getHeight!()
+				}
+
+				buttonMaxW = math.max(buttonMaxW, w)
+				contentH   = math.max(contentH,   h)
+			}
+
+			buttons.layoutWidth  = #buttons.buttons * (buttonMaxW + 2*SPACING)
+			buttons.layoutHeight = contentH + BUTTON_PADDING_Y * 2
+
+		case Checkbox:
+			local checkbox        = cast(Checkbox) el
+			checkbox.layoutWidth  = CHECKBOX_SIZE + SPACING + fontSmall.getWidth!(checkbox.label) + SPACING_LARGE
+			checkbox.layoutHeight = math.max(CHECKBOX_SIZE, fontSmall.getHeight!())
+
+		case InputText:
+			local input = cast(InputText) el
+			input.layoutWidth  = INPUT_MIN_WIDTH
+			input.layoutHeight = fontNormal.getHeight!() + 2*SPACING
+
+		case Slider:
+			local slider        = cast(Slider) el
+			slider.layoutWidth  = SLIDER_MIN_LENGTH
+			slider.layoutHeight = SLIDER_WIDTH
+
+		case Color:
+			local colorEl        = cast(Color) el
+			colorEl.layoutWidth  = SLIDER_MIN_LENGTH
+			colorEl.layoutHeight = (colorEl.alpha ? 4 : 3) * SLIDER_WIDTH
+
+		case ColorPreview:
+			local preview        = cast(ColorPreview) el
+			preview.layoutWidth  = COLOR_PREVIEW_WIDTH
+			preview.layoutHeight = 0
+
+		case Direction:
+			local direction        = cast(Direction) el
+			direction.layoutWidth  = 2*DIRECTION_RADIUS
+			direction.layoutHeight = 2*DIRECTION_RADIUS
+
+		case: errorf("%d", el.type)
+	}
+
+	el.layoutWidth += el.inset
+}
+
+local positionAndFit :: (state:State, el:Element, x,y,w,h:int) {
+	local positionAndFitChildrenV :: (state:State, el:Element, x,y,w,h:int) {
+		for el  if it.active {
+			positionAndFit(state, it, x, y, w, it.layoutHeight)
+			y += it.layoutHeight + SPACING
+		}
+	}
+	local positionAndFitChildrenH :: (state:State, el:Element, x,y,w,h:int) {
+		for el  if it.active {
+			positionAndFit(state, it, x, y, it.layoutWidth, h)
+			x += it.layoutWidth + SPACING
+		}
+	}
+
+	x += el.inset
+	w -= el.inset
+
+	el.layoutX      = x
+	el.layoutY      = y
+	el.layoutWidth  = w
+	el.layoutHeight = h
+
+	if el.type == {
+		case Frame:
+			local frame = cast(Frame) el
+
+			if !complete frame.layout == {
+				case Layout.DOCKED:
+					x = 0
+					y = 0
+				case Layout.FLOATING:
+					x = (LG.getWidth()  - w) // 2
+					y = (LG.getHeight() - h) // 2
+			}
+
+			frame.layoutX = x
+			frame.layoutY = y
+
+			x += SPACING
+			y += SPACING
+			w -= 2*SPACING
+
+			positionAndFitChildrenV(state, frame, x, y, w, h)
+
+		case Scrollable:
+			local scrollable = cast(Scrollable) el
+
+			y += SPACING + SCROLLABLE_PADDING
+			w -= SCROLLBAR_WIDTH + SPACING
+
+			positionAndFitChildrenV(state, scrollable, x, y, w, h)
+
+		case Section:
+			local section = cast(Section) el
+
+			x += SECTION_LABEL_WIDTH
+			w -= SECTION_LABEL_WIDTH
+
+			positionAndFitChildrenV(state, section, x, y, w, h)
+
+		case Hbox:
+			local hbox         = cast(Hbox) el
+			local dynamicSpace = w
+			local weight       = 0
+			local activeCount  = 0
+
+			for hbox  if it.active {
+				activeCount += 1
+				if it.weight
+					weight += it.weight
+				else
+					dynamicSpace -= it.layoutWidth
+			}
+
+			if weight {
+				dynamicSpace -= (activeCount-1) * SPACING
+
+				for hbox  if it.active and it.weight {
+					it.layoutWidth  = math.round(dynamicSpace * it.weight / weight)
+					dynamicSpace   -= it.layoutWidth
+					weight         -= it.weight
+				}
+			}
+
+			positionAndFitChildrenH(state, hbox, x, y, w, h)
+
+		case Vbox:
+			local vbox         = cast(Vbox) el
+			local dynamicSpace = h
+			local weight       = 0
+			local activeCount  = 0
+
+			for vbox  if it.active {
+				activeCount += 1
+				if it.weight
+					weight += it.weight
+				else
+					dynamicSpace -= it.layoutHeight
+			}
+
+			if weight {
+				dynamicSpace -= (activeCount-1) * SPACING
+
+				for vbox  if it.active and it.weight {
+					it.layoutHeight  = math.round(dynamicSpace * it.weight / weight)
+					dynamicSpace    -= it.layoutHeight
+					weight          -= it.weight
+				}
+			}
+
+			positionAndFitChildrenV(state, vbox, x, y, w, h)
+
+		case Radio: !through
+		case Buttons:
+			local buttons       = cast(Buttons) el
+			buttons.buttonWidth = w / #buttons.buttons
+
+		case Tabs:
+			local tabs = cast(Tabs) el
+			tabs.buttonWidth
+				= tabs.specialLastTab
+				? (w-SPECIAL_TAB_WIDTH) / (#tabs.buttons-1)
+				: (w                  ) / (#tabs.buttons  )
+	}
+}
+
+local updateLayoutIfNeeded :: (state:State) {
+	if not state.layoutNeedsUpdate  return
+	state.layoutNeedsUpdate = false
+
+	-- print("Updating layout.")
+
+	for state.frames  if it.active {
+		state.extraScrollableSpace = 0
+		calculateNaturalSize(state, it)
+
+		-- We need to do calculateNaturalSize() twice to know how much scrollables can expand the frame.
+		-- Note: If there are multiple scrollables with height<=0 then things may or may not work as expected!
+		state.extraScrollableSpace = LG.getHeight() - (it.layoutY + it.layoutHeight) -- layoutNeedsUpdate better be set if the window resizes!
+		calculateNaturalSize(state, it)
+
+		positionAndFit(state, it, 0, 0, it.layoutWidth, it.layoutHeight)
+	}
+
+	for state.scrollables  limitScrollTarget(it)
+}
+
+
+
+local update :: (state:State, dt:float) {
+	local anyScrolling = false
+
+	for state.scrollables {
+		local targetReached: bool = NULL
+
+		it.scroll, targetReached = math.moveTowards(
+			it.scroll,
+			it.scrollTarget,
+			math.abs(it.scrollTarget - it.scrollSource) * dt / 0.05
+		)
+		if not targetReached  anyScrolling = true
+	}
+
+	if anyScrolling {
+		local mx, my = LM.getPosition()
+		onMouseMoved(state, mx, my, 0, 0, false)
+	}
+}
+
+
+
+local drawElement :: (state:State, el:Element) {
+	local drawChildren :: (state:State, el:Element) {
+		for el {
+			if it.active  drawElement(state, it)
+		}
+	}
+
+	if el.labelLeft {
+		LG.setFont(fontSmall)
+		LG.setColor(1, 1, 1)
+		LG.print(
+			el.labelLeft,
+			el.layoutX - SPACING - fontSmall.getWidth!(el.labelLeft),
+			el.layoutY + (el.layoutHeight - fontSmall.getHeight!()) // 2
+		)
+		LG.setFont(fontNormal)
+	}
+
+	if el.type == {
+		case Frame:
+			local frame = cast(Frame) el
+
+			if frame.layout == Layout.FLOATING {
+				LG.setColor(0, 0, 0, .4)
+				LG.rectangle(LG.DrawMode.FILL, frame.layoutX-10, frame.layoutY-10, frame.layoutWidth+20, frame.layoutHeight+20)
+			}
+
+			LG.setColor(.2, .2, .2)
+			LG.rectangle(LG.DrawMode.FILL, frame.layoutX, frame.layoutY, frame.layoutWidth, frame.layoutHeight)
+
+			LG.pushAll()
+			LG.intersectScissor(frame.layoutX, frame.layoutY, frame.layoutWidth, frame.layoutHeight)
+			drawChildren(state, frame)
+			LG.pop()
+
+		case Scrollable:
+			local scrollable = cast(Scrollable) el
+
+			LG.pushAll()
+			LG.translate(0, scrollable.scroll)
+			LG.intersectScissor(scrollable.layoutX-SPACING, scrollable.layoutY, scrollable.layoutWidth+SPACING, scrollable.layoutHeight)
+			drawChildren(state, scrollable)
+			LG.pop()
+
+			-- Shadow.
+			do {
+				local h      = scrollable.scroll ? 30 : 10
+				local iw, ih = imageGradient.getDimensions!()
+				local sx     = h / ih
+				local sy     = (scrollable.layoutWidth + SPACING - SCROLLBAR_WIDTH) / iw
+
+				LG.setColor(0, 0, 0, (scrollable.scroll ? 1 : .3))
+				LG.draw(imageGradient, scrollable.layoutX-SPACING, scrollable.layoutY+h, -math.TAU/4, sx, sy)
+			}
+
+			-- Scrollbar.
+			do {
+				local handlePos, handleLen, handlePosMax = getScrollbarHandle(scrollable, visual=true)
+
+				local x = scrollable.layoutX + scrollable.layoutWidth - SCROLLBAR_WIDTH
+				local y = scrollable.layoutY + handlePos
+
+				LG.setColor(0, 0, 0, .3)
+				LG.rectangle(LG.DrawMode.FILL, x, scrollable.layoutY, SCROLLBAR_WIDTH, scrollable.layoutHeight)
+
+				if scrollable.id == state.activeId
+					LG.setColor(1, 1, 1, .30)
+				elseif scrollable.id == state.hoveredId
+					LG.setColor(1, 1, 1, .45)
+				else
+					LG.setColor(1, 1, 1, .15)
+
+				LG.rectangle(LG.DrawMode.FILL, x+1, y+1, SCROLLBAR_WIDTH-2, handleLen-2, SCROLLBAR_WIDTH//2-1)
+			}
+
+		case Section:
+			local section = cast(Section) el
+
+			if section.label {
+				LG.setColor(1, 1, 1)
+				LG.print(section.label, section.layoutX, section.layoutY)
+			}
+
+			drawChildren(state, section)
+
+		case Hbox:
+			local hbox = cast(Hbox) el
+			drawChildren(state, hbox)
+
+		case Vbox:
+			local vbox = cast(Vbox) el
+			drawChildren(state, vbox)
+
+		case Text:
+			local textEl = cast(Text) el
+			LG.setColor(1, 1, 1)
+			LG.print(textEl.text, textEl.layoutX, textEl.layoutY)
+
+		case Separator:
+			local separator = cast(Separator) el
+			LG.setColor(0, 0, 0, (separator.thick ? .3 : .2))
+			LG.rectangle(LG.DrawMode.FILL, separator.layoutX-SPACING, separator.layoutY, separator.layoutWidth+2*SPACING, separator.layoutHeight)
+
+		case Tabs:  !through
+		case Radio: !through
+		case Buttons:
+			local buttons = cast(Buttons) el
+			local radio   = cast(Radio)   el
+			local tabs    = cast(Tabs)    el
+
+			local isRadio = el.type == Radio
+			local isTabs  = el.type == Tabs
+
+			local x = buttons.layoutX
+			local y = buttons.layoutY
+			local w = buttons.layoutWidth
+			local h = buttons.layoutHeight
+
+			local padding = isTabs ? 8 : SPACING
+
+			local bx1:   []int : {}
+			local bx2:   []int : {}
+			local bw:    []int : {}
+			local faded: []bool : {}
+
+			-- Backgrounds.
+			for buttons.buttons {
+				bx1[itIndex]   = math.round(x + buttons.buttonWidth*(itIndex-1))
+				bx2[itIndex]   = math.round(x + buttons.buttonWidth*(itIndex  ))
+				bx2[itIndex]   = math.min(bx2[itIndex], x + w)
+				bw[itIndex]    = bx2[itIndex] - bx1[itIndex]
+				faded[itIndex] = false
+
+				if not (buttons.id == state.hoveredId and itIndex == state.hoveredSubid) {
+					faded[itIndex] = (isRadio or isTabs) and radio.index ~= itIndex
+					if faded[itIndex]
+						LG.setColor(1, 1, 1, .1)
+					else
+						LG.setColor(1, 1, 1, .3)
+				} elseif not (buttons.id == state.activeId and itIndex == state.activeSubid) {
+					LG.setColor(1, 1, 1, .45)
+				} else {
+					LG.setColor(0, 0, 0, .5)
+				}
+
+				if isTabs {
+					local topInset = math.min(.6*h, bw[itIndex]/4)
+					LG.polygon(LG.DrawMode.FILL, bx1[itIndex],y+h, bx1[itIndex]+topInset,y, bx2[itIndex]-topInset,y, bx2[itIndex],y+h)
+				} else {
+					LG.rectangle(LG.DrawMode.FILL, bx1[itIndex]+1, y+1, bw[itIndex]-2, h-2, 3)
+				}
+			}
+
+			-- Images.
+			LG.setColor(1, 1, 1)
+
+			for buttons.buttons  if it.image {
+				local image  = particleImages[it.image]
+				local iw, ih = image.getDimensions!()
+				local sx     = BUTTON_IMAGE_MAX_SIZE / iw
+				local sy     = BUTTON_IMAGE_MAX_SIZE / ih
+
+				if it.label
+					LG.draw(image, bx1[itIndex]+padding, y+BUTTON_PADDING_Y, 0, sx, sy)
+				else
+					LG.draw(image, bx1[itIndex] + (bw[itIndex]-BUTTON_IMAGE_MAX_SIZE)//2, y+BUTTON_PADDING_Y, 0, sx, sy)
+			}
+
+			-- Labels.
+			for buttons.buttons  if it.label {
+				local scissorX1 = bx1[itIndex] + (padding-1)
+				local scissorX2 = bx2[itIndex] - (padding-1)
+
+				if scissorX2 > scissorX1 {
+					local textY = y + (h - fontNormal.getHeight!()) // 2
+					local textX: int = NULL
+
+					if it.image {
+						textX = bx1[itIndex] + padding + BUTTON_IMAGE_MAX_SIZE + SPACING
+					} else {
+						using Alignment
+						if buttons.align == {
+							case LEFT:   textX = bx1[itIndex] + padding
+							case RIGHT:  textX = bx1[itIndex] + math.max(math.round(bw[itIndex] - padding - fontNormal.getWidth!(it.label)), padding)
+							case CENTER: textX = bx1[itIndex] + math.max((bw[itIndex] - fontNormal.getWidth!(it.label)) // 2,                padding)
+						}
+					}
+
+					if faded[itIndex]
+						LG.setColor(1, 1, 1, .8)
+					else
+						LG.setColor(1, 1, 1)
+
+					LG.pushAll()
+					LG.intersectScissor(scissorX1, 0, scissorX2-scissorX1, LG.getHeight())
+					LG.print(it.label, textX, textY)
+					LG.pop()
+				}
+			}
+
+		case Checkbox:
+			local checkbox = cast(Checkbox) el
+			local y        = checkbox.layoutY + checkbox.layoutHeight // 2
+
+			if checkbox.id ~= state.hoveredId {
+				if checkbox.checked
+					LG.setColor(1, 1, 1, .35)
+				else
+					LG.setColor(1, 1, 1, .25)
+			} elseif checkbox.id ~= state.activeId {
+				LG.setColor(1, 1, 1, .55)
+			} else {
+				LG.setColor(1, 1, 1, .45)
+			}
+
+			if checkbox.checked {
+				LG.rectangle(LG.DrawMode.LINE, checkbox.layoutX+.5, y-CHECKBOX_SIZE//2+.5, CHECKBOX_SIZE-1, CHECKBOX_SIZE-1)
+				LG.rectangle(LG.DrawMode.FILL, checkbox.layoutX+2,  y-CHECKBOX_SIZE//2+2,  CHECKBOX_SIZE-4, CHECKBOX_SIZE-4)
+			} else {
+				LG.rectangle(LG.DrawMode.LINE, checkbox.layoutX+.5, y-CHECKBOX_SIZE//2+.5, CHECKBOX_SIZE-1, CHECKBOX_SIZE-1)
+			}
+
+			LG.setFont(fontSmall)
+			LG.setColor(1, 1, 1)
+			LG.print(checkbox.label, checkbox.layoutX+CHECKBOX_SIZE+SPACING, y-fontSmall.getHeight!()//2)
+			LG.setFont(fontNormal)
+
+		case InputText:
+			-- @Incomplete
+			local input = cast(InputText) el
+
+		case Slider:
+			local slider  = cast(Slider) el
+			local x1      = slider.layoutX +                      SLIDER_WIDTH // 2
+			local x2      = slider.layoutX + slider.layoutWidth - SLIDER_WIDTH // 2
+			local w       = x2-x1
+			local value01 = (slider.value-slider.min) / (slider.max-slider.min)
+			local handleX = x1 + math.round(value01 * w)
+			local y       = slider.layoutY + slider.layoutHeight // 2
+
+			local highlight = (slider.id == state.activeId or slider.id == state.hoveredId)
+
+			-- Line/background.
+			LG.setColor(1, 1, 1, (highlight ? .2 : .1))
+			LG.rectangle(LG.DrawMode.FILL, x1, y-1, w, 2)
+
+			-- Guides.
+			LG.setColor(1, 1, 1, .1)
+			LG.rectangle(LG.DrawMode.FILL, x1, y-3, +1, 6)
+			LG.rectangle(LG.DrawMode.FILL, x2, y-3, -1, 6)
+			if w >= 50 {
+				LG.rectangle(LG.DrawMode.FILL, math.round(x1+1/4*w), y-3, 1, 6)
+				LG.rectangle(LG.DrawMode.FILL, math.round(x1+2/4*w), y-3, 1, 6)
+				LG.rectangle(LG.DrawMode.FILL, math.round(x1+3/4*w), y-3, 1, 6)
+				if w >= 200 {
+					LG.rectangle(LG.DrawMode.FILL, math.round(x1+1/8*w), y-1, 1, 2)
+					LG.rectangle(LG.DrawMode.FILL, math.round(x1+3/8*w), y-1, 1, 2)
+					LG.rectangle(LG.DrawMode.FILL, math.round(x1+5/8*w), y-1, 1, 2)
+					LG.rectangle(LG.DrawMode.FILL, math.round(x1+7/8*w), y-1, 1, 2)
+				}
+			}
+
+			-- Handle.
+			local grey = (highlight ? .8 : .65)
+			LG.setColor(grey, grey, grey)
+			LG.rectangle(LG.DrawMode.FILL, handleX-1, y-SLIDER_WIDTH/2, 2, SLIDER_WIDTH)
+			-- LG.circle(LG.DrawMode.FILL, handleX, y, 3, 16)
+
+			-- Readout.
+			if showPanelNumbers {
+				local formatString = slider.readout
+				if slider.value == 0 and slider.readoutZero  formatString = slider.readoutZero
+
+				if formatString {
+					local text  = format(formatString, slider.value * slider.readoutMulti)
+					local textX = x2-SPACING-fontSmall.getWidth!(text)
+
+					if textX < handleX+5  textX = x1+SPACING
+
+					LG.setFont(fontSmall)
+					LG.setColor(0, 0, 0, .5)
+					LG.print(text, textX+1, y-fontSmall.getHeight!()//2+1)
+					LG.setColor(1, 1, 1, .8)
+					LG.print(text, textX, y-fontSmall.getHeight!()//2)
+					LG.setFont(fontNormal)
+				}
+			}
+
+		case Color:
+			local drawSliderValue :: (sliderX,sliderY:float, sliderW,sliderH:float, value:float, readout:float, readoutFormat:string, highlight:bool) {
+				-- @Incomplete: Make this more like the new sliders.
+				local a = (highlight ? .9 : .7)
+
+				if showPanelNumbers and readoutFormat {
+					local text = format(readoutFormat, readout)
+					local x    = math.round(sliderX+(sliderW-fontSmall.getWidth!(text))/2)
+					local y    = math.round(sliderY+(sliderH-fontSmall.getHeight!())/2)
+
+					LG.setFont(fontSmall)
+
+					LG.setColor(0, 0, 0)
+					LG.print(text, x+1, y+1)
+
+					LG.setColor(1, 1, 1)
+					LG.print(text, x, y)
+
+					LG.setFont(fontNormal)
+				}
+
+				do {
+					local x = math.round(sliderX + value*(sliderW-4))
+
+					LG.setColor(0, 0, 0, a)
+					LG.rectangle(LG.DrawMode.FILL, x, sliderY, 4, sliderH)
+
+					LG.setColor(1, 1, 1, a)
+					LG.rectangle(LG.DrawMode.FILL, x+1, sliderY, 2, sliderH)
+				}
+			}
+
+			local colorEl    = cast(Color) el
+			local components = (colorEl.alpha ? 3 : 4)
+			local x          = colorEl.layoutX
+			local y          = colorEl.layoutY
+			local w          = colorEl.layoutWidth
+
+			local hue        = colorEl.color[1]
+			local saturation = colorEl.color[2]
+			local value      = colorEl.color[3]
+			local a          = colorEl.color[4]
+
+			local highlight  = (colorEl.id == state.activeId or colorEl.id == state.hoveredId) ? math.max(state.activeSubid, state.hoveredSubid) : 0
+
+			local iw, ih     = imageGradient.getDimensions!()
+			local gradientSx = w/iw
+			local gradientSy = SLIDER_WIDTH/ih
+
+			iw, ih           = imageRainbow.getDimensions!()
+			local rainbowSx  = w/iw
+			local rainbowSy  = SLIDER_WIDTH/ih
+
+			local componentY = y
+
+			LG.setColor(1, 1, 1)
+			LG.draw(imageRainbow, x, componentY, 0, rainbowSx, rainbowSy)
+			drawSliderValue(x, componentY, w, SLIDER_WIDTH, hue, hue*360, "%d°", (highlight == 1))
+			componentY += SLIDER_WIDTH
+
+			local r2, g2, b2 = hsvToRgb(hue, 1, 1)
+			LG.setColor(.5, .5, .5)
+			LG.rectangle(LG.DrawMode.FILL, x, componentY, w, SLIDER_WIDTH)
+			LG.setColor(r2, g2, b2)
+			LG.draw(imageGradient, x, componentY, 0, gradientSx, gradientSy)
+			drawSliderValue(x, componentY, w, SLIDER_WIDTH, saturation, saturation*100, "%d%%", (highlight == 2))
+			componentY += SLIDER_WIDTH
+
+			r2, g2, b2 = hsvToRgb(hue, saturation, 1)
+			LG.setColor(0, 0, 0)
+			LG.rectangle(LG.DrawMode.FILL, x, componentY, w, SLIDER_WIDTH)
+			LG.setColor(r2, g2, b2)
+			LG.draw(imageGradient, x, componentY, 0, gradientSx, gradientSy)
+			drawSliderValue(x, componentY, w, SLIDER_WIDTH, value, value*100, "%d%%", (highlight == 3))
+			componentY += SLIDER_WIDTH
+
+			if colorEl.alpha {
+				local r, g, b = hsvToRgb(hue, saturation, value)
+				drawCheckerBox(x, componentY, w, SLIDER_WIDTH)
+				LG.setColor(r, g, b)
+				LG.draw(imageGradient, x, componentY, 0, gradientSx, gradientSy)
+				drawSliderValue(x, componentY, w, SLIDER_WIDTH, a, a*100, "%d%%", (highlight == 4))
+			}
+
+			if highlight {
+				LG.setColor(1, 1, 1, HOVER_OUTLINE_OPACITY_STRONG)
+				LG.rectangle(LG.DrawMode.LINE, x-.5, y+(math.max(state.hoveredSubid, state.activeSubid)-1)*SLIDER_WIDTH-.5, w+1, SLIDER_WIDTH+1)
+			}
+
+		case ColorPreview:
+			local preview = cast(ColorPreview) el
+
+			static shader: LG.Shader = NULL
+			if shader == NULL  shader = LG.newShader("src/particleColorPreview.glsl")
+
+			-- The shader only supports 8 colors, but we can change that if necessary.
+			static colorsForShader: [][]float = { {1,1,1,1}, {1,1,1,1}, {1,1,1,1}, {1,1,1,1}, {1,1,1,1}, {1,1,1,1}, {1,1,1,1}, {1,1,1,1} }
+
+			local colorCount = 0
+
+			for preview.linkColors {
+				local colorEl = cast(Color) state.elementsByName[it]
+
+				if colorEl ~= NULL and colorEl.active {
+					colorCount  += 1
+					local color  = colorsForShader[colorCount]
+
+					color[1], color[2], color[3] = hsvToRgb(colorEl.color[1], colorEl.color[2], colorEl.color[3])
+					color[4]                     = colorEl.alpha ? colorEl.color[4] : 1
+				}
+			}
+
+			shader.send!("colors",     colorsForShader[1], unpack(colorsForShader, 2))
+			shader.send!("colorCount", colorCount)
+
+			drawCheckerBox(preview.layoutX, preview.layoutY, preview.layoutWidth, preview.layoutHeight)
+
+			LG.setShader(shader)
+			LG.draw(imagePixel, preview.layoutX, preview.layoutY, 0, preview.layoutWidth, preview.layoutHeight)
+			LG.setShader()
+
+		case Direction:
+			local direction = cast(Direction) el
+
+			local r :: DIRECTION_RADIUS
+			local x = direction.layoutX + r
+			local y = direction.layoutY + r
+
+			local angle = direction.angle
+
+			-- Background.
+			LG.setColor(0, 0, 0, .4)
+			LG.circle(LG.DrawMode.FILL, x, y, r)
+
+			-- Spread.
+			if direction.linkSpread {
+				local other = cast(Slider) state.elementsByName[direction.linkSpread]
+
+				if other ~= NULL and other.type == Slider and other.value ~= 0 {
+					LG.setColor(1, 1, 1, .25)
+					LG.arc(LG.DrawMode.FILL, x, y, .8*r, angle-other.value/2, angle+other.value/2, 32)
+				}
+
+			} elseif direction.linkOther {
+				local other = cast(Direction) state.elementsByName[direction.linkOther]
+
+				if other ~= NULL and other.type == Direction and other.angle ~= angle {
+					LG.setColor(1, 1, 1, .25)
+					LG.arc(LG.DrawMode.FILL, x, y, .8*r, angle, other.angle, 32)
+				}
+			}
+
+			-- Guides.
+			LG.setColor(1, 1, 1, .08)
+			LG.line(x-r+1, y, x+r-1, y)
+			LG.line(x, y-r+1, x, y+r-1)
+			LG.line(x-.3*r, y-.3*r, x+.3*r, y+.3*r)
+			LG.line(x+.3*r, y-.3*r, x-.3*r, y+.3*r)
+
+			-- Outline.
+			if direction.id == state.activeId or direction.id == state.hoveredId {
+				LG.setColor(1, 1, 1, HOVER_OUTLINE_OPACITY)
+				LG.circle(LG.DrawMode.LINE, x, y, r+.5)
+			}
+
+			-- Value.
+			LG.setColor(1, 1, 1)
+			LG.line(x, y, x+r*math.cos(angle), y+r*math.sin(angle))
+
+			-- Readout.
+			if showPanelNumbers {
+				local text  = format("%d°", angle*360/math.TAU)
+				local textX = x - fontSmall.getWidth!(text) // 2
+				local textY = (angle % math.TAU < math.PI) ? direction.layoutY+5 : direction.layoutY+2*r-5-fontSmall.getHeight!()
+				LG.setFont(fontSmall)
+				LG.setColor(0, 0, 0)
+				LG.print(text, textX+1, textY+1)
+				LG.setColor(1, 1, 1)
+				LG.print(text, textX, textY)
+				LG.setFont(fontNormal)
+			}
+
+		case: errorf("%d", el.type)
+	}
+
+	!if DRAW_DEBUG_INFO  if LK.isScancodeDown"`" {
+		if el[1] == NULL {
+			LG.setColor(0, 1, 0, .5)
+		} else {
+			LG.setColor(1, 0, 0, .35)
+			LG.setColorMask(true, false, true, true)
+		}
+		LG.rectangle(LG.DrawMode.LINE, el.layoutX+.5, el.layoutY+.5, el.layoutWidth-1, el.layoutHeight-1)
+		LG.setColorMask()
+	}
+}
+
+export draw :: (state:State) {
+	updateLayoutIfNeeded(state)
+	for state.frames {
+		if it.active  drawElement(state, it)
+	}
+}
+
+
+
+export isInsideElement :: (state:State, x,y:int, el:gui.Element) -> bool {
+	if not el.active  return false
+
+	updateLayoutIfNeeded(state)
+
+	if el.type == {
+		case Direction:
+			local r :: DIRECTION_RADIUS
+			return math.distance(x,y, el.layoutX+r,el.layoutY+r) <= r
+
+		case Slider:
+			return x >= el.layoutX and x < el.layoutX+el.layoutWidth and math.abs(y-(el.layoutY+el.layoutHeight/2)) <= SLIDER_WIDTH/2
+
+		case Checkbox:
+			return x >= el.layoutX and x < el.layoutX+el.layoutWidth and math.abs(y-(el.layoutY+el.layoutHeight/2)) <= CHECKBOX_SIZE/2
+
+		case:
+			return
+				x >= el.layoutX and
+				y >= el.layoutY and
+				x <  el.layoutX+el.layoutWidth and
+				y <  el.layoutY+el.layoutHeight
+	}
+}
+
+export isOverGui :: (state:State, x,y:int) -> bool {
+	for state.frames {
+		if isInsideElement(state, x, y, it)  return true
+	}
+	return false
+}
+
+
+
+export getElementAt :: (state:State, x,y:int) -> (found:bool, el:Element) {
+	updateLayoutIfNeeded(state)
+
+	for < state.frames {
+		local helper :: (state:State, el:Element, x,y:int) -> Element {
+			if not isInsideElement(state, x, y, el)  return NULL
+
+			if el.type == Scrollable  y -= math.round((cast(Scrollable)el).scroll)
+
+			for < el {
+				local subEl = helper(state, it, x, y)
+				if subEl ~= NULL  return subEl
+			}
+
+			return el
+		}
+
+		local el = helper(state, it, x, y)
+		if el ~= NULL  return true, el
+	}
+
+	return false, NULL
+}
+
+export getWidgetAt :: (state:State, x,y:int) -> (found:bool, widget:Widget) {
+	local found, widget = getElementAt(state, x, y)
+	if not found  return false, NULL
+
+	if widget.type == {
+		case Buttons:   return true, cast(Widget)widget
+		case InputText: return true, cast(Widget)widget
+		case Radio:     return true, cast(Widget)widget
+		case Tabs:      return true, cast(Widget)widget
+		case Checkbox:  return true, cast(Widget)widget
+		case Slider:    return true, cast(Widget)widget
+		case Color:     return true, cast(Widget)widget
+		case Direction: return true, cast(Widget)widget
+
+		case Scrollable:
+			if x < widget.layoutX + widget.layoutWidth - SCROLLBAR_WIDTH  return false, NULL
+			return true, cast(Widget)widget
+
+		case:
+			return false, NULL
+	}
+}
+
+
+
+export setActive :: (state:State, name:string, active:bool) {
+	local el = state.elementsByName[name]
+	if el == NULL {
+		printf("Error: No element '%s'.", name)
+		return
+	}
+
+	if el.active == active  return
+
+	el.active               = active
+	state.layoutNeedsUpdate = true
+}
+
+
+
+local getScrollbarHandle :: (scrollable:Scrollable, visual:bool) -> (handlePos:int, handleLen:int, handlePosMax:int) {
+	local contentH = scrollable.contentHeight
+	local visibleH = scrollable.layoutHeight
+	local paddedH  = visibleH - 2*SPACING
+
+	local handleLen = math.clamp(
+		math.round(visibleH * paddedH / contentH),
+		SCROLLBAR_MIN_LENGTH,
+		visibleH
+	)
+
+	local handlePos, handlePosMax = 0, 0
+	if contentH > paddedH {
+		local scroll = visual ? scrollable.scroll : scrollable.scrollTarget
+		handlePosMax = visibleH - handleLen
+		handlePos    = math.min(math.round(-scroll*handlePosMax/(contentH-paddedH)), handlePosMax)
+	}
+
+	return handlePos, handleLen, handlePosMax
+}
+
+local limitScrollTarget :: (scrollable:Scrollable) {
+	local limit             = math.max(scrollable.contentHeight - scrollable.layoutHeight + 2*SPACING, 0)
+	scrollable.scrollTarget = math.clamp(scrollable.scrollTarget, -limit, 0)
+}
+
+local getScrollOffset :: (el:Element) -> int {
+	local offset = 0
+
+	while el.parent ~= NULL {
+		el = el.parent
+		if el.type == Scrollable {
+			offset += math.round((cast(Scrollable)el).scroll)
+		}
+	}
+
+	return offset
+}
+
+
+
+local drawChecker :: (x,y,w,h:float, scale=1.0) {
+	static quad: LG.Quad = NULL
+
+	if quad == NULL {
+		local iw, ih = imageChecker.getDimensions!()
+		quad         = LG.newQuad(0, 0, 1, 1, iw, ih)
+	}
+
+	quad.setViewport!(0, 0, w/scale, h/scale)
+	LG.draw(imageChecker, quad, x, y, 0, scale)
+}
+
+local drawCheckerBox :: (x,y,w,h:int) {
+	LG.setColor(.15, .15, .15)
+	LG.rectangle(LG.DrawMode.FILL, x, y, w, h)
+	LG.setColor(.27, .27, .27)
+	drawChecker(x, y, w, h)
+}
+
+

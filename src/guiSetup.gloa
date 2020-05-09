@@ -1,0 +1,250 @@
+--[[============================================================
+--=
+--=  GUI setup
+--=
+--=-------------------------------------------------------------
+--=
+--=  Hot Particles - a particle editor for LÖVE
+--=  by Marcus 'ReFreezed' Thunström
+--=
+--============================================================]]
+
+export setupGuiFrames :: () {
+	guiState.frames = {
+		guiState.frame!({ name="main", width=MAIN_PANEL_WIDTH,
+			guiState.tabs!({ specialLastTab=true, reorder=true,
+				buttons = {
+					{label="(unnamed 1)"},
+					{label="+"},
+				},
+			}),
+
+			guiState.buttons!({
+				buttons = {
+					{label="save"},
+					{label="save as..."},
+					{label="open..."},
+					{label="hide settings"},
+				},
+			}),
+
+			guiState.separator!({ thick=false }),
+
+			guiState.section!({ label="Pixelate",
+				guiState.hbox!({
+					guiState.checkbox!({ label="world" }),
+					guiState.checkbox!({ label="textures" }),
+				}),
+			}),
+
+			guiState.separator!({ thick=false }),
+
+			guiState.section!({ label="Background",
+				guiState.hbox!({
+					guiState.color!({ name="bgColor", alpha=false, weight=1 }),
+					guiState.colorPreview!({ linkColors={"bgColor"} }),
+				}),
+			}),
+
+			guiState.separator!({ thick=false }),
+
+			guiState.section!({ label="EmitterMovem.",
+				guiState.radio!({
+					buttons = {
+						{value=Movement.NONE,      label="none",      tooltip="No movement"},
+						{value=Movement.CIRCLE,    label="circle",    tooltip="Circle, or back and forth"},
+						{value=Movement.EIGHT,     label="eight",     tooltip="Numeral eight"},
+						{value=Movement.IRREGULAR, label="irregular", tooltip="Irregular movement"},
+					}
+				}),
+				guiState.hbox!({
+					guiState.vbox!({ weight=1,
+						guiState.slider!({ labelLeft="scale x", min=0, max=2, readoutMulti=100, readout="%d%%" }),
+						guiState.slider!({ labelLeft="scale y", min=0, max=2, readoutMulti=100, readout="%d%%" }),
+					}),
+					guiState.slider!({ labelLeft="speed", inset=40, min=-8, max=8, readoutMulti=100, readout="%d%%", weight=2 }),
+				}),
+			}),
+
+			guiState.separator!({ thick=true }),
+
+			guiState.section!({ label="ParticleSystem",
+				guiState.tabs!({ specialLastTab=true, reorder=true,
+					buttons = {
+						{label="1"},
+						{label="+"},
+					},
+				}),
+			}),
+
+			guiState.scrollable!({ height=0,--[[Remaining height.]]
+				guiState.section!({ label="Texture",
+					guiState.radio!({
+						buttons = {{value="light",tooltip="light",image="light"},{value="moon",tooltip="moon",image="moon"}}, -- @Incomplete: Dynamically create this list.
+					}),
+				}),
+
+				guiState.separator!({ thick=false }),
+
+				guiState.section!({ label="InsertMode",
+					guiState.radio!({
+						buttons = {
+							{value=LG.ParticleInsertMode.TOP,    label="top"},
+							{value=LG.ParticleInsertMode.BOTTOM, label="bottom"},
+							{value=LG.ParticleInsertMode.RANDOM, label="random"},
+						}
+					}),
+				}),
+
+				guiState.separator!({ thick=false }),
+
+				guiState.section!({ label="Lifetime",
+					guiState.slider!({ labelLeft="emitter",     min=0, max=20, readout="%.2f sec", readoutZero="∞" }),
+					guiState.slider!({ labelLeft="paricle min", min=0, max=20, readout="%.2f sec" }),
+					guiState.slider!({ labelLeft="paricle max", min=0, max=20, readout="%.2f sec" }),
+				}),
+
+				guiState.separator!({ thick=true }),
+
+				guiState.section!({ label="SpawnRate",
+					guiState.slider!({ min=.1, max=1000, readout="%.1f / sec" }),
+				}),
+
+				guiState.separator!({ thick=false }),
+
+				guiState.section!({ label="Area",
+					guiState.radio!({ name="area",
+						buttons = {
+							{value=LG.AreaSpreadDistribution.NONE,             label="none",    tooltip="None"},
+							{value=LG.AreaSpreadDistribution.NORMAL,           label="norm",    tooltip="Normal"},
+							{value=LG.AreaSpreadDistribution.ELLIPSE,          label="ellip",   tooltip="Ellipse"},
+							{value=LG.AreaSpreadDistribution.UNIFORM,          label="rect",    tooltip="Rectangle (uniform)"},
+							{value=LG.AreaSpreadDistribution.BORDER_ELLIPSE,   label="b.ellip", tooltip="Border ellipse"},
+							{value=LG.AreaSpreadDistribution.BORDER_RECTANGLE, label="b.rect",  tooltip="Border rectangle"},
+						},
+					}),
+					guiState.hbox!({ name="areaParams", active=false,
+						guiState.direction!({ labelLeft="angle" }),
+						guiState.vbox!({ weight=1,
+							guiState.slider!({ labelLeft="dx", inset=30, min=0, max=1000, readout="%d" }),
+							guiState.slider!({ labelLeft="dy", inset=30, min=0, max=1000, readout="%d" }),
+							guiState.checkbox!({ label="direction relative to center", inset=14, weight=1 }),
+						}),
+					}),
+				}),
+
+				guiState.separator!({ thick=false }),
+
+				guiState.section!({ label="Direction",
+					guiState.hbox!({
+						guiState.direction!({ linkSpread="spread" }),
+						guiState.slider!({ name="spread", labelLeft="spread", min=0, max=math.TAU, readoutMulti=360/math.TAU, readout="%d°", weight=1, inset=50 }),
+					}),
+				}),
+
+				guiState.separator!({ thick=true }),
+
+				guiState.section!({ label="Speed",
+					guiState.slider!({ labelLeft="min", min=-2000, max=2000, readout="%d / sec" }),
+					guiState.slider!({ labelLeft="max", min=-2000, max=2000, readout="%d / sec" }),
+				}),
+
+				guiState.separator!({ thick=false }),
+
+				guiState.section!({ label="AccLinear",
+					guiState.slider!({ labelLeft="xmin", min=-10000, max=10000, readout="%d / sec²" }),
+					guiState.slider!({ labelLeft="xmax", min=-10000, max=10000, readout="%d / sec²" }),
+					guiState.slider!({ labelLeft="ymin", min=-10000, max=10000, readout="%d / sec²" }),
+					guiState.slider!({ labelLeft="ymax", min=-10000, max=10000, readout="%d / sec²" }),
+				}),
+
+				guiState.separator!({ thick=false }),
+
+				guiState.section!({ label="AccRadial",
+					guiState.slider!({ labelLeft="min", min=-20000, max=20000, readout="%d / sec²" }),
+					guiState.slider!({ labelLeft="max", min=-20000, max=20000, readout="%d / sec²" }),
+				}),
+
+				guiState.separator!({ thick=false }),
+
+				guiState.section!({ label="AccTangent",
+					guiState.slider!({ labelLeft="min", min=-20000, max=20000, readout="%d / sec²" }),
+					guiState.slider!({ labelLeft="max", min=-20000, max=20000, readout="%d / sec²" }),
+				}),
+
+				guiState.separator!({ thick=false }),
+
+				guiState.section!({ label="DampLinear",
+					guiState.slider!({ labelLeft="min", min=-50, max=50, readout="%.2f" }),
+					guiState.slider!({ labelLeft="max", min=-50, max=50, readout="%.2f" }),
+				}),
+
+				guiState.separator!({ thick=true }),
+
+				guiState.section!({ label="Rotation",
+					guiState.hbox!({
+						guiState.direction!({ name="rotationMin", linkOther="rotationMax", labelLeft="min/max" }),
+						guiState.direction!({ name="rotationMax", linkOther="rotationMin", }),
+						guiState.checkbox!({ label="relative", inset=10 }),
+					}),
+				}),
+
+				guiState.separator!({ thick=false }),
+
+				guiState.section!({ label="Spin",
+					guiState.slider!({ labelLeft="at start", min=-8*math.TAU, max=8*math.TAU, readoutMulti=1/math.TAU, readout="%.2f turns / sec" }),
+					guiState.slider!({ labelLeft="at end",   min=-8*math.TAU, max=8*math.TAU, readoutMulti=1/math.TAU, readout="%.2f turns / sec" }),
+					guiState.slider!({ labelLeft="variation", min=0, max=1, readoutMulti=100, readout="%d%%" }),
+				}),
+
+				guiState.separator!({ thick=true }),
+
+				guiState.section!({ label="Size",
+					guiState.buttons!({ buttons={{label="+"}} }),
+					guiState.slider!({ name="size1", labelLeft="#1", min=0, max=8, readout="%.2f" }),
+					guiState.slider!({ name="size2", labelLeft="#2", min=0, max=8, readout="%.2f" }),
+					guiState.slider!({ name="size3", labelLeft="#3", min=0, max=8, readout="%.2f", active=false }),
+					guiState.slider!({ name="size4", labelLeft="#4", min=0, max=8, readout="%.2f", active=false }),
+					guiState.slider!({ name="size5", labelLeft="#5", min=0, max=8, readout="%.2f", active=false }),
+					guiState.slider!({ name="size6", labelLeft="#6", min=0, max=8, readout="%.2f", active=false }),
+					guiState.slider!({ name="size7", labelLeft="#7", min=0, max=8, readout="%.2f", active=false }),
+					guiState.slider!({ name="size8", labelLeft="#8", min=0, max=8, readout="%.2f", active=false }),
+					guiState.slider!({ labelLeft="variation", min=0, max=1, readoutMulti=100, readout="%d%%" }),
+				}),
+
+				guiState.separator!({ thick=false }),
+
+				guiState.section!({ label="Color",
+					guiState.buttons!({ buttons={{label="+"}} }),
+					guiState.hbox!({
+						guiState.vbox!({ weight=1,
+							guiState.color!({ name="color1", labelLeft="#1" }),
+							guiState.color!({ name="color2", labelLeft="#2" }),
+							guiState.color!({ name="color3", labelLeft="#3" }),
+							guiState.color!({ name="color4", labelLeft="#4" }),
+							guiState.color!({ name="color5", labelLeft="#5", active=false }),
+							guiState.color!({ name="color6", labelLeft="#6", active=false }),
+							guiState.color!({ name="color7", labelLeft="#7", active=false }),
+							guiState.color!({ name="color8", labelLeft="#8", active=false }),
+						}),
+						guiState.colorPreview!({ linkColors={"color1","color2","color3","color4"} }),
+					}),
+					guiState.radio!({ labelLeft="blend mode",
+						buttons = {
+							{value=LG.BlendMode.ALPHA,    label="alpha"},
+							{value=LG.BlendMode.ADD,      label="add"},
+							{value=LG.BlendMode.SUBTRACT, label="subtract"},
+							{value=LG.BlendMode.SCREEN,   label="screen"},
+						},
+					}),
+				}),
+			}),
+		}),
+	}
+}
+
+export setupGuiCallbacks :: () {
+	guiState.onAction.area = (widget:gui.Widget, i:int) {
+		gui.setActive(guiState, "areaParams", i > 1)
+	}
+}

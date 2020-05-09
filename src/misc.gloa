@@ -11,6 +11,67 @@
 
 export ModifierKey :: enum { NONE::0, C, A, S, CA, CS, AS, CAS }
 
+export InputField :: !foreign struct {
+	Alignment :: enum {
+		LEFT  :: "left",
+		RIGHT :: "right",
+	},
+	Side :: enum {
+		START :: "start",
+		END   :: "end",
+	},
+
+	!call :: (initialText="") -> InputField !foreign lua "require'src.InputField'",
+
+	update                 :: (self:InputField, dt:float) !foreign method "update",
+	getBlinkPhase          :: (self:InputField) -> float !foreign method "getBlinkPhase",
+	resetBlinking          :: (self:InputField) !foreign method "resetBlinking",
+	getCursor              :: (self:InputField) -> int !foreign method "getCursor",
+	setCursor              :: (self:InputField, pos:int)                        !foreign method "setCursor",
+	setCursor              :: (self:InputField, pos:int,    selSideAnchor:Side) !foreign method "setCursor",
+	moveCursor             :: (self:InputField, amount:int)                     !foreign method "moveCursor",
+	moveCursor             :: (self:InputField, amount:int, selSideAnchor:Side) !foreign method "moveCursor",
+	getCursorSelectionSide :: (self:InputField) -> Side !foreign method "getCursorSelectionSide",
+	getAnchorSelectionSide :: (self:InputField) -> Side !foreign method "getAnchorSelectionSide",
+	getFont                :: (self:InputField) -> LG.Font !foreign method "getFont",
+	setFont                :: (self:InputField, font:LG.Font) !foreign method "setFont",
+	getScroll              :: (self:InputField) -> (scroll:int) !foreign method "getScroll",
+	setScroll              :: (self:InputField, scroll:int) !foreign method "setScroll",
+	getSelection           :: (self:InputField) -> (from,to:int) !foreign method "getSelection",
+	setSelection           :: (self:InputField, from,to:int, cursorAlign=Alignment.RIGHT) !foreign method "setSelection",
+	selectAll              :: (self:InputField) !foreign method "selectAll",
+	getSelectedText        :: (self:InputField) -> string !foreign method "getSelectedText",
+	getSelectedVisibleText :: (self:InputField) -> string !foreign method "getSelectedVisibleText",
+	getText                :: (self:InputField) -> string !foreign method "getText",
+	setText                :: (self:InputField, text:string, replaceLastHistoryEntry=false) !foreign method "setText",
+	getVisibleText         :: (self:InputField) -> string !foreign method "getVisibleText",
+	getTextLength          :: (self:InputField) -> int !foreign method "getTextLength",
+	getTextOffset          :: (self:InputField) -> int !foreign method "getTextOffset",
+	getCursorOffset        :: (self:InputField) -> int !foreign method "getCursorOffset",
+	getSelectionOffset     :: (self:InputField) -> int, int !foreign method "getSelectionOffset",
+	getWidth               :: (self:InputField) -> int !foreign method "getWidth",
+	setWidth               :: (self:InputField, width:int) !foreign method "setWidth",
+	insert                 :: (self:InputField, newText:string) !foreign method "insert",
+	replace                :: (self:InputField, newText:string) !foreign method "replace",
+	isFontFilteringActive  :: (self:InputField) -> bool !foreign method "isFontFilteringActive",
+	setFontFilteringActive :: (self:InputField, state:bool) !foreign method "setFontFilteringActive",
+	isPasswordActive       :: (self:InputField) -> bool !foreign method "isPasswordActive",
+	setPasswordActive      :: (self:InputField, state:bool) !foreign method "setPasswordActive",
+	isEditable             :: (self:InputField) -> bool !foreign method "isEditable",
+	setEditable            :: (self:InputField, state:bool) !foreign method "setEditable",
+	CharacterFilter        :: (char:string) -> (filterOut:bool),
+	getFilter              :: (self:InputField) -> (filter:CharacterFilter) !foreign method "getFilter",
+	setFilter              :: (self:InputField, filter:CharacterFilter)     !foreign method "setFilter",
+	setFilter              :: (self:InputField)                             !foreign method "setFilter",
+	clearHistory           :: (self:InputField) !foreign method "clearHistory",
+	mousepressed           :: (self:InputField, mx,my:int, mbutton:int)              -> (wasHandled:bool) !foreign method "mousepressed",
+	mousepressed           :: (self:InputField, mx,my:int, mbutton:int, presses:int) -> (wasHandled:bool) !foreign method "mousepressed",
+	mousemoved             :: (self:InputField, mx,my:int) -> (wasHandled:bool) !foreign method "mousemoved",
+	mousereleased          :: (self:InputField, mx,my:int, mbutton:int) -> (wasHandled:bool) !foreign method "mousereleased",
+	keypressed             :: (self:InputField, key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool) -> (wasHandled:bool, wasEdited:bool) !foreign method "keypressed",
+	textinput              :: (self:InputField, text:string) -> (wasHandled:bool, wasEdited:bool) !foreign method "textinput",
+}
+
 export getModifierKey :: () -> ModifierKey {
 	local ctrl  = LK.isDown("lctrl","rctrl")
 	local alt   = LK.isDown("lalt","ralt")
