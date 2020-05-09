@@ -136,8 +136,12 @@ local writeProject :: (buffer:[]string, project:Project) {
 }
 
 export saveWorkspace :: () {
-	if not scheduleSaveWorkspace  return
-	scheduleSaveWorkspace = false
+	if not workspaceSaveScheduled  return
+
+	workspaceSaveScheduled = false
+	workspaceSaveDelay     = 0
+	workspaceSaveTime      = LT.getTime()
+
 	-- print("Saving workspace.")
 
 	local buffer: []string

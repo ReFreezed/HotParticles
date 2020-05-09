@@ -24,15 +24,14 @@
 	Separator
 
 	draw
-	getElementAt, getWidgetAt
+	getElement, getElementAt, getWidgetAt
 	isInsideElement, isOverGui
 	onKeyPressed, onKeyReleased, onTextInput
 	onMousePressed, onMouseMoved, onMouseReleased, onMouseWheel
+	refresh, refreshRecursively, refreshAll
 	setActive
 
 --============================================================]]
-
-local DRAW_DEBUG_INFO :: 1==1
 
 local SPACING       :: 3
 local SPACING_LARGE :: 10
@@ -80,7 +79,10 @@ export State :: struct {
 
 	extraScrollableSpace = 0,
 
-	onAction: struct { !key: string, !value: (widget:Widget, i:int) },
+	onRefresh: struct { !key:string, !value:any--[[ (el:Element)           ]] },
+	onAction:  struct { !key:string, !value:any--[[ (widget:Widget, i:int) ]] },
+	onOption:  struct { !key:string, !value:any--[[ (widget:Widget, i:int) ]] },
+	onClose:   struct { !key:string, !value:any--[[ (widget:Widget, i:int) ]] },
 
 	buttons      :: (state:State, el:Buttons)      -> type_of(el) { return cast(type_of(el)) register(state, el, type_of(el)) },
 	checkbox     :: (state:State, el:Checkbox)     -> type_of(el) { return cast(type_of(el)) register(state, el, type_of(el)) },
@@ -123,6 +125,7 @@ export Element :: struct {
 	tooltip   = "",
 	weight    = 0,
 	inset     = 0,
+	data: any,
 
 	type: Type = NULL,
 	id:   int  = NULL,
@@ -153,7 +156,7 @@ export Frame :: struct {
 
 
 
-local Scrollable :: struct {
+export Scrollable :: struct {
 	using Widget,
 
 	height = 0, -- Non-positive means distance from the bottom of the screen.
@@ -165,7 +168,7 @@ local Scrollable :: struct {
 	scrollTarget = 0,
 }
 
-local Section :: struct {
+export Section :: struct {
 	using Element,
 }
 
@@ -174,22 +177,22 @@ local Box :: struct {
 
 	using Element,
 }
-local Hbox :: struct {
+export Hbox :: struct {
 	using Box,
 }
-local Vbox :: struct {
+export Vbox :: struct {
 	using Box,
 }
 
 
 
-local Text :: struct {
+export Text :: struct {
 	using Element,
 
 	text = "",
 }
 
-local Separator :: struct {
+export Separator :: struct {
 	using Element,
 
 	thick = false,
@@ -206,7 +209,7 @@ export Button :: struct {
 
 export Alignment :: enum { CENTER, LEFT, RIGHT }
 
-local Buttons :: struct {
+export Buttons :: struct {
 	using Widget,
 
 	buttons: []Button,
@@ -215,13 +218,13 @@ local Buttons :: struct {
 	buttonWidth: float, -- Round when necessary!
 }
 
-local Radio :: struct {
+export Radio :: struct {
 	using Buttons,
 
 	index = 1,
 }
 
-local Tabs :: struct {
+export Tabs :: struct {
 	using Radio,
 
 	specialLastTab = false,
@@ -230,7 +233,7 @@ local Tabs :: struct {
 
 
 
-local Checkbox :: struct {
+export Checkbox :: struct {
 	using Widget,
 
 	checked = false,
@@ -238,7 +241,7 @@ local Checkbox :: struct {
 
 
 
-local Slider :: struct {
+export Slider :: struct {
 	using Widget,
 
 	value = 0.0,
@@ -251,7 +254,7 @@ local Slider :: struct {
 	readoutZero  = "",
 }
 
-local Color :: struct {
+export Color :: struct {
 	using Widget,
 
 	alpha = true,
@@ -260,7 +263,7 @@ local Color :: struct {
 
 
 
-local ColorPreview :: struct {
+export ColorPreview :: struct {
 	using Widget,
 
 	linkColors: []string,
@@ -268,7 +271,7 @@ local ColorPreview :: struct {
 
 
 
-local Direction :: struct {
+export Direction :: struct {
 	using Widget,
 
 	angle = 0.0,
@@ -279,7 +282,7 @@ local Direction :: struct {
 
 
 
-local InputText :: struct {
+export InputText :: struct {
 	using Widget,
 
 	value = "",
@@ -293,6 +296,7 @@ export onKeyPressed :: (state:State, key:LK.KeyConstant, scancode:LK.Scancode, i
 	if state.activeId and (key == "lctrl" or key == "rctrl" or key == "lshift" or key == "rshift" or key == "lalt" or key == "ralt") {
 		local mx, my = LM.getPosition()
 		onMouseMoved(state, mx, my, 0, 0, false)
+		return true
 	}
 	return false
 }
@@ -316,6 +320,7 @@ export onMousePressed :: (state:State, mx,my:int, mbutton:int, isTouch:bool, pre
 			state.activeId    = state.hoveredId
 			state.activeSubid = state.hoveredSubid
 			LM.setGrabbed(true)
+			LK.setKeyRepeat(false)
 			onMouseMoved(state, mx, my, 0, 0, isTouch)
 		}
 		return true
@@ -376,7 +381,7 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int, isTouch:bool) {
 
 			if value ~= slider.value {
 				slider.value = value
-				if state.onAction[slider.name] ~= NULL  state.onAction[slider.name](slider, 0)
+				triggerActionEvent(state, slider, 0)
 			}
 
 		case Color:
@@ -393,7 +398,7 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int, isTouch:bool) {
 
 			if value ~= colorEl.color[component] {
 				colorEl.color[component] = value
-				if state.onAction[colorEl.name] ~= NULL  state.onAction[colorEl.name](colorEl, component)
+				triggerActionEvent(state, colorEl, component)
 			}
 
 		case Direction:
@@ -405,7 +410,7 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int, isTouch:bool) {
 
 			if angle ~= direction.angle {
 				direction.angle = angle
-				if state.onAction[direction.name] ~= NULL  state.onAction[direction.name](direction, 0)
+				triggerActionEvent(state, direction, 0)
 			}
 
 		case Scrollable:
@@ -424,49 +429,82 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int, isTouch:bool) {
 
 export onMouseReleased :: (state:State, mx,my:int, mbutton:int, isTouch:bool, presses:int) {
 	if mbutton == 1 and state.activeId {
-		if state.hoveredId {
-			local widget = cast(Widget) state.elementsById[state.activeId]
+		local widget = cast(Widget) state.elementsById[state.activeId]
 
-			if widget ~= NULL  if widget.type == {
-				case Buttons:
+		if widget ~= NULL  if widget.type == {
+			case Buttons:
+				if state.hoveredId {
 					local buttons = cast(Buttons) widget
-					if state.onAction[buttons.name] ~= NULL  state.onAction[buttons.name](buttons, state.activeSubid)
+					triggerActionEvent(state, buttons, state.activeSubid, save=true)
+				}
 
-				case Radio:
+			case Radio:
+				if state.hoveredId {
 					local radio = cast(Radio) widget
 
 					if radio.index ~= state.hoveredSubid {
 						radio.index = state.hoveredSubid
-						if state.onAction[radio.name] ~= NULL  state.onAction[radio.name](radio, state.activeSubid)
+						triggerActionEvent(state, radio, state.activeSubid, save=true)
 					}
+				}
 
-				case Tabs:
+			case Tabs:
+				if state.hoveredId {
 					local tabs = cast(Tabs) widget
 
 					if tabs.specialLastTab and state.hoveredSubid == #tabs.buttons {
-						if state.onAction[tabs.name] ~= NULL  state.onAction[tabs.name](tabs, state.activeSubid)
+						triggerActionEvent(state, tabs, state.activeSubid, save=true)
 					} elseif tabs.index ~= state.hoveredSubid {
 						tabs.index = state.hoveredSubid
-						if state.onAction[tabs.name] ~= NULL  state.onAction[tabs.name](tabs, state.activeSubid)
+						triggerActionEvent(state, tabs, state.activeSubid, save=true)
 					}
+				}
 
-				case Checkbox:
+			case Checkbox:
+				if state.hoveredId {
 					local checkbox   = cast(Checkbox) widget
 					checkbox.checked = not checkbox.checked
 
-					if state.onAction[checkbox.name] ~= NULL  state.onAction[checkbox.name](checkbox, 0)
-			}
-		}
+					triggerActionEvent(state, checkbox, 0, save=true)
+				}
 
+			case Slider: !through
+			case Color:  !through
+			case Direction:
+				scheduleSaveWorkspace()
+		}
+	}
+
+	if mbutton == 3 and not state.activeId and state.hoveredId {
+		local widget = cast(Widget) state.elementsById[state.hoveredId]
+
+		if widget ~= NULL  if widget.type == {
+			case Tabs:
+				local tabs = cast(Tabs) widget
+
+				if not (tabs.specialLastTab and state.hoveredSubid == #tabs.buttons) {
+					triggerCloseEvent(state, tabs, state.hoveredSubid, save=true)
+				}
+		}
+	}
+
+	if mbutton == 2 and not state.activeId and state.hoveredId {
+		local widget = cast(Widget) state.elementsById[state.hoveredId]
+		if widget ~= NULL  triggerOptionEvent(state, widget, state.hoveredSubid)
+	}
+
+	if state.activeId and mbutton == 1 {
 		state.activeId    = 0
 		state.activeSubid = 0
 		LM.setGrabbed(false)
+		LK.setKeyRepeat(true)
 		onMouseMoved(state, mx, my, 0, 0, isTouch)
 	}
 }
 
 export onMouseWheel :: (state:State, dx,dy:int) -> (handled:bool) {
 	if state.activeId  return true
+	if getModifierKey() ~= ModifierKey.NONE  return false
 
 	updateLayoutIfNeeded(state)
 
@@ -787,6 +825,9 @@ local updateLayoutIfNeeded :: (state:State) {
 	}
 
 	for state.scrollables  limitScrollTarget(it)
+
+	local mx, my = LM.getPosition()
+	if isOverGui(state, mx, my)  onMouseMoved(state, mx, my, 0, 0, false)
 }
 
 
@@ -1286,7 +1327,7 @@ local drawElement :: (state:State, el:Element) {
 		case: errorf("%d", el.type)
 	}
 
-	!if DRAW_DEBUG_INFO  if LK.isScancodeDown"`" {
+	!if DEV  if LK.isScancodeDown"`" {
 		if el[1] == NULL {
 			LG.setColor(0, 1, 0, .5)
 		} else {
@@ -1340,6 +1381,10 @@ export isOverGui :: (state:State, x,y:int) -> bool {
 }
 
 
+
+export getElement :: (state:State, name:string, $T:Type) -> T {
+	return cast(T) state.elementsByName[name]
+}
 
 export getElementAt :: (state:State, x,y:int) -> (found:bool, el:Element) {
 	updateLayoutIfNeeded(state)
@@ -1463,6 +1508,78 @@ local drawCheckerBox :: (x,y,w,h:int) {
 	LG.rectangle(LG.DrawMode.FILL, x, y, w, h)
 	LG.setColor(.27, .27, .27)
 	drawChecker(x, y, w, h)
+}
+
+
+
+local triggerRefreshEvent :: (state:State, el:Element) {
+	local cb = cast((el:Element)) state.onRefresh[el.name]
+	if cb == NULL  return
+
+	cb(el)
+	state.layoutNeedsUpdate = true
+}
+
+local triggerActionEvent :: (state:State, widget:Widget, subid:int, save=false) {
+	local cb = cast((widget:Widget, i:int)) state.onAction[widget.name]
+	if cb == NULL  return
+
+	cb(widget, subid)
+	if save  scheduleSaveWorkspace()
+}
+local triggerOptionEvent :: (state:State, widget:Widget, subid:int, save=false) {
+	local cb = cast((widget:Widget, i:int)) state.onOption[widget.name]
+	if cb == NULL  return
+
+	cb(widget, subid)
+	if save  scheduleSaveWorkspace()
+}
+local triggerCloseEvent :: (state:State, widget:Widget, subid:int, save=false) {
+	local cb = cast((widget:Widget, i:int)) state.onClose[widget.name]
+	if cb == NULL  return
+
+	cb(widget, subid)
+	if save  scheduleSaveWorkspace()
+}
+
+
+
+export refresh :: (state:State, el:Element) {
+	triggerRefreshEvent(state, el)
+}
+export refresh :: (state:State, name:string) {
+	local el = state.elementsByName[name]
+	if el == NULL {
+		printf("Error: No element '%s'.", name)
+		return
+	}
+
+	triggerRefreshEvent(state, el)
+}
+
+export refreshRecursively :: (state:State, el:Element, onlyActive=true) {
+	triggerRefreshEvent(state, el)
+	for el  if not (onlyActive and not it.active) {
+		refreshRecursively(state, it, onlyActive)
+	}
+}
+export refreshRecursively :: (state:State, name:string, onlyActive=true) {
+	local el = state.elementsByName[name]
+	if el == NULL {
+		printf("Error: No element '%s'.", name)
+		return
+	}
+
+	triggerRefreshEvent(state, el)
+	for el  if not (onlyActive and not it.active) {
+		refreshRecursively(state, it, onlyActive)
+	}
+}
+
+export refreshAll :: (state:State, onlyActive=true) {
+	for state.frames  if not (onlyActive and not it.active) {
+		refreshRecursively(state, it, onlyActive)
+	}
 }
 
 

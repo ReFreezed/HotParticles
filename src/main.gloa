@@ -5,8 +5,23 @@
 --=
 --============================================================]]
 
-export MAX_BUFFER_SIZE  :: 16000 -- Default buffer size for ParticleSystem is 1000. @Incomplete: make this configurable.
-export MAIN_PANEL_WIDTH :: 450
+export PARTICLE_IMAGES = {
+	-- Location: gfx/<name>.png
+	"light",
+	"moon",
+}
+
+export MAX_BUFFER_SIZE      :: 16000 -- Default buffer size for ParticleSystem is 1000. @Incomplete: make this configurable.
+export MAIN_PANEL_WIDTH     :: 450
+export WORKSPACE_SAVE_DELAY :: 0.50
+
+
+
+local isDev :: () -> bool {
+	!import"utils"
+	return (indexOf(getProgramArguments(), "--dev"))
+}
+export DEV :: !run isDev()
 
 
 
@@ -38,9 +53,9 @@ export gui :: !load "src/gui"
 
 
 
-export fontSmall:  LG.Font  = NULL
-export fontNormal: LG.Font  = NULL
-export fontLarge:  LG.Font  = NULL
+export fontSmall:  LG.Font = NULL
+export fontNormal: LG.Font = NULL
+export fontLarge:  LG.Font = NULL
 
 export imageChecker:  LG.Image = NULL
 export imageGradient: LG.Image = NULL
@@ -61,7 +76,10 @@ local messageTextDuration = 1.00
 
 export isPositioningParticles = false
 
-export scheduleSaveWorkspace    = false
+export workspaceSaveScheduled = false
+export workspaceSaveDelay     = 0.00
+export workspaceSaveTime      = -9999.00
+
 export scheduleRecreateCanvases = false
 
 local particleUpdateTime = 0.00
@@ -70,6 +88,8 @@ local particleDrawTime   = 0.00
 local defaultSearchPaths: []string = NULL
 
 export guiState: gui.State
+
+local freezeDtThisFrame = false
 
 -- Saved settings.
 export openProjects: []Project
@@ -173,6 +193,16 @@ export updateParticleColors :: (ps:LG.ParticleSystem, colors:[]float) {
 	ps.setColors!(colorsRgba)
 }
 
+export updateParticleImageFilters :: () {
+	local filter = openProjects[currentProjectIndex].pixelateTextures ? LG.FilterMode.NEAREST : LG.FilterMode.LINEAR
+
+	for PARTICLE_IMAGES {
+		LG.Image.setFilter(particleImages[it], filter, filter)
+	}
+}
+
+
+
 export addNewSystem :: (project:Project) {
 	local system = System()
 	system.colors    = {0,0,1,0, 0,0,1,1, 0,0,1,.5, 0,0,1,0}
@@ -193,14 +223,16 @@ export addNewSystem :: (project:Project) {
 	}
 }
 
-export addNewProject :: () {
+export addNewProject :: () -> Project {
 	local project = Project()
 	insert(openProjects, project)
 
 	addNewSystem(project)
 
-	currentProjectIndex = #openProjects
+	return project
 }
+
+
 
 export createCanvases :: () {
 	local ww, wh = LG.getDimensions()
@@ -217,24 +249,24 @@ export createCanvases :: () {
 	if openProjects[currentProjectIndex].pixelateWorld {
 		canvasWorld.setFilter!(LG.FilterMode.NEAREST, LG.FilterMode.NEAREST)
 	}
+
+	scheduleRecreateCanvases = false
 }
 
-export updateParticleImageFilters :: () {
-	local filter = openProjects[currentProjectIndex].pixelateTextures ? LG.FilterMode.NEAREST : LG.FilterMode.LINEAR
 
-	for cast(table) particleImages {
-		LG.Image.setFilter(cast(LG.Image)it, filter, filter)
-	}
-}
 
 export moveEmittersTo :: (x,y:float) {
 	for openProjects[currentProjectIndex].systems  it.particles.moveTo!(x, y)
 }
 
+
+
 export pushQuitEvent :: () {
 	saveWorkspace()
 	LE.quit(0)
 }
+
+
 
 export connectToRemoteDirectory :: (dir:string) -> (success:bool) {
 	if not physfs.setWriteDirectory(dir)  return false
@@ -244,6 +276,7 @@ export connectToRemoteDirectory :: (dir:string) -> (success:bool) {
 	assert(physfs.mountReadDirectory(dir)) -- If we can write then we should be able to read too.
 	return true
 }
+
 export disconnectFromRemoteDirectory :: () {
 	for physfs.getSearchPaths()  assert(physfs.unmountReadDirectory(it))
 	for defaultSearchPaths       assert(physfs.mountReadDirectory(it, true))
@@ -251,16 +284,20 @@ export disconnectFromRemoteDirectory :: () {
 	assert(physfs.setWriteDirectory(LF.getSaveDirectory()))
 }
 
+
+
 export setActionText :: (s:string, ...:int|float|string) {
 	actionText     = format(s, ...)
 	actionTextTime = LT.getTime()
 	messageText    = "" -- Good?
 }
+
 export setMessageText :: (s:string, ...:int|float|string) {
 	messageText         = format(s, ...)
 	messageTextTime     = LT.getTime()
 	messageTextDuration = 3.00
 }
+
 export setErrorText :: (s:string, ...:int|float|string) {
 	messageText         = format("Error: "..s, ...)
 	messageTextTime     = LT.getTime()
@@ -274,6 +311,7 @@ export onLoad :: (args:[]string, argsRaw:[]string) {
 	io.disableBuffering(io.STDERR)
 
 	print("Running Hot Particles")
+	!if DEV  love.window.setTitle(love.window.getTitle().." (DEBUG BUILD)")
 
 	LK.setKeyRepeat(true)
 
@@ -288,32 +326,34 @@ export onLoad :: (args:[]string, argsRaw:[]string) {
 	imagePixel    = LG.newImage("gfx/pixel.png")
 	imageRainbow  = LG.newImage("gfx/rainbow.png")
 
-	particleImages.light = LG.newImage("gfx/light.png")
-	particleImages.moon  = LG.newImage("gfx/moon.png")
+	for PARTICLE_IMAGES {
+		particleImages[it] = LG.newImage(format("gfx/%s.png", it))
+	}
 
 	local ok, gotError, projects = loadWorkspace()
 	if ok {
-		openProjects        = projects
-		currentProjectIndex = 1
+		openProjects = projects
 	} else {
 		if gotError  setErrorText("Could not load previous workspace")
 		addNewProject()
 	}
 
-	createCanvases()
-	updateParticleImageFilters()
+	do {
+		!load "src/guiSetup"
+		setupGuiFrames()
+		setupGuiCallbacks()
+		gui.refreshAll(guiState)
+	}
 
-	!load "src/guiSetup"
-	setupGuiFrames()
-	setupGuiCallbacks()
+	setCurrentProject(currentProjectIndex, force=true)
 }
 
 
 
 export onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool) {
-	if LM.isGrabbed()  return
-
 	if gui.onKeyPressed(guiState, key, scancode, isRepeat)  return
+
+	if LM.isGrabbed()  return
 
 	local mod     = getModifierKey()
 	local project = openProjects[currentProjectIndex]
@@ -344,10 +384,10 @@ export onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool)
 	if key == {
 		case "tab":
 			if mod == {
-				case ModifierKey.NONE: project.systemIndex = (project.systemIndex-0) % #project.systems + 1 ; scheduleRecreateCanvases = true
-				case ModifierKey.S:    project.systemIndex = (project.systemIndex-2) % #project.systems + 1 ; scheduleRecreateCanvases = true
-				case ModifierKey.C:    currentProjectIndex = (currentProjectIndex-0) % #openProjects    + 1
-				case ModifierKey.CS:   currentProjectIndex = (currentProjectIndex-2) % #openProjects    + 1
+				case ModifierKey.NONE: setCurrentSystem ((project.systemIndex-0) % #project.systems + 1)
+				case ModifierKey.S:    setCurrentSystem ((project.systemIndex-2) % #project.systems + 1)
+				case ModifierKey.C:    setCurrentProject((currentProjectIndex-0) % #openProjects    + 1)
+				case ModifierKey.CS:   setCurrentProject((currentProjectIndex-2) % #openProjects    + 1)
 			}
 
 		case "r":
@@ -377,15 +417,15 @@ export onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool)
 		case "f1":
 			if mod == {
 				case ModifierKey.NONE:
-					showStats             = not showStats
-					scheduleSaveWorkspace = true
+					showStats = not showStats
+					scheduleSaveWorkspace()
 			}
 
 		case "f2":
 			if mod == {
 				case ModifierKey.NONE:
-					showPanelNumbers      = not showPanelNumbers
-					scheduleSaveWorkspace = true
+					showPanelNumbers = not showPanelNumbers
+					scheduleSaveWorkspace()
 			}
 	}
 }
@@ -406,6 +446,7 @@ export onMousePressed :: (mx,my:int, mbutton:int, isTouch:bool, presses:int) {
 	if mbutton == 1 {
 		isPositioningParticles = true
 		LM.setGrabbed(true)
+		LK.setKeyRepeat(false)
 		onMouseMoved(mx,my, 0,0, isTouch)
 	}
 }
@@ -427,6 +468,7 @@ export onMouseReleased :: (mx,my:int, mbutton:int, isTouch:bool, presses:int) {
 	if isPositioningParticles and mbutton == 1 {
 		isPositioningParticles = false
 		LM.setGrabbed(false)
+		LK.setKeyRepeat(true)
 	}
 
 	gui.onMouseReleased(guiState, mx, my, mbutton, isTouch, presses)
@@ -455,8 +497,9 @@ export onMouseWheel :: (dx,dy:int) {
 
 
 export onUpdate :: (dt:float) {
-	if dt > .2 and (LT.getFPS() == 0 or LT.getFPS() > 60-5) { -- @Robustness: Don't assume 60 FPS!
-		dt = 1/60 -- Needed so things don't jump like crazy e.g. after the user has dragged the window (in Windows at least).
+	if freezeDtThisFrame {
+		dt                = 0
+		freezeDtThisFrame = false
 	}
 
 	local project = openProjects[currentProjectIndex]
@@ -485,7 +528,11 @@ export onUpdate :: (dt:float) {
 		}
 	}
 
-	if scheduleSaveWorkspace     saveWorkspace() -- @UX: Maybe wait a little while before saving?
+	if workspaceSaveScheduled {
+		workspaceSaveDelay -= dt
+		if workspaceSaveDelay <= 0  saveWorkspace()
+	}
+
 	if scheduleRecreateCanvases  createCanvases()
 
 	if not isPositioningParticles {
@@ -638,11 +685,36 @@ export onDraw :: () {
 			LG.print(text, x, y)
 		}
 
+		local anyInfiniteEmitter = false
+		local anyFiniteEmitter   = false
+
+		for project.systems {
+			if it.particles.getEmitterLifetime!() < 0
+				anyInfiniteEmitter = true
+			else
+				anyFiniteEmitter   = true
+		}
+
 		LG.origin()
 		LG.setFont(fontLarge)
 
-		drawGuiText(messageText, messageTextTime, messageTextDuration, math.round(.1*wh))
-		drawGuiText(actionText,  actionTextTime,  actionTextDuration,  math.round(.1*wh+fontLarge.getHeight!()))
+		if anyFiniteEmitter and anyInfiniteEmitter {
+			drawGuiText("Warning: Mixing infinite and finite emitters", 0, math.HUGE, 20)
+		}
+		drawGuiText(messageText, messageTextTime, messageTextDuration, 20+1*(5+fontLarge.getHeight!()))
+		drawGuiText(actionText,  actionTextTime,  actionTextDuration,  20+2*(5+fontLarge.getHeight!()))
+
+		-- Dev/debug stuff.
+		!if DEV {
+			local visibility = 1 - (LT.getTime() - workspaceSaveTime) / 0.40
+			if visibility > 0 {
+				LG.setColor(1, 1, 1, .4*visibility^.5)
+				LG.circle(LG.DrawMode.FILL, ww-10, 10, 4, 8)
+			}
+
+			-- LG.setColor(1, 1, 1)
+			-- LG.print(format("%d", LT.getFPS()))
+		}
 
 		--[[ Mouse stuff.
 		local mx, my = LM.getPosition()
@@ -711,6 +783,7 @@ export onDraw :: () {
 export onResize :: (w,h:int) {
 	createCanvases()
 	guiState.layoutNeedsUpdate = true
+	freezeDtThisFrame          = true -- Fixes things jumping forward like crazy (in Windows at least).
 }
 
 
@@ -732,6 +805,41 @@ export main :: () {
 	loveTable.resize        = wrapFunctionInGloaErrorHandler(onResize)
 	loveTable.errhand       = nil
 	loveTable.errorhandler  = nil
+}
+
+
+
+export setCurrentProject :: (i:int, force=false) {
+	if currentProjectIndex == i and not force  return
+
+	currentProjectIndex = i
+	gui.getElement(guiState, "projects", gui.Tabs).index = i
+
+	gui.refreshRecursively(guiState, "projectSettings")
+	gui.refreshRecursively(guiState, "systems")
+	gui.refreshRecursively(guiState, "system")
+
+	scheduleRecreateCanvases = true
+	updateParticleImageFilters()
+}
+
+export setCurrentSystem :: (i:int, force=true) {
+	local project = openProjects[currentProjectIndex]
+	if project.systemIndex == i and not force  return
+
+	project.systemIndex = i
+	gui.getElement(guiState, "systems", gui.Tabs).index = i
+
+	gui.refreshRecursively(guiState, "system")
+}
+
+
+
+export scheduleSaveWorkspace :: () {
+	-- if workspaceSaveScheduled  return
+
+	workspaceSaveScheduled = true
+	workspaceSaveDelay     = WORKSPACE_SAVE_DELAY
 }
 
 

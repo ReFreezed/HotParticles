@@ -12,14 +12,9 @@
 export setupGuiFrames :: () {
 	guiState.frames = {
 		guiState.frame!({ name="main", width=MAIN_PANEL_WIDTH,
-			guiState.tabs!({ specialLastTab=true, reorder=true,
-				buttons = {
-					{label="(unnamed 1)"},
-					{label="+"},
-				},
-			}),
+			guiState.tabs!({ name="projects", specialLastTab=true, reorder=true }),
 
-			guiState.buttons!({
+			guiState.buttons!({ name="saveOpenBar",
 				buttons = {
 					{label="save"},
 					{label="save as..."},
@@ -28,214 +23,211 @@ export setupGuiFrames :: () {
 				},
 			}),
 
-			guiState.separator!({ thick=false }),
+			guiState.vbox!({ name="projectSettings",
+				guiState.separator!({ thick=false }),
 
-			guiState.section!({ label="Pixelate",
-				guiState.hbox!({
-					guiState.checkbox!({ label="world" }),
-					guiState.checkbox!({ label="textures" }),
-				}),
-			}),
-
-			guiState.separator!({ thick=false }),
-
-			guiState.section!({ label="Background",
-				guiState.hbox!({
-					guiState.color!({ name="bgColor", alpha=false, weight=1 }),
-					guiState.colorPreview!({ linkColors={"bgColor"} }),
-				}),
-			}),
-
-			guiState.separator!({ thick=false }),
-
-			guiState.section!({ label="EmitterMovem.",
-				guiState.radio!({
-					buttons = {
-						{value=Movement.NONE,      label="none",      tooltip="No movement"},
-						{value=Movement.CIRCLE,    label="circle",    tooltip="Circle, or back and forth"},
-						{value=Movement.EIGHT,     label="eight",     tooltip="Numeral eight"},
-						{value=Movement.IRREGULAR, label="irregular", tooltip="Irregular movement"},
-					}
-				}),
-				guiState.hbox!({
-					guiState.vbox!({ weight=1,
-						guiState.slider!({ labelLeft="scale x", min=0, max=2, readoutMulti=100, readout="%d%%" }),
-						guiState.slider!({ labelLeft="scale y", min=0, max=2, readoutMulti=100, readout="%d%%" }),
+				guiState.section!({ label="Pixelate",
+					guiState.hbox!({
+						guiState.checkbox!({ name="pixelateWorld",    label="world"    }),
+						guiState.checkbox!({ name="pixelateTextures", label="textures" }),
 					}),
-					guiState.slider!({ labelLeft="speed", inset=40, min=-8, max=8, readoutMulti=100, readout="%d%%", weight=2 }),
+				}),
+
+				guiState.separator!({ thick=false }),
+
+				guiState.section!({ label="Background",
+					guiState.hbox!({
+						guiState.color!({ name="bgColor", alpha=false, weight=1 }),
+						guiState.colorPreview!({ linkColors={"bgColor"} }),
+					}),
+				}),
+
+				guiState.separator!({ thick=false }),
+
+				guiState.section!({ label="EmitterMovem.",
+					guiState.radio!({ name="emitterMovement",
+						buttons = {
+							{value=Movement.NONE,      label="none",      tooltip="No movement"},
+							{value=Movement.CIRCLE,    label="circle",    tooltip="Circle, or back and forth"},
+							{value=Movement.EIGHT,     label="eight",     tooltip="Numeral eight"},
+							{value=Movement.IRREGULAR, label="irregular", tooltip="Irregular movement"},
+						}
+					}),
+					guiState.hbox!({
+						guiState.vbox!({ weight=1,
+							guiState.slider!({ name="emitterMovementSx", labelLeft="scale x", min=0, max=2, readoutMulti=100, readout="%d%%" }),
+							guiState.slider!({ name="emitterMovementSy", labelLeft="scale y", min=0, max=2, readoutMulti=100, readout="%d%%" }),
+						}),
+						guiState.slider!({ name="emitterMovementSpeed", labelLeft="speed", inset=40, min=-8, max=8, readoutMulti=100, readout="%d%%", weight=2 }),
+					}),
 				}),
 			}),
 
 			guiState.separator!({ thick=true }),
 
-			guiState.section!({ label="ParticleSystem",
-				guiState.tabs!({ specialLastTab=true, reorder=true,
-					buttons = {
-						{label="1"},
-						{label="+"},
-					},
+			guiState.vbox!({ name="system",
+				guiState.section!({ label="ParticleSystem",
+					guiState.tabs!({ name="systems", specialLastTab=true, reorder=true }),
 				}),
-			}),
 
-			guiState.scrollable!({ height=0,--[[Remaining height.]]
-				guiState.section!({ label="Texture",
-					guiState.radio!({
-						buttons = {{value="light",tooltip="light",image="light"},{value="moon",tooltip="moon",image="moon"}}, -- @Incomplete: Dynamically create this list.
+				guiState.scrollable!({ height=0,--[[Remaining height.]]
+					guiState.section!({ label="Texture",
+						guiState.radio!({ name="texture" }),
 					}),
-				}),
 
-				guiState.separator!({ thick=false }),
+					guiState.separator!({ thick=false }),
 
-				guiState.section!({ label="InsertMode",
-					guiState.radio!({
-						buttons = {
-							{value=LG.ParticleInsertMode.TOP,    label="top"},
-							{value=LG.ParticleInsertMode.BOTTOM, label="bottom"},
-							{value=LG.ParticleInsertMode.RANDOM, label="random"},
-						}
-					}),
-				}),
-
-				guiState.separator!({ thick=false }),
-
-				guiState.section!({ label="Lifetime",
-					guiState.slider!({ labelLeft="emitter",     min=0, max=20, readout="%.2f sec", readoutZero="∞" }),
-					guiState.slider!({ labelLeft="paricle min", min=0, max=20, readout="%.2f sec" }),
-					guiState.slider!({ labelLeft="paricle max", min=0, max=20, readout="%.2f sec" }),
-				}),
-
-				guiState.separator!({ thick=true }),
-
-				guiState.section!({ label="SpawnRate",
-					guiState.slider!({ min=.1, max=1000, readout="%.1f / sec" }),
-				}),
-
-				guiState.separator!({ thick=false }),
-
-				guiState.section!({ label="Area",
-					guiState.radio!({ name="area",
-						buttons = {
-							{value=LG.AreaSpreadDistribution.NONE,             label="none",    tooltip="None"},
-							{value=LG.AreaSpreadDistribution.NORMAL,           label="norm",    tooltip="Normal"},
-							{value=LG.AreaSpreadDistribution.ELLIPSE,          label="ellip",   tooltip="Ellipse"},
-							{value=LG.AreaSpreadDistribution.UNIFORM,          label="rect",    tooltip="Rectangle (uniform)"},
-							{value=LG.AreaSpreadDistribution.BORDER_ELLIPSE,   label="b.ellip", tooltip="Border ellipse"},
-							{value=LG.AreaSpreadDistribution.BORDER_RECTANGLE, label="b.rect",  tooltip="Border rectangle"},
-						},
-					}),
-					guiState.hbox!({ name="areaParams", active=false,
-						guiState.direction!({ labelLeft="angle" }),
-						guiState.vbox!({ weight=1,
-							guiState.slider!({ labelLeft="dx", inset=30, min=0, max=1000, readout="%d" }),
-							guiState.slider!({ labelLeft="dy", inset=30, min=0, max=1000, readout="%d" }),
-							guiState.checkbox!({ label="direction relative to center", inset=14, weight=1 }),
+					guiState.section!({ label="InsertMode",
+						guiState.radio!({ name="insertMode",
+							buttons = {
+								{value=LG.ParticleInsertMode.TOP,    label="top"},
+								{value=LG.ParticleInsertMode.BOTTOM, label="bottom"},
+								{value=LG.ParticleInsertMode.RANDOM, label="random"},
+							}
 						}),
 					}),
-				}),
 
-				guiState.separator!({ thick=false }),
+					guiState.separator!({ thick=false }),
 
-				guiState.section!({ label="Direction",
-					guiState.hbox!({
-						guiState.direction!({ linkSpread="spread" }),
-						guiState.slider!({ name="spread", labelLeft="spread", min=0, max=math.TAU, readoutMulti=360/math.TAU, readout="%d°", weight=1, inset=50 }),
+					guiState.section!({ label="Lifetime",
+						guiState.slider!({ name="emitterLifetime",     labelLeft="emitter",     min=0, max=20, readout="%.2f sec", readoutZero="∞" }),
+						guiState.slider!({ name="particleLifetimeMin", labelLeft="paricle min", min=0, max=20, readout="%.2f sec" }),
+						guiState.slider!({ name="particleLifetimeMax", labelLeft="paricle max", min=0, max=20, readout="%.2f sec" }),
 					}),
-				}),
 
-				guiState.separator!({ thick=true }),
+					guiState.separator!({ thick=true }),
 
-				guiState.section!({ label="Speed",
-					guiState.slider!({ labelLeft="min", min=-2000, max=2000, readout="%d / sec" }),
-					guiState.slider!({ labelLeft="max", min=-2000, max=2000, readout="%d / sec" }),
-				}),
-
-				guiState.separator!({ thick=false }),
-
-				guiState.section!({ label="AccLinear",
-					guiState.slider!({ labelLeft="xmin", min=-10000, max=10000, readout="%d / sec²" }),
-					guiState.slider!({ labelLeft="xmax", min=-10000, max=10000, readout="%d / sec²" }),
-					guiState.slider!({ labelLeft="ymin", min=-10000, max=10000, readout="%d / sec²" }),
-					guiState.slider!({ labelLeft="ymax", min=-10000, max=10000, readout="%d / sec²" }),
-				}),
-
-				guiState.separator!({ thick=false }),
-
-				guiState.section!({ label="AccRadial",
-					guiState.slider!({ labelLeft="min", min=-20000, max=20000, readout="%d / sec²" }),
-					guiState.slider!({ labelLeft="max", min=-20000, max=20000, readout="%d / sec²" }),
-				}),
-
-				guiState.separator!({ thick=false }),
-
-				guiState.section!({ label="AccTangent",
-					guiState.slider!({ labelLeft="min", min=-20000, max=20000, readout="%d / sec²" }),
-					guiState.slider!({ labelLeft="max", min=-20000, max=20000, readout="%d / sec²" }),
-				}),
-
-				guiState.separator!({ thick=false }),
-
-				guiState.section!({ label="DampLinear",
-					guiState.slider!({ labelLeft="min", min=-50, max=50, readout="%.2f" }),
-					guiState.slider!({ labelLeft="max", min=-50, max=50, readout="%.2f" }),
-				}),
-
-				guiState.separator!({ thick=true }),
-
-				guiState.section!({ label="Rotation",
-					guiState.hbox!({
-						guiState.direction!({ name="rotationMin", linkOther="rotationMax", labelLeft="min/max" }),
-						guiState.direction!({ name="rotationMax", linkOther="rotationMin", }),
-						guiState.checkbox!({ label="relative", inset=10 }),
+					guiState.section!({ label="SpawnRate",
+						guiState.slider!({ name="emissionRate", min=.1, max=1000, readout="%.1f / sec" }),
 					}),
-				}),
 
-				guiState.separator!({ thick=false }),
+					guiState.separator!({ thick=false }),
 
-				guiState.section!({ label="Spin",
-					guiState.slider!({ labelLeft="at start", min=-8*math.TAU, max=8*math.TAU, readoutMulti=1/math.TAU, readout="%.2f turns / sec" }),
-					guiState.slider!({ labelLeft="at end",   min=-8*math.TAU, max=8*math.TAU, readoutMulti=1/math.TAU, readout="%.2f turns / sec" }),
-					guiState.slider!({ labelLeft="variation", min=0, max=1, readoutMulti=100, readout="%d%%" }),
-				}),
-
-				guiState.separator!({ thick=true }),
-
-				guiState.section!({ label="Size",
-					guiState.buttons!({ buttons={{label="+"}} }),
-					guiState.slider!({ name="size1", labelLeft="#1", min=0, max=8, readout="%.2f" }),
-					guiState.slider!({ name="size2", labelLeft="#2", min=0, max=8, readout="%.2f" }),
-					guiState.slider!({ name="size3", labelLeft="#3", min=0, max=8, readout="%.2f", active=false }),
-					guiState.slider!({ name="size4", labelLeft="#4", min=0, max=8, readout="%.2f", active=false }),
-					guiState.slider!({ name="size5", labelLeft="#5", min=0, max=8, readout="%.2f", active=false }),
-					guiState.slider!({ name="size6", labelLeft="#6", min=0, max=8, readout="%.2f", active=false }),
-					guiState.slider!({ name="size7", labelLeft="#7", min=0, max=8, readout="%.2f", active=false }),
-					guiState.slider!({ name="size8", labelLeft="#8", min=0, max=8, readout="%.2f", active=false }),
-					guiState.slider!({ labelLeft="variation", min=0, max=1, readoutMulti=100, readout="%d%%" }),
-				}),
-
-				guiState.separator!({ thick=false }),
-
-				guiState.section!({ label="Color",
-					guiState.buttons!({ buttons={{label="+"}} }),
-					guiState.hbox!({
-						guiState.vbox!({ weight=1,
-							guiState.color!({ name="color1", labelLeft="#1" }),
-							guiState.color!({ name="color2", labelLeft="#2" }),
-							guiState.color!({ name="color3", labelLeft="#3" }),
-							guiState.color!({ name="color4", labelLeft="#4" }),
-							guiState.color!({ name="color5", labelLeft="#5", active=false }),
-							guiState.color!({ name="color6", labelLeft="#6", active=false }),
-							guiState.color!({ name="color7", labelLeft="#7", active=false }),
-							guiState.color!({ name="color8", labelLeft="#8", active=false }),
+					guiState.section!({ label="Area",
+						guiState.radio!({ name="areaDistribution",
+							buttons = {
+								{value=LG.AreaSpreadDistribution.NONE,             label="none",    tooltip="None"},
+								{value=LG.AreaSpreadDistribution.NORMAL,           label="norm",    tooltip="Normal"},
+								{value=LG.AreaSpreadDistribution.ELLIPSE,          label="ellip",   tooltip="Ellipse"},
+								{value=LG.AreaSpreadDistribution.UNIFORM,          label="rect",    tooltip="Rectangle (uniform)"},
+								{value=LG.AreaSpreadDistribution.BORDER_ELLIPSE,   label="b.ellip", tooltip="Border ellipse"},
+								{value=LG.AreaSpreadDistribution.BORDER_RECTANGLE, label="b.rect",  tooltip="Border rectangle"},
+							},
 						}),
-						guiState.colorPreview!({ linkColors={"color1","color2","color3","color4"} }),
+						guiState.hbox!({ name="areaParams", active=false,
+							guiState.direction!({ name="areaAngle", labelLeft="angle" }),
+							guiState.vbox!({ weight=1,
+								guiState.slider!({ name="areaDx", labelLeft="dx", inset=30, min=0, max=1000, readout="%d" }),
+								guiState.slider!({ name="areaDy", labelLeft="dy", inset=30, min=0, max=1000, readout="%d" }),
+								guiState.checkbox!({ name="areaRelative", label="direction relative to center", inset=14, weight=1 }),
+							}),
+						}),
 					}),
-					guiState.radio!({ labelLeft="blend mode",
-						buttons = {
-							{value=LG.BlendMode.ALPHA,    label="alpha"},
-							{value=LG.BlendMode.ADD,      label="add"},
-							{value=LG.BlendMode.SUBTRACT, label="subtract"},
-							{value=LG.BlendMode.SCREEN,   label="screen"},
-						},
+
+					guiState.separator!({ thick=false }),
+
+					guiState.section!({ label="Direction",
+						guiState.hbox!({
+							guiState.direction!({ name="direction", linkSpread="directionSpread" }),
+							guiState.slider!({ name="directionSpread", labelLeft="spread", min=0, max=math.TAU, readoutMulti=360/math.TAU, readout="%d°", weight=1, inset=50 }),
+						}),
+					}),
+
+					guiState.separator!({ thick=true }),
+
+					guiState.section!({ label="Speed",
+						guiState.slider!({ name="speedMin", labelLeft="min", min=-2000, max=2000, readout="%d / sec" }),
+						guiState.slider!({ name="speedMax", labelLeft="max", min=-2000, max=2000, readout="%d / sec" }),
+					}),
+
+					guiState.separator!({ thick=false }),
+
+					guiState.section!({ label="AccLinear",
+						guiState.slider!({ name="accLinearXmin", labelLeft="xmin", min=-10000, max=10000, readout="%d / sec²" }),
+						guiState.slider!({ name="accLinearXmax", labelLeft="xmax", min=-10000, max=10000, readout="%d / sec²" }),
+						guiState.slider!({ name="accLinearYmin", labelLeft="ymin", min=-10000, max=10000, readout="%d / sec²" }),
+						guiState.slider!({ name="accLinearYmax", labelLeft="ymax", min=-10000, max=10000, readout="%d / sec²" }),
+					}),
+
+					guiState.separator!({ thick=false }),
+
+					guiState.section!({ label="AccRadial",
+						guiState.slider!({ name="radialAccelerationMin", labelLeft="min", min=-20000, max=20000, readout="%d / sec²" }),
+						guiState.slider!({ name="radialAccelerationMax", labelLeft="max", min=-20000, max=20000, readout="%d / sec²" }),
+					}),
+
+					guiState.separator!({ thick=false }),
+
+					guiState.section!({ label="AccTangent",
+						guiState.slider!({ name="tangentialAccelerationMin", labelLeft="min", min=-20000, max=20000, readout="%d / sec²" }),
+						guiState.slider!({ name="tangentialAccelerationMax", labelLeft="max", min=-20000, max=20000, readout="%d / sec²" }),
+					}),
+
+					guiState.separator!({ thick=false }),
+
+					guiState.section!({ label="DampLinear",
+						guiState.slider!({ name="linearDampingMin", labelLeft="min", min=-50, max=50, readout="%.2f" }),
+						guiState.slider!({ name="linearDampingMax", labelLeft="max", min=-50, max=50, readout="%.2f" }),
+					}),
+
+					guiState.separator!({ thick=true }),
+
+					guiState.section!({ label="Rotation",
+						guiState.hbox!({
+							guiState.direction!({ name="rotationMin", linkOther="rotationMax", labelLeft="min/max" }),
+							guiState.direction!({ name="rotationMax", linkOther="rotationMin", }),
+							guiState.checkbox!({ name="rotationRelative", label="relative", inset=10 }),
+						}),
+					}),
+
+					guiState.separator!({ thick=false }),
+
+					guiState.section!({ label="Spin",
+						guiState.slider!({ name="spinMin", labelLeft="at start", min=-8*math.TAU, max=8*math.TAU, readoutMulti=1/math.TAU, readout="%.2f turns / sec" }),
+						guiState.slider!({ name="spinMax", labelLeft="at end",   min=-8*math.TAU, max=8*math.TAU, readoutMulti=1/math.TAU, readout="%.2f turns / sec" }),
+						guiState.slider!({ name="spinVariation", labelLeft="variation", min=0, max=1, readoutMulti=100, readout="%d%%" }),
+					}),
+
+					guiState.separator!({ thick=true }),
+
+					guiState.section!({ name="sizes", label="Size",
+						guiState.buttons!({ name="sizeAdd", buttons={{label="+"}} }),
+						guiState.slider!({ name="size1", data=1, labelLeft="#1", min=0, max=8, readout="%.2f" }),
+						guiState.slider!({ name="size2", data=2, labelLeft="#2", min=0, max=8, readout="%.2f" }),
+						guiState.slider!({ name="size3", data=3, labelLeft="#3", min=0, max=8, readout="%.2f" }),
+						guiState.slider!({ name="size4", data=4, labelLeft="#4", min=0, max=8, readout="%.2f" }),
+						guiState.slider!({ name="size5", data=5, labelLeft="#5", min=0, max=8, readout="%.2f" }),
+						guiState.slider!({ name="size6", data=6, labelLeft="#6", min=0, max=8, readout="%.2f" }),
+						guiState.slider!({ name="size7", data=7, labelLeft="#7", min=0, max=8, readout="%.2f" }),
+						guiState.slider!({ name="size8", data=8, labelLeft="#8", min=0, max=8, readout="%.2f" }),
+						guiState.slider!({ labelLeft="variation", min=0, max=1, readoutMulti=100, readout="%d%%" }),
+					}),
+
+					guiState.separator!({ thick=false }),
+
+					guiState.section!({ name="colors", label="Color",
+						guiState.buttons!({ name="colorAdd", buttons={{label="+"}} }),
+						guiState.hbox!({
+							guiState.vbox!({ weight=1,
+								guiState.color!({ name="color1", data=1, labelLeft="#1" }),
+								guiState.color!({ name="color2", data=2, labelLeft="#2" }),
+								guiState.color!({ name="color3", data=3, labelLeft="#3" }),
+								guiState.color!({ name="color4", data=4, labelLeft="#4" }),
+								guiState.color!({ name="color5", data=5, labelLeft="#5", active=false }),
+								guiState.color!({ name="color6", data=6, labelLeft="#6", active=false }),
+								guiState.color!({ name="color7", data=7, labelLeft="#7", active=false }),
+								guiState.color!({ name="color8", data=8, labelLeft="#8", active=false }),
+							}),
+							guiState.colorPreview!({ linkColors={"color1","color2","color3","color4"} }),
+						}),
+						guiState.radio!({ name="blendMode", labelLeft="blend mode",
+							buttons = {
+								{value=LG.BlendMode.ALPHA,    label="alpha"},
+								{value=LG.BlendMode.ADD,      label="add"},
+								{value=LG.BlendMode.SUBTRACT, label="subtract"},
+								{value=LG.BlendMode.SCREEN,   label="screen"},
+							},
+						}),
 					}),
 				}),
 			}),
@@ -244,7 +236,657 @@ export setupGuiFrames :: () {
 }
 
 export setupGuiCallbacks :: () {
-	guiState.onAction.area = (widget:gui.Widget, i:int) {
+	guiState.onRefresh.projects = (tabs:gui.Tabs) {
+		tabs.buttons = {}
+
+		for openProjects {
+			insert(tabs.buttons, cast(gui.Button){ label=it.displayedName })
+		}
+		insert(tabs.buttons, cast(gui.Button){ label="+" })
+
+		tabs.index = currentProjectIndex
+	}
+	guiState.onAction.projects = (tabs:gui.Tabs, i:int) {
+		if i < #tabs.buttons {
+			setCurrentProject(i)
+			return
+		}
+
+		local project = addNewProject()
+
+		insert(tabs.buttons, #tabs.buttons, cast(gui.Button){ label=project.displayedName })
+		guiState.layoutNeedsUpdate = true
+
+		setCurrentProject(#openProjects)
+	}
+	guiState.onClose.projects = (tabs:gui.Tabs, i:int) {
+		if i == #tabs.buttons  return
+
+		local isCurrent = (i == currentProjectIndex)
+
+		-- @UX: Confirm closing project if there are changes.
+		remove(openProjects, i)
+
+		if openProjects[1] == NULL
+			addNewProject()
+		elseif i < currentProjectIndex
+			currentProjectIndex -= 1
+		else
+			currentProjectIndex = math.min(currentProjectIndex, #openProjects)
+
+		gui.refreshRecursively(guiState, "projects")
+		if isCurrent  setCurrentProject(currentProjectIndex, force=true)
+	}
+
+	guiState.onRefresh.saveOpenBar = (buttons:gui.Buttons) {
+		buttons.buttons[4].label = showProjectSettings ? "hide settings" : "show settings"
+		gui.setActive(guiState, "projectSettings", showProjectSettings)
+	}
+	guiState.onAction.saveOpenBar = (buttons:gui.Buttons, i:int) {
+		if i == {
+			case 1:
+				-- @Incomplete: save
+
+			case 2:
+				-- @Incomplete: save as...
+
+			case 3:
+				-- @Incomplete: open...
+
+			case 4:
+				showProjectSettings = not showProjectSettings
+				buttons.buttons[4].label = showProjectSettings ? "hide settings" : "show settings"
+				gui.setActive(guiState, "projectSettings", showProjectSettings)
+		}
+	}
+
+	guiState.onRefresh.pixelateWorld = (checkbox:gui.Checkbox) {
+		local project    = openProjects[currentProjectIndex]
+		checkbox.checked = project.pixelateWorld
+	}
+	guiState.onAction.pixelateWorld = (checkbox:gui.Checkbox, i:int) {
+		local project            = openProjects[currentProjectIndex]
+		project.pixelateWorld    = checkbox.checked
+		scheduleRecreateCanvases = true
+
+		if project.pixelateWorld and project.zoomLevel < -1 {
+			project.zoomLevel  = -1
+			project.zoomSource = project.zoom
+			project.zoomTarget = 2^project.zoomLevel
+		}
+	}
+	guiState.onRefresh.pixelateTextures = (checkbox:gui.Checkbox) {
+		local project    = openProjects[currentProjectIndex]
+		checkbox.checked = project.pixelateTextures
+	}
+	guiState.onAction.pixelateTextures = (checkbox:gui.Checkbox, i:int) {
+		local project            = openProjects[currentProjectIndex]
+		project.pixelateTextures    = checkbox.checked
+		scheduleRecreateCanvases = true
+
+		if project.pixelateTextures and project.zoomLevel < -1 {
+			project.zoomLevel  = -1
+			project.zoomSource = project.zoom
+			project.zoomTarget = 2^project.zoomLevel
+		}
+	}
+
+	guiState.onRefresh.bgColor = (colorEl:gui.Color) {
+		local project    = openProjects[currentProjectIndex]
+		colorEl.color[1] = project.bgColorH
+		colorEl.color[2] = project.bgColorS
+		colorEl.color[3] = project.bgColorV
+	}
+	guiState.onAction.bgColor = (colorEl:gui.Color, i:int) {
+		local project    = openProjects[currentProjectIndex]
+		project.bgColorH = colorEl.color[1]
+		project.bgColorS = colorEl.color[2]
+		project.bgColorV = colorEl.color[3]
+	}
+
+	guiState.onRefresh.emitterMovement = (radio:gui.Radio) {
+		local project  = openProjects[currentProjectIndex]
+		local found, i = indexWith(radio.buttons, "value", project.movementPreset)
+		assert(found)
+		radio.index = i
+	}
+	guiState.onAction.emitterMovement = (radio:gui.Radio, i:int) {
+		local project          = openProjects[currentProjectIndex]
+		project.movementPreset = cast(Movement) radio.buttons[i].value
+	}
+	guiState.onRefresh.emitterMovementSx = (slider:gui.Slider) {
+		local project = openProjects[currentProjectIndex]
+		slider.value  = project.movementScaleX
+	}
+	guiState.onAction.emitterMovementSx = (slider:gui.Slider, i:int) {
+		local project          = openProjects[currentProjectIndex]
+		project.movementScaleX = slider.value
+	}
+	guiState.onRefresh.emitterMovementSy = (slider:gui.Slider) {
+		local project = openProjects[currentProjectIndex]
+		slider.value  = project.movementScaleY
+	}
+	guiState.onAction.emitterMovementSy = (slider:gui.Slider, i:int) {
+		local project          = openProjects[currentProjectIndex]
+		project.movementScaleY = slider.value
+	}
+	guiState.onRefresh.emitterMovementSpeed = (slider:gui.Slider) {
+		local project = openProjects[currentProjectIndex]
+		slider.value  = project.movementSpeed
+	}
+	guiState.onAction.emitterMovementSpeed = (slider:gui.Slider, i:int) {
+		local project         = openProjects[currentProjectIndex]
+		project.movementSpeed = slider.value
+	}
+
+	guiState.onRefresh.systems = (tabs:gui.Tabs) {
+		local project = openProjects[currentProjectIndex]
+		tabs.buttons  = {}
+
+		for project.systems {
+			insert(tabs.buttons, cast(gui.Button){ label=format("%d", itIndex) })
+		}
+		insert(tabs.buttons, cast(gui.Button){ label="+" })
+
+		tabs.index = project.systemIndex
+	}
+	guiState.onAction.systems = (tabs:gui.Tabs, i:int) {
+		local project = openProjects[currentProjectIndex]
+
+		if i < #tabs.buttons {
+			setCurrentSystem(i)
+			return
+		}
+
+		addNewSystem(project)
+		gui.refreshRecursively(guiState, "systems")
+		setCurrentSystem(#project.systems)
+	}
+	guiState.onOption.systems = (tabs:gui.Tabs, i:int) {
+		if i == #tabs.buttons  return
+
+		local project              = openProjects[currentProjectIndex]
+		project.systems[i].visible = not project.systems[i].visible
+	}
+	guiState.onClose.systems = (tabs:gui.Tabs, i:int) {
+		if i == #tabs.buttons  return
+
+		local project   = openProjects[currentProjectIndex]
+		local isCurrent = i == project.systemIndex
+
+		-- @UX: Confirm removal of system.
+		remove(project.systems, i)
+
+		if project.systems[1] == NULL
+			addNewSystem(project)
+		elseif i < project.systemIndex
+			project.systemIndex -= 1
+		else
+			project.systemIndex = math.min(project.systemIndex, #project.systems)
+
+		gui.refreshRecursively(guiState, "systems")
+		if isCurrent  setCurrentSystem(project.systemIndex, force=true)
+	}
+
+	guiState.onRefresh.texture = (radio:gui.Radio) {
+		local project = openProjects[currentProjectIndex]
+		local system  = project.systems[project.systemIndex]
+		radio.buttons = {}
+
+		for PARTICLE_IMAGES {
+			insert(radio.buttons, cast(gui.Button){ value=it, tooltip=it, image=it })
+		}
+
+		local found, i = indexOf(PARTICLE_IMAGES, system.textureName)
+		assert(found)
+		radio.index = i
+	}
+	guiState.onAction.texture = (radio:gui.Radio, i:int) {
+		local project      = openProjects[currentProjectIndex]
+		local system       = project.systems[project.systemIndex]
+		system.textureName = cast(string) radio.buttons[i].value
+		system.particles.setTexture!(particleImages[system.textureName]) -- @Incomplete: Update offset if system.useCustomOffset is set.
+	}
+
+	guiState.onRefresh.insertMode = (radio:gui.Radio) {
+		local project  = openProjects[currentProjectIndex]
+		local system   = project.systems[project.systemIndex]
+		local found, i = indexWith(radio.buttons, "value", system.particles.getInsertMode!())
+		assert(found)
+		radio.index = i
+	}
+	guiState.onAction.insertMode = (radio:gui.Radio, i:int) {
+		local project = openProjects[currentProjectIndex]
+		local system  = project.systems[project.systemIndex]
+		system.particles.setInsertMode!(cast(LG.ParticleInsertMode) radio.buttons[i].value)
+	}
+
+	guiState.onRefresh.emitterLifetime = (slider:gui.Slider) {
+		local project = openProjects[currentProjectIndex]
+		local system  = project.systems[project.systemIndex]
+		slider.value  = math.max(system.particles.getEmitterLifetime!(), 0)
+	}
+	guiState.onAction.emitterLifetime = (slider:gui.Slider, i:int) {
+		local project = openProjects[currentProjectIndex]
+		local system  = project.systems[project.systemIndex]
+		system.particles.setEmitterLifetime!(slider.value > 0 ? slider.value : -1.0)
+		if slider.value <= 0  system.particles.start!()
+	}
+	guiState.onRefresh.particleLifetimeMin = (slider:gui.Slider) {
+		local project  = openProjects[currentProjectIndex]
+		local system   = project.systems[project.systemIndex]
+		local min, max = system.particles.getParticleLifetime!()
+		slider.value   = min
+	}
+	guiState.onAction.particleLifetimeMin = (slider:gui.Slider, i:int) {
+		local project  = openProjects[currentProjectIndex]
+		local system   = project.systems[project.systemIndex]
+		local min, max = system.particles.getParticleLifetime!()
+		system.particles.setParticleLifetime!(slider.value, max)
+	}
+	guiState.onRefresh.particleLifetimeMax = (slider:gui.Slider) {
+		local project  = openProjects[currentProjectIndex]
+		local system   = project.systems[project.systemIndex]
+		local min, max = system.particles.getParticleLifetime!()
+		slider.value   = max
+	}
+	guiState.onAction.particleLifetimeMax = (slider:gui.Slider, i:int) {
+		local project  = openProjects[currentProjectIndex]
+		local system   = project.systems[project.systemIndex]
+		local min, max = system.particles.getParticleLifetime!()
+		system.particles.setParticleLifetime!(min, slider.value)
+	}
+
+	guiState.onRefresh.emissionRate = (slider:gui.Slider) {
+		local project = openProjects[currentProjectIndex]
+		local system  = project.systems[project.systemIndex]
+		slider.value  = system.particles.getEmissionRate!()
+	}
+	guiState.onAction.emissionRate = (slider:gui.Slider, i:int) {
+		local project = openProjects[currentProjectIndex]
+		local system  = project.systems[project.systemIndex]
+		system.particles.setEmissionRate!(slider.value)
+	}
+
+	guiState.onRefresh.areaDistribution = (radio:gui.Radio) {
+		local project  = openProjects[currentProjectIndex]
+		local ps       = project.systems[project.systemIndex].particles
+		local found, i = indexWith(radio.buttons, "value", (ps.getEmissionArea!()))
+		assert(found)
+		radio.index = i
 		gui.setActive(guiState, "areaParams", i > 1)
+	}
+	guiState.onAction.areaDistribution = (radio:gui.Radio, i:int) {
+		local project = openProjects[currentProjectIndex]
+		local ps      = project.systems[project.systemIndex].particles
+		local distribution, dx,dy, angle, relative = ps.getEmissionArea!()
+		distribution  = cast(LG.AreaSpreadDistribution) radio.buttons[i].value
+		ps.setEmissionArea!(distribution, dx,dy, angle, relative)
+		gui.setActive(guiState, "areaParams", i > 1)
+		gui.refreshRecursively(guiState, "areaParams")
+	}
+	guiState.onRefresh.areaAngle = (direction:gui.Direction) {
+		local project   = openProjects[currentProjectIndex]
+		local ps        = project.systems[project.systemIndex].particles
+		local distribution, dx,dy, angle = ps.getEmissionArea!()
+		direction.angle = angle
+	}
+	guiState.onAction.areaAngle = (direction:gui.Direction, i:int) {
+		local project = openProjects[currentProjectIndex]
+		local ps      = project.systems[project.systemIndex].particles
+		local distribution, dx,dy, angle, relative = ps.getEmissionArea!()
+		ps.setEmissionArea!(distribution, dx,dy, direction.angle, relative)
+	}
+	guiState.onRefresh.areaDx = (slider:gui.Slider) {
+		local project = openProjects[currentProjectIndex]
+		local ps      = project.systems[project.systemIndex].particles
+		local distribution, dx = ps.getEmissionArea!()
+		slider.value  = dx
+	}
+	guiState.onAction.areaDx = (slider:gui.Slider, i:int) {
+		local project = openProjects[currentProjectIndex]
+		local ps      = project.systems[project.systemIndex].particles
+		local distribution, dx,dy, angle, relative = ps.getEmissionArea!()
+		ps.setEmissionArea!(distribution, slider.value,dy, angle, relative)
+	}
+	guiState.onRefresh.areaDy = (slider:gui.Slider) {
+		local project = openProjects[currentProjectIndex]
+		local ps      = project.systems[project.systemIndex].particles
+		local distribution, dx,dy = ps.getEmissionArea!()
+		slider.value  = dy
+	}
+	guiState.onAction.areaDy = (slider:gui.Slider, i:int) {
+		local project = openProjects[currentProjectIndex]
+		local ps      = project.systems[project.systemIndex].particles
+		local distribution, dx,dy, angle, relative = ps.getEmissionArea!()
+		ps.setEmissionArea!(distribution, dx,slider.value, angle, relative)
+	}
+	guiState.onRefresh.areaRelative = (checkbox:gui.Checkbox) {
+		local project    = openProjects[currentProjectIndex]
+		local ps         = project.systems[project.systemIndex].particles
+		local distribution, dx,dy, angle, relative = ps.getEmissionArea!()
+		checkbox.checked = relative
+	}
+	guiState.onAction.areaRelative = (checkbox:gui.Checkbox, i:int) {
+		local project = openProjects[currentProjectIndex]
+		local ps      = project.systems[project.systemIndex].particles
+		local distribution, dx,dy, angle, relative = ps.getEmissionArea!()
+		ps.setEmissionArea!(distribution, dx,dy, angle, checkbox.checked)
+	}
+
+	guiState.onRefresh.direction = (direction:gui.Direction) {
+		local project   = openProjects[currentProjectIndex]
+		local ps        = project.systems[project.systemIndex].particles
+		direction.angle = ps.getDirection!()
+	}
+	guiState.onAction.direction = (direction:gui.Direction, i:int) {
+		local project = openProjects[currentProjectIndex]
+		local ps      = project.systems[project.systemIndex].particles
+		ps.setDirection!(direction.angle)
+	}
+	guiState.onRefresh.directionSpread = (slider:gui.Slider) {
+		local project = openProjects[currentProjectIndex]
+		local ps      = project.systems[project.systemIndex].particles
+		slider.value  = ps.getSpread!()
+	}
+	guiState.onAction.directionSpread = (slider:gui.Slider, i:int) {
+		local project = openProjects[currentProjectIndex]
+		local ps      = project.systems[project.systemIndex].particles
+		ps.setSpread!(slider.value)
+	}
+
+	guiState.onRefresh.speedMin = (slider:gui.Slider) {
+		local project  = openProjects[currentProjectIndex]
+		local ps       = project.systems[project.systemIndex].particles
+		local min, max = ps.getSpeed!()
+		slider.value   = min
+	}
+	guiState.onAction.speedMin = (slider:gui.Slider, i:int) {
+		local project  = openProjects[currentProjectIndex]
+		local ps       = project.systems[project.systemIndex].particles
+		local min, max = ps.getSpeed!()
+		ps.setSpeed!(slider.value, max)
+	}
+	guiState.onRefresh.speedMax = (slider:gui.Slider) {
+		local project  = openProjects[currentProjectIndex]
+		local ps       = project.systems[project.systemIndex].particles
+		local min, max = ps.getSpeed!()
+		slider.value   = max
+	}
+	guiState.onAction.speedMax = (slider:gui.Slider, i:int) {
+		local project  = openProjects[currentProjectIndex]
+		local ps       = project.systems[project.systemIndex].particles
+		local min, max = ps.getSpeed!()
+		ps.setSpeed!(min, slider.value)
+	}
+
+	guiState.onRefresh.accLinearXmin = (slider:gui.Slider) {
+		local project = openProjects[currentProjectIndex]
+		local ps      = project.systems[project.systemIndex].particles
+		local xmin,ymin, xmax,ymax = ps.getLinearAcceleration!()
+		slider.value  = xmin
+	}
+	guiState.onAction.accLinearXmin = (slider:gui.Slider, i:int) {
+		local project = openProjects[currentProjectIndex]
+		local ps      = project.systems[project.systemIndex].particles
+		local xmin,ymin, xmax,ymax = ps.getLinearAcceleration!()
+		ps.setLinearAcceleration!(slider.value,ymin, xmax,ymax)
+	}
+	guiState.onRefresh.accLinearXmax = (slider:gui.Slider) {
+		local project = openProjects[currentProjectIndex]
+		local ps      = project.systems[project.systemIndex].particles
+		local xmin,ymin, xmax,ymax = ps.getLinearAcceleration!()
+		slider.value  = xmax
+	}
+	guiState.onAction.accLinearXmax = (slider:gui.Slider, i:int) {
+		local project = openProjects[currentProjectIndex]
+		local ps      = project.systems[project.systemIndex].particles
+		local xmin,ymin, xmax,ymax = ps.getLinearAcceleration!()
+		ps.setLinearAcceleration!(xmin,ymin, slider.value,ymax)
+	}
+	guiState.onRefresh.accLinearYmin = (slider:gui.Slider) {
+		local project = openProjects[currentProjectIndex]
+		local ps      = project.systems[project.systemIndex].particles
+		local xmin,ymin, xmax,ymax = ps.getLinearAcceleration!()
+		slider.value  = ymin
+	}
+	guiState.onAction.accLinearYmin = (slider:gui.Slider, i:int) {
+		local project = openProjects[currentProjectIndex]
+		local ps      = project.systems[project.systemIndex].particles
+		local xmin,ymin, xmax,ymax = ps.getLinearAcceleration!()
+		ps.setLinearAcceleration!(xmin,slider.value, xmax,ymax)
+	}
+	guiState.onRefresh.accLinearYmax = (slider:gui.Slider) {
+		local project = openProjects[currentProjectIndex]
+		local ps      = project.systems[project.systemIndex].particles
+		local xmin,ymin, xmax,ymax = ps.getLinearAcceleration!()
+		slider.value  = ymax
+	}
+	guiState.onAction.accLinearYmax = (slider:gui.Slider, i:int) {
+		local project = openProjects[currentProjectIndex]
+		local ps      = project.systems[project.systemIndex].particles
+		local xmin,ymin, xmax,ymax = ps.getLinearAcceleration!()
+		ps.setLinearAcceleration!(xmin,ymin, xmax,slider.value)
+	}
+
+	guiState.onRefresh.radialAccelerationMin = (slider:gui.Slider) {
+		local project  = openProjects[currentProjectIndex]
+		local ps       = project.systems[project.systemIndex].particles
+		local min, max = ps.getRadialAcceleration!()
+		slider.value   = min
+	}
+	guiState.onAction.radialAccelerationMin = (slider:gui.Slider, i:int) {
+		local project = openProjects[currentProjectIndex]
+		local ps      = project.systems[project.systemIndex].particles
+		local min, max = ps.getRadialAcceleration!()
+		ps.setRadialAcceleration!(slider.value, max)
+	}
+	guiState.onRefresh.radialAccelerationMax = (slider:gui.Slider) {
+		local project  = openProjects[currentProjectIndex]
+		local ps       = project.systems[project.systemIndex].particles
+		local min, max = ps.getRadialAcceleration!()
+		slider.value   = max
+	}
+	guiState.onAction.radialAccelerationMax = (slider:gui.Slider, i:int) {
+		local project = openProjects[currentProjectIndex]
+		local ps      = project.systems[project.systemIndex].particles
+		local min, max = ps.getRadialAcceleration!()
+		ps.setRadialAcceleration!(min, slider.value)
+	}
+
+	guiState.onRefresh.tangentialAccelerationMin = (slider:gui.Slider) {
+		local project  = openProjects[currentProjectIndex]
+		local ps       = project.systems[project.systemIndex].particles
+		local min, max = ps.getTangentialAcceleration!()
+		slider.value   = min
+	}
+	guiState.onAction.tangentialAccelerationMin = (slider:gui.Slider, i:int) {
+		local project = openProjects[currentProjectIndex]
+		local ps      = project.systems[project.systemIndex].particles
+		local min, max = ps.getTangentialAcceleration!()
+		ps.setTangentialAcceleration!(slider.value, max)
+	}
+	guiState.onRefresh.tangentialAccelerationMax = (slider:gui.Slider) {
+		local project  = openProjects[currentProjectIndex]
+		local ps       = project.systems[project.systemIndex].particles
+		local min, max = ps.getTangentialAcceleration!()
+		slider.value   = max
+	}
+	guiState.onAction.tangentialAccelerationMax = (slider:gui.Slider, i:int) {
+		local project = openProjects[currentProjectIndex]
+		local ps      = project.systems[project.systemIndex].particles
+		local min, max = ps.getTangentialAcceleration!()
+		ps.setTangentialAcceleration!(min, slider.value)
+	}
+
+	guiState.onRefresh.linearDampingMin = (slider:gui.Slider) {
+		local project  = openProjects[currentProjectIndex]
+		local ps       = project.systems[project.systemIndex].particles
+		local min, max = ps.getLinearDamping!()
+		slider.value   = min
+	}
+	guiState.onAction.linearDampingMin = (slider:gui.Slider, i:int) {
+		local project = openProjects[currentProjectIndex]
+		local ps      = project.systems[project.systemIndex].particles
+		local min, max = ps.getLinearDamping!()
+		ps.setLinearDamping!(slider.value, max)
+	}
+	guiState.onRefresh.linearDampingMax = (slider:gui.Slider) {
+		local project  = openProjects[currentProjectIndex]
+		local ps       = project.systems[project.systemIndex].particles
+		local min, max = ps.getLinearDamping!()
+		slider.value   = max
+	}
+	guiState.onAction.linearDampingMax = (slider:gui.Slider, i:int) {
+		local project = openProjects[currentProjectIndex]
+		local ps      = project.systems[project.systemIndex].particles
+		local min, max = ps.getLinearDamping!()
+		ps.setLinearDamping!(min, slider.value)
+	}
+
+	guiState.onRefresh.rotationMin = (direction:gui.Direction) {
+		local project   = openProjects[currentProjectIndex]
+		local ps        = project.systems[project.systemIndex].particles
+		local min, max  = ps.getRotation!()
+		direction.angle = min
+	}
+	guiState.onAction.rotationMin = (direction:gui.Direction, i:int) {
+		local project  = openProjects[currentProjectIndex]
+		local ps       = project.systems[project.systemIndex].particles
+		local min, max = ps.getRotation!()
+		ps.setRotation!(direction.angle, max)
+	}
+	guiState.onRefresh.rotationMax = (direction:gui.Direction) {
+		local project   = openProjects[currentProjectIndex]
+		local ps        = project.systems[project.systemIndex].particles
+		local min, max  = ps.getRotation!()
+		direction.angle = max
+	}
+	guiState.onAction.rotationMax = (direction:gui.Direction, i:int) {
+		local project  = openProjects[currentProjectIndex]
+		local ps       = project.systems[project.systemIndex].particles
+		local min, max = ps.getRotation!()
+		ps.setRotation!(min, direction.angle)
+	}
+	guiState.onRefresh.rotationRelative = (checkbox:gui.Checkbox) {
+		local project    = openProjects[currentProjectIndex]
+		local ps         = project.systems[project.systemIndex].particles
+		checkbox.checked = ps.hasRelativeRotation!()
+	}
+	guiState.onAction.rotationRelative = (checkbox:gui.Checkbox, i:int) {
+		local project = openProjects[currentProjectIndex]
+		local ps      = project.systems[project.systemIndex].particles
+		ps.setRelativeRotation!(checkbox.checked)
+	}
+
+	guiState.onRefresh.spinMin = (slider:gui.Slider) {
+		local project  = openProjects[currentProjectIndex]
+		local ps       = project.systems[project.systemIndex].particles
+		local min, max = ps.getSpin!()
+		slider.value   = min
+	}
+	guiState.onAction.spinMin = (slider:gui.Slider, i:int) {
+		local project  = openProjects[currentProjectIndex]
+		local ps       = project.systems[project.systemIndex].particles
+		local min, max = ps.getSpin!()
+		ps.setSpin!(slider.value, max)
+	}
+	guiState.onRefresh.spinMax = (slider:gui.Slider) {
+		local project  = openProjects[currentProjectIndex]
+		local ps       = project.systems[project.systemIndex].particles
+		local min, max = ps.getSpin!()
+		slider.value   = max
+	}
+	guiState.onAction.spinMax = (slider:gui.Slider, i:int) {
+		local project  = openProjects[currentProjectIndex]
+		local ps       = project.systems[project.systemIndex].particles
+		local min, max = ps.getSpin!()
+		ps.setSpin!(min, slider.value)
+	}
+	guiState.onRefresh.spinVariation = (slider:gui.Slider) {
+		local project = openProjects[currentProjectIndex]
+		local ps      = project.systems[project.systemIndex].particles
+		slider.value  = ps.getSpinVariation!()
+	}
+	guiState.onAction.spinVariation = (slider:gui.Slider, i:int) {
+		local project = openProjects[currentProjectIndex]
+		local ps      = project.systems[project.systemIndex].particles
+		ps.setSpinVariation!(slider.value)
+	}
+
+	guiState.onAction.sizeAdd = (buttons:gui.Buttons, i:int) {
+		local project = openProjects[currentProjectIndex]
+		local system  = project.systems[project.systemIndex]
+		-- @Incomplete: Action.
+	}
+	guiState.onRefresh.sizes = (slider:gui.Slider) {
+		local project = openProjects[currentProjectIndex]
+		local system  = project.systems[project.systemIndex]
+		local sizes   = {system.particles.getSizesAsVararg!()}
+		for 1, 8 {
+			gui.getElement(guiState, format("size%d", it), gui.Slider).active = (sizes[it] ~= NULL)
+		}
+	}
+	for i = 1, 8 {
+		guiState.onRefresh[format("size%d", i)] = (slider:gui.Slider) {
+			local project = openProjects[currentProjectIndex]
+			local system  = project.systems[project.systemIndex]
+			local sizes   = {system.particles.getSizesAsVararg!()}
+			slider.value  = sizes[cast(int)slider.data]
+		}
+		guiState.onAction[format("size%d", i)] = (slider:gui.Slider, i:int) {
+			local project = openProjects[currentProjectIndex]
+			local system  = project.systems[project.systemIndex]
+			local sizes   = {system.particles.getSizesAsVararg!()}
+			sizes[cast(int)slider.data] = slider.value
+			system.particles.setSizes!(sizes)
+		}
+	}
+
+	guiState.onAction.colorAdd = (buttons:gui.Buttons, i:int) {
+		local project = openProjects[currentProjectIndex]
+		local system  = project.systems[project.systemIndex]
+		-- @Incomplete: Action.
+	}
+	guiState.onRefresh.colors = (slider:gui.Slider) {
+		local project = openProjects[currentProjectIndex]
+		local system  = project.systems[project.systemIndex]
+		local colors  = system.colors
+		for 1, 8 {
+			gui.getElement(guiState, format("color%d", it), gui.Slider).active = (colors[it*4] ~= NULL)
+		}
+	}
+	for i = 1, 8 {
+		guiState.onRefresh[format("color%d", i)] = (colorEl:gui.Color) {
+			local project    = openProjects[currentProjectIndex]
+			local system     = project.systems[project.systemIndex]
+			local colors     = system.colors
+			local i1         = (4 * cast(int) colorEl.data) - 3
+			colorEl.color[1] = colors[i1+0]
+			colorEl.color[2] = colors[i1+1]
+			colorEl.color[3] = colors[i1+2]
+			colorEl.color[4] = colors[i1+3]
+		}
+		guiState.onAction[format("color%d", i)] = (colorEl:gui.Color, i:int) {
+			local project  = openProjects[currentProjectIndex]
+			local system   = project.systems[project.systemIndex]
+			local colors   = system.colors
+			local i1       = (4 * cast(int) colorEl.data) - 3
+			colors[i1+i-1] = colorEl.color[i]
+			updateParticleColors(system.particles, colors)
+		}
+	}
+
+	guiState.onRefresh.blendMode = (radio:gui.Radio) {
+		local project  = openProjects[currentProjectIndex]
+		local system   = project.systems[project.systemIndex]
+		local found, i = indexWith(radio.buttons, "value", system.blendMode)
+		assert(found)
+		radio.index = i
+	}
+	guiState.onAction.blendMode = (radio:gui.Radio, i:int) {
+		local project    = openProjects[currentProjectIndex]
+		local system     = project.systems[project.systemIndex]
+		system.blendMode = cast(LG.BlendMode) radio.buttons[i].value
 	}
 }
