@@ -816,8 +816,17 @@ export setupGuiCallbacks :: () {
 
 	guiState.onAction.sizeAdd = (buttons:gui.Buttons, i:int) {
 		local project = openProjects[currentProjectIndex]
-		local system  = project.systems[project.systemIndex]
-		-- @Incomplete: Action.
+		local ps      = project.systems[project.systemIndex].particles
+		local sizes   = {ps.getSizesAsVararg!()}
+
+		if sizes[8] ~= NULL  return
+
+		insert(sizes, sizes[#sizes])
+		ps.setSizes!(sizes)
+
+		local name = format("size%d", #sizes)
+		gui.setActive(guiState, name, true)
+		gui.refreshRecursively(guiState, name)
 	}
 	guiState.onRefresh.sizes = (slider:gui.Slider) {
 		local project = openProjects[currentProjectIndex]
@@ -844,9 +853,20 @@ export setupGuiCallbacks :: () {
 	}
 
 	guiState.onAction.colorAdd = (buttons:gui.Buttons, i:int) {
-		local project = openProjects[currentProjectIndex]
-		local system  = project.systems[project.systemIndex]
-		-- @Incomplete: Action.
+		local project  = openProjects[currentProjectIndex]
+		local system   = project.systems[project.systemIndex]
+		local colors   = system.colors
+		local oldCount = #colors // 4
+		local i1       = oldCount*4 - 3
+
+		if colors[8*4] ~= NULL  return
+
+		for 1, 4  insert(colors, colors[i1+it-1])
+		updateParticleColors(system.particles, colors)
+
+		local name = format("color%d", oldCount+1)
+		gui.setActive(guiState, name, true)
+		gui.refreshRecursively(guiState, name)
 	}
 	guiState.onRefresh.colors = (slider:gui.Slider) {
 		local project = openProjects[currentProjectIndex]

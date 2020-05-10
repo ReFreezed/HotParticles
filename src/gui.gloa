@@ -422,7 +422,7 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int, isTouch:bool) {
 
 			-- @Polish: Don't snap the handle to the mouse if pressing on the handle.
 			scrollable.scrollTarget = -math.round((my-handlePosMax/2-scrollable.layoutY) / (visibleH-handlePosMax) * paddedH)
-			limitScrollTarget(scrollable)
+			limitScroll(scrollable)
 			scrollable.scroll = scrollable.scrollTarget
 	}
 }
@@ -519,7 +519,7 @@ export onMouseWheel :: (state:State, dx,dy:int) -> (handled:bool) {
 		local scrollable        = cast(Scrollable) el
 		scrollable.scrollSource = scrollable.scroll
 		scrollable.scrollTarget = scrollable.scrollTarget + 50*dy
-		limitScrollTarget(scrollable)
+		limitScroll(scrollable)
 		return true
 	}
 
@@ -824,7 +824,7 @@ local updateLayoutIfNeeded :: (state:State) {
 		positionAndFit(state, it, 0, 0, it.layoutWidth, it.layoutHeight)
 	}
 
-	for state.scrollables  limitScrollTarget(it)
+	for state.scrollables  limitScroll(it)
 
 	local mx, my = LM.getPosition()
 	if isOverGui(state, mx, my)  onMouseMoved(state, mx, my, 0, 0, false)
@@ -1471,9 +1471,10 @@ local getScrollbarHandle :: (scrollable:Scrollable, visual:bool) -> (handlePos:i
 	return handlePos, handleLen, handlePosMax
 }
 
-local limitScrollTarget :: (scrollable:Scrollable) {
+local limitScroll :: (scrollable:Scrollable) {
 	local limit             = math.max(scrollable.contentHeight - scrollable.layoutHeight + 2*SPACING, 0)
 	scrollable.scrollTarget = math.clamp(scrollable.scrollTarget, -limit, 0)
+	scrollable.scroll       = math.max(scrollable.scroll, scrollable.scrollTarget)
 }
 
 local getScrollOffset :: (el:Element) -> int {

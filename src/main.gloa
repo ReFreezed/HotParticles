@@ -84,6 +84,7 @@ export scheduleRecreateCanvases = false
 
 local particleUpdateTime = 0.00
 local particleDrawTime   = 0.00
+local presentTime        = 0.00
 
 local defaultSearchPaths: []string = NULL
 
@@ -302,6 +303,39 @@ export setErrorText :: (s:string, ...:int|float|string) {
 	messageText         = format("Error: "..s, ...)
 	messageTextTime     = LT.getTime()
 	messageTextDuration = 8.00
+}
+
+
+
+export onRun :: () -> (mainLoop:()->int|none) {
+	local LOVE: struct { !key:string, !value:(...:love.Variant) } : !foreign lua "love"
+
+	local argsRaw = !import"utils".getCommandLineArguments()
+	LOVE.load(love.arg.parseGameArguments(argsRaw), argsRaw)
+
+	LT.step()
+	local dt = .0
+
+	return [dt] () -> int|none {
+		LE.pump()
+		for name, a,b,c,d,e,f in LE.poll() {
+			if name == LE.Event.QUIT {
+				-- if not (cast(()->bool)cast(any)LOVE.quit)() {
+					return a == NULL ? 0 : cast(int)a
+				-- }
+			}
+			local HANDLERS: struct { !key:LE.Event, !value:(...:love.Variant) } : !foreign lua "love.handlers"
+			HANDLERS[name](a,b,c,d,e,f)
+		}
+
+		dt = LT.step()
+		LOVE.update(dt)
+
+		if LG.isActive()  LOVE.draw()
+
+		LT.sleep(0.001)
+		return nil
+	}
 }
 
 
@@ -655,10 +689,21 @@ export onDraw :: () {
 				y += fontH+1
 			}
 
+			local _, _, windowMode = love.window.getMode()
+			local ratio            = 1 / presentTime / windowMode.refreshrate
 			drawStatsLine("FPS: %d", LT.getFPS())
 			drawStatsLine("ParticleSystemUpdateTime: %.3f ms", 1000*particleUpdateTime)
 			drawStatsLine("ParticleSystemDrawTime: %.3f ms",   1000*particleDrawTime)
-			drawStatsLine("ParticleCountTotal: %d",            particleCountTotal)
+			if not windowMode.refreshrate {
+				drawStatsLine("LoveGraphicsPresentTime: %.3f ms", 1000*presentTime)
+			} elseif ratio >= 10 {
+				drawStatsLine("LoveGraphicsPresentTime: %.3f ms (%.0f.0 x framerate)", 1000*presentTime, ratio)
+			} elseif ratio >= 2 {
+				drawStatsLine("LoveGraphicsPresentTime: %.3f ms (%.1f0 x framerate)",  1000*presentTime, ratio)
+			} else {
+				drawStatsLine("LoveGraphicsPresentTime: %.3f ms (%.2f x framerate)",   1000*presentTime, ratio)
+			}
+			drawStatsLine("ParticleCountTotal: %d", particleCountTotal)
 			for project.systems  drawStatsLine("ParticleCount_%d: %d", itIndex, it.particles.getCount!())
 			drawStatsLine("(hide this with F1)")
 		}
@@ -776,6 +821,10 @@ export onDraw :: () {
 	}
 
 	LG.draw(canvasGui)
+
+	local time = LT.getTime()
+	LG.present()
+	presentTime = LT.getTime()-time
 }
 
 
@@ -790,21 +839,22 @@ export onResize :: (w,h:int) {
 
 export main :: () {
 	!import "utils"
-	local loveTable: table : !foreign lua "love"
+	local LOVE: table : !foreign lua "love"
 
-	loveTable.load          = wrapFunctionInGloaErrorHandler(onLoad)
-	loveTable.keypressed    = wrapFunctionInGloaErrorHandler(onKeyPressed)
-	loveTable.keyreleased   = wrapFunctionInGloaErrorHandler(onKeyReleased)
-	loveTable.textinput     = wrapFunctionInGloaErrorHandler(onTextInput)
-	loveTable.mousepressed  = wrapFunctionInGloaErrorHandler(onMousePressed)
-	loveTable.mousemoved    = wrapFunctionInGloaErrorHandler(onMouseMoved)
-	loveTable.mousereleased = wrapFunctionInGloaErrorHandler(onMouseReleased)
-	loveTable.wheelmoved    = wrapFunctionInGloaErrorHandler(onMouseWheel)
-	loveTable.update        = wrapFunctionInGloaErrorHandler(onUpdate)
-	loveTable.draw          = wrapFunctionInGloaErrorHandler(onDraw)
-	loveTable.resize        = wrapFunctionInGloaErrorHandler(onResize)
-	loveTable.errhand       = nil
-	loveTable.errorhandler  = nil
+	LOVE.run           = wrapFunctionInGloaErrorHandler(onRun)
+	LOVE.load          = wrapFunctionInGloaErrorHandler(onLoad)
+	LOVE.keypressed    = wrapFunctionInGloaErrorHandler(onKeyPressed)
+	LOVE.keyreleased   = wrapFunctionInGloaErrorHandler(onKeyReleased)
+	LOVE.textinput     = wrapFunctionInGloaErrorHandler(onTextInput)
+	LOVE.mousepressed  = wrapFunctionInGloaErrorHandler(onMousePressed)
+	LOVE.mousemoved    = wrapFunctionInGloaErrorHandler(onMouseMoved)
+	LOVE.mousereleased = wrapFunctionInGloaErrorHandler(onMouseReleased)
+	LOVE.wheelmoved    = wrapFunctionInGloaErrorHandler(onMouseWheel)
+	LOVE.update        = wrapFunctionInGloaErrorHandler(onUpdate)
+	LOVE.draw          = wrapFunctionInGloaErrorHandler(onDraw)
+	LOVE.resize        = wrapFunctionInGloaErrorHandler(onResize)
+	LOVE.errorhandler  = nil
+	LOVE.errhand       = nil
 }
 
 

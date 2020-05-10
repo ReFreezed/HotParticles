@@ -8,6 +8,7 @@ local main :: () {
 		window.width     = 1400
 		window.height    = 800
 		window.resizable = true
+		window.vsync     = 0
 
 		modules.audio    = false
 		modules.data     = true
