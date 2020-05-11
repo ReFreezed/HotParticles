@@ -10,6 +10,20 @@
 --============================================================]]
 
 export generateIcons :: () {
+	guiImages.iconAdd = newMonochromeImage({
+		"            ",
+		"     FF     ",
+		"     FF     ",
+		"     FF     ",
+		"     FF     ",
+		" FFFFFFFFFF ",
+		" FFFFFFFFFF ",
+		"     FF     ",
+		"     FF     ",
+		"     FF     ",
+		"     FF     ",
+		"            ",
+	})
 	guiImages.iconAddUp = newMonochromeImage({
 		"  F         ",
 		"  F         ",
