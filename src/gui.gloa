@@ -54,7 +54,7 @@ local CHECKBOX_SIZE :: 14 -- @Temp until we have an image.
 
 local DIRECTION_RADIUS :: 25
 
-local BUTTON_IMAGE_MAX_SIZE :: 20
+local BUTTON_IMAGE_MAX_SIZE :: 20 -- Also the size of particle previews.
 local SPECIAL_TAB_WIDTH     :: 32
 
 local HOVER_OUTLINE_OPACITY        :: .3
@@ -214,6 +214,7 @@ export Button :: struct {
 	tooltip = "",
 	value: any,
 	draggable = false,
+	system: System = NULL,
 
 	imageScale = 1.0,
 }
@@ -698,7 +699,10 @@ local calculateNaturalSize :: (state:State, el:Element) {
 				local w: int = NULL
 				local h: int = NULL
 
-				if it.label and it.image {
+				if it.system ~= NULL {
+					w             = BUTTON_IMAGE_MAX_SIZE
+					h             = BUTTON_IMAGE_MAX_SIZE
+				} elseif it.label and it.image {
 					w, h          = guiImages[it.image].getDimensions!()
 					it.imageScale = math.min(BUTTON_IMAGE_MAX_SIZE/w, BUTTON_IMAGE_MAX_SIZE/h, 1)
 					w             = math.round(w*it.imageScale) + SPACING + fontNormal.getWidth!(it.label)
@@ -1144,6 +1148,40 @@ local drawElement :: (state:State, el:Element) {
 						by1[itIndex] + bh[itIndex] // 2,
 						0, it.imageScale, it.imageScale, iw/2, ih/2
 					)
+				}
+			}
+
+			-- Particle previews.
+			-- @Cleanup: All this is a bit misplaced in the GUI. Maybe provide an onDraw event for elements so systems and projects can stay outside this file.
+			local project = openProjects[currentProjectIndex]
+			local scale   = 2 * BUTTON_IMAGE_MAX_SIZE / math.min(LG.getWidth() - MAIN_PANEL_WIDTH, LG.getHeight()) * project.zoom
+			local r, g, b = hsvToRgb(project.bgColorH, project.bgColorS, project.bgColorV)
+
+			LG.setColor(1, 1, 1)
+
+			for buttons.buttons  if it.system ~= NULL {
+				local system = it.system
+				if system.visible {
+					local emitterX, emitterY = system.particles.getPosition!()
+
+					LG.pushAll()
+					LG.intersectScissor(
+						bx1[itIndex] + (bw[itIndex] - BUTTON_IMAGE_MAX_SIZE) // 2,
+						by1[itIndex] + (bh[itIndex] - BUTTON_IMAGE_MAX_SIZE) // 2 + getScrollOffset(buttons),
+						BUTTON_IMAGE_MAX_SIZE,
+						BUTTON_IMAGE_MAX_SIZE
+					)
+
+					LG.clear(r, g, b)
+					LG.setBlendMode(system.blendMode)
+
+					LG.draw(system.particles,
+						bx1[itIndex] + bw[itIndex]/2 - emitterX*scale,
+						by1[itIndex] + bh[itIndex]/2 - emitterY*scale,
+						0, scale
+					)
+
+					LG.pop()
 				}
 			}
 
@@ -1612,7 +1650,7 @@ export getScrollOffset :: (el:Element) -> int {
 	while el.parent ~= NULL {
 		el = el.parent
 		if el.type == Scrollable {
-			offset += math.round((cast(Scrollable)el).scroll)
+			offset += math.round((cast(Scrollable)el).scroll) -- Should we round here or when we return?
 		}
 	}
 

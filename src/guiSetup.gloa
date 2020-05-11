@@ -461,7 +461,7 @@ export setupGuiCallbacks :: () {
 		tabs.buttons  = {}
 
 		for project.systems {
-			insert(tabs.buttons, cast(gui.Button){ label=format("%d", itIndex), draggable=true })
+			insert(tabs.buttons, cast(gui.Button){ system=it, draggable=true })
 		}
 		insert(tabs.buttons, cast(gui.Button){ image="iconAdd" })
 
