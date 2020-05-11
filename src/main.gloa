@@ -902,10 +902,11 @@ export setCurrentProject :: (i:int, force=false) {
 
 	gui.refreshRecursively(guiState, "projectSettings")
 	gui.refreshRecursively(guiState, "systems")
-	gui.refreshRecursively(guiState, "system")
 
 	scheduleRecreateCanvases = true
 	updateParticleImageFilters()
+
+	setCurrentSystem(openProjects[i].systemIndex, force=true)
 }
 
 export setCurrentSystem :: (i:int, force=true) {

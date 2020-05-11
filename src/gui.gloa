@@ -603,7 +603,6 @@ export onMouseWheel :: (state:State, dx,dy:int) -> (handled:bool) {
 
 local calculateNaturalSize :: (state:State, el:Element) {
 	for el  if it.active {
-		it.parent = el -- Eh, no other better place to do this really.
 		calculateNaturalSize(state, it)
 	}
 
@@ -903,6 +902,12 @@ local updateLayoutIfNeeded :: (state:State) {
 	state.layoutNeedsUpdate = false
 
 	-- print("Updating layout.")
+
+	local updateParents :: (el:Element, parent:Element) {
+		el.parent = parent
+		for el  updateParents(it, el)
+	}
+	for state.frames  updateParents(it, NULL)
 
 	for state.frames  if it.active {
 		state.extraScrollableSpace = 0
@@ -1601,7 +1606,7 @@ local limitScroll :: (scrollable:Scrollable) {
 	scrollable.scroll       = math.max(scrollable.scroll, scrollable.scrollTarget)
 }
 
-local getScrollOffset :: (el:Element) -> int {
+export getScrollOffset :: (el:Element) -> int {
 	local offset = 0
 
 	while el.parent ~= NULL {

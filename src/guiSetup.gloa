@@ -228,9 +228,9 @@ export setupGuiFrames :: () {
 
 					guiState.separator!({ thick=false }),
 
-					guiState.section!({ name="colors", label="Color",
+					guiState.section!({ label="Color",
 						guiState.hbox!({
-							guiState.vbox!({ weight=1,
+							guiState.vbox!({ name="colors", weight=1,
 								guiState.hbox!({ name="colorContainer1", labelLeft="#1",
 									guiState.buttons!({ data=1, buttons={{name="colorRemove",image="iconDelete",tooltip="Remove color"},{name="colorMove",image="iconMoveV",tooltip="Move color",draggable=true}}, vertical=true }),
 									guiState.buttons!({ data=1, buttons={{name="colorAdd",image="iconAdd",tooltip="Add color"}}, vertical=true }),
@@ -1042,8 +1042,32 @@ export setupGuiCallbacks :: () {
 			gui.refreshRecursively(guiState, format("colorContainer%d", j))
 		}
 	}
-	guiState.onAction.colorMove = (buttons:gui.Buttons, i:int) {
+	guiState.onDrag.colorMove = (buttons:gui.Buttons, i:int, mx,my:int) {
 		i = cast(int) buttons.data
+
+		local colorDragContainer = gui.getElement(guiState, "colors", gui.Vbox)
+
+		local project     = openProjects[currentProjectIndex]
+		local system      = project.systems[project.systemIndex]
+		local colors      = system.colors
+		local targetIndex = math.clamp(math.floor(1 + (my - (colorDragContainer.layoutY + gui.getScrollOffset(colorDragContainer))) / colorDragContainer[1].layoutHeight), 1, #colors//4)
+		if targetIndex == i  return
+
+		local dir = math.getSign(targetIndex-i)
+
+		for j = i, targetIndex-dir, dir {
+			colors[j*4-3], colors[(j+dir)*4-3] = colors[(j+dir)*4-3], colors[j*4-3]
+			colors[j*4-2], colors[(j+dir)*4-2] = colors[(j+dir)*4-2], colors[j*4-2]
+			colors[j*4-1], colors[(j+dir)*4-1] = colors[(j+dir)*4-1], colors[j*4-1]
+			colors[j*4  ], colors[(j+dir)*4  ] = colors[(j+dir)*4  ], colors[j*4  ]
+		}
+
+		updateParticleColors(system.particles, colors)
+
+		guiState.activeId  = colorDragContainer[targetIndex][1].id -- @Volatile
+		guiState.hoveredId = guiState.activeId
+
+		gui.refreshRecursively(guiState, colorDragContainer)
 	}
 	for i = 1, 8 {
 		guiState.onRefresh[format("color%d", i)] = (colorEl:gui.Color) {
