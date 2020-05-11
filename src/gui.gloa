@@ -74,6 +74,7 @@ export State :: struct {
 	hoveredSubid = 0,
 	activeId     = 0,
 	activeSubid  = 0,
+	activeMod    = ModifierKey.NONE,
 
 	layoutNeedsUpdate = true,
 
@@ -264,6 +265,7 @@ export Color :: struct {
 
 	alpha = true,
 	color: []float = {0,0,1,1}, -- {r,g,b,a}
+	linkMultiDrag: []string,
 
 	sliderWidth = 0.0, -- Round when necessary!
 }
@@ -327,6 +329,7 @@ export onMousePressed :: (state:State, mx,my:int, mbutton:int, isTouch:bool, pre
 		if mbutton == 1 and state.hoveredId {
 			state.activeId    = state.hoveredId
 			state.activeSubid = state.hoveredSubid
+			state.activeMod   = getModifierKey()
 			LM.setGrabbed(true)
 			LK.setKeyRepeat(false)
 			onMouseMoved(state, mx, my, 0, 0, isTouch)
@@ -410,6 +413,17 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int, isTouch:bool) {
 			if value ~= colorEl.color[component] {
 				colorEl.color[component] = value
 				triggerActionEvent(state, colorEl, "", component)
+			}
+
+			if colorEl.linkMultiDrag and (state.activeMod == ModifierKey.S or state.activeMod == ModifierKey.CS) {
+				for colorEl.linkMultiDrag {
+					local other = cast(Color) state.elementsByName[it]
+
+					if other ~= NULL and other.type == Color and other.color[component] ~= value and isVisible(other) {
+						other.color[component] = value
+						triggerActionEvent(state, other, "", component)
+					}
+				}
 			}
 
 		case Direction:
@@ -1350,7 +1364,7 @@ local drawElement :: (state:State, el:Element) {
 			if direction.linkSpread {
 				local other = cast(Slider) state.elementsByName[direction.linkSpread]
 
-				if other ~= NULL and other.type == Slider and other.value ~= 0 {
+				if other ~= NULL and other.type == Slider and other.value ~= 0 and isVisible(other) {
 					LG.setColor(1, 1, 1, .25)
 					LG.arc(LG.DrawMode.FILL, x, y, .8*r, angle-other.value/2, angle+other.value/2, 32)
 				}
@@ -1358,7 +1372,7 @@ local drawElement :: (state:State, el:Element) {
 			} elseif direction.linkOther {
 				local other = cast(Direction) state.elementsByName[direction.linkOther]
 
-				if other ~= NULL and other.type == Direction and other.angle ~= angle {
+				if other ~= NULL and other.type == Direction and other.angle ~= angle and isVisible(other) {
 					LG.setColor(1, 1, 1, .25)
 					LG.arc(LG.DrawMode.FILL, x, y, .8*r, angle, other.angle, 32)
 				}
