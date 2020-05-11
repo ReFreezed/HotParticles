@@ -310,11 +310,52 @@ export InputText :: struct {
 
 
 export onKeyPressed :: (state:State, key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool) -> (handled:bool) {
-	if state.activeId and (key == "lctrl" or key == "rctrl" or key == "lshift" or key == "rshift" or key == "lalt" or key == "ralt") {
-		local mx, my = LM.getPosition()
-		onMouseMoved(state, mx, my, 0, 0, false)
+	if state.activeId {
+		if key == "lctrl" or key == "rctrl" or key == "lshift" or key == "rshift" or key == "lalt" or key == "ralt" {
+			local mx, my = LM.getPosition()
+			onMouseMoved(state, mx, my, 0, 0, false)
+		}
 		return true
 	}
+
+	local widget = cast(Widget) state.elementsById[state.hoveredId]
+	local mod    = getModifierKey()
+
+	if widget ~= NULL  if widget.type == {
+		case Direction:
+			local direction = cast(Direction) widget
+			if (mod == ModifierKey.NONE or mod == ModifierKey.S or mod == ModifierKey.C) and (key == "left" or key == "right") {
+				local delta     = math.TAU * ((mod == ModifierKey.S) ? 22.5/360 : (mod == ModifierKey.C) ? 1/360 : 5/360)
+				direction.angle = ((key == "left" ? direction.angle-delta : direction.angle+delta) + math.PI) % math.TAU - math.PI
+				triggerActionEvent(state, direction, "", 0, save=true)
+				return true
+			}
+
+		case Slider:
+			local slider = cast(Slider) widget
+			if (mod == ModifierKey.NONE or mod == ModifierKey.S or mod == ModifierKey.C) and (key == "left" or key == "right") {
+				local delta  = (slider.max-slider.min) / ((mod == ModifierKey.S) ? 16 : (mod == ModifierKey.C) ? 1024 : 128)
+				slider.value = math.clamp((key == "left" ? slider.value-delta : slider.value+delta), slider.min, slider.max)
+				triggerActionEvent(state, slider, "", 0, save=true)
+				return true
+			}
+
+		case Color:
+			local colorEl = cast(Color) widget
+			if (mod == ModifierKey.NONE or mod == ModifierKey.S or mod == ModifierKey.C) and (key == "left" or key == "right") {
+				local component          = state.hoveredSubid
+
+				local delta
+					= component == 1
+					? ((mod == ModifierKey.S) ? 30  : (mod == ModifierKey.C) ? 1  : 6) / 360
+					: ((mod == ModifierKey.S) ? 7.5 : (mod == ModifierKey.C) ? .5 : 2) / 100
+
+				colorEl.color[component] = math.clamp01(key == "left" ? colorEl.color[component]-delta : colorEl.color[component]+delta)
+				triggerActionEvent(state, colorEl, "", component, save=true)
+				return true
+			}
+	}
+
 	return false
 }
 

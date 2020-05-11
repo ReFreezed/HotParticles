@@ -5,12 +5,6 @@
 --=
 --============================================================]]
 
-export PARTICLE_IMAGES = {
-	-- Location: gfx/particles/<name>.png
-	"light",
-	"moon",
-}
-
 export MAX_BUFFER_SIZE      :: 16000 -- Default buffer size for ParticleSystem is 1000. @Incomplete: make this configurable.
 export MAIN_PANEL_WIDTH     :: 450
 export WORKSPACE_SAVE_DELAY :: 0.50
@@ -62,6 +56,7 @@ export imageGradient: LG.Image = NULL
 export imagePixel:    LG.Image = NULL
 export imageRainbow:  LG.Image = NULL
 
+export particleImageNames: []string
 export particleImages: struct { !key:string, !value:LG.Image }
 export guiImages:      struct { !key:string, !value:LG.Image }
 
@@ -92,6 +87,8 @@ local defaultSearchPaths: []string = NULL
 export guiState: gui.State
 
 local freezeDtThisFrame = false
+
+local zoomTime = -9999.00
 
 -- Saved settings.
 export openProjects: []Project
@@ -198,7 +195,7 @@ export updateParticleColors :: (ps:LG.ParticleSystem, colors:[]float) {
 export updateParticleImageFilters :: () {
 	local filter = openProjects[currentProjectIndex].pixelateTextures ? LG.FilterMode.NEAREST : LG.FilterMode.LINEAR
 
-	for PARTICLE_IMAGES {
+	for particleImageNames {
 		LG.Image.setFilter(particleImages[it], filter, filter)
 	}
 }
@@ -364,9 +361,17 @@ export onLoad :: (args:[]string, argsRaw:[]string) {
 	!load "src/icons"
 	generateIcons()
 
-	for PARTICLE_IMAGES {
-		particleImages[it] = LG.newImage(format("gfx/particles/%s.png", it))
-		guiImages[it]      = particleImages[it]
+	for LF.getDirectoryItems"gfx/particles" {
+		local found, name = matchPattern(it, "^(.+)%.png$")
+
+		if found {
+			local image = LG.newImage("gfx/particles/"..it)
+
+			particleImages[cast(string)name] = image
+			guiImages[cast(string)name]      = image
+
+			insert(particleImageNames, cast(string)name)
+		}
 	}
 
 	local ok, gotError, projects = loadWorkspace()
@@ -506,6 +511,7 @@ export onMouseMoved :: (mx,my:int, dx,dy:int, isTouch:bool) {
 		local y = (my - (LG.getHeight()                )/2) / project.zoom
 
 		moveEmittersTo(x, y)
+		return
 	}
 
 	gui.onMouseMoved(guiState, mx, my, dx, dy, isTouch)
@@ -516,6 +522,8 @@ export onMouseReleased :: (mx,my:int, mbutton:int, isTouch:bool, presses:int) {
 		isPositioningParticles = false
 		LM.setGrabbed(false)
 		LK.setKeyRepeat(true)
+		gui.onMouseMoved(guiState, mx, my, 0, 0, isTouch)
+		return
 	}
 
 	gui.onMouseReleased(guiState, mx, my, mbutton, isTouch, presses)
@@ -534,9 +542,16 @@ export onMouseWheel :: (dx,dy:int) {
 
 	local project = openProjects[currentProjectIndex]
 
+	-- Stick slightly to 100% zoom.
+	if project.zoomLevel == 0 and LT.getTime()-zoomTime < 0.15 {
+		zoomTime = LT.getTime()
+		return
+	}
+
 	project.zoomLevel  = math.clamp(project.zoomLevel+dy, (project.pixelateWorld ? -1 : -4), 6)
 	project.zoomSource = project.zoom
 	project.zoomTarget = 2^project.zoomLevel
+	zoomTime           = LT.getTime()
 
 	setActionText("Zoom: %d%%", project.zoomTarget*100)
 }

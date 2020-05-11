@@ -534,11 +534,11 @@ export setupGuiCallbacks :: () {
 		local system  = project.systems[project.systemIndex]
 		radio.buttons = {}
 
-		for PARTICLE_IMAGES {
+		for particleImageNames {
 			insert(radio.buttons, cast(gui.Button){ value=it, tooltip=it, image=it })
 		}
 
-		local found, i = indexOf(PARTICLE_IMAGES, system.textureName)
+		local found, i = indexOf(particleImageNames, system.textureName)
 		assert(found)
 		radio.index = i
 	}
@@ -930,7 +930,10 @@ export setupGuiCallbacks :: () {
 		local ps      = project.systems[project.systemIndex].particles
 		local sizes   = {ps.getSizesAsVararg!()}
 
-		if sizes[8] ~= NULL  return
+		if sizes[8] ~= NULL {
+			setErrorText("Max 8 sizes")
+			return
+		}
 
 		insert(sizes, i, sizes[i])
 		ps.setSizes!(sizes)
@@ -992,7 +995,10 @@ export setupGuiCallbacks :: () {
 		local system  = project.systems[project.systemIndex]
 		local colors  = system.colors
 
-		if colors[8*4] ~= NULL  return
+		if colors[8*4] ~= NULL {
+			setErrorText("Max 8 colors")
+			return
+		}
 
 		local i1 = i*4 - 3
 		local h  = colors[i1  ]
