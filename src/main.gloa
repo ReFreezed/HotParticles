@@ -372,6 +372,8 @@ export onLoad :: (args:[]string, argsRaw:[]string) {
 		addNewProject()
 	}
 
+	love.window.setVSync(showStats ? 0 : 1)
+
 	do {
 		!load "src/guiSetup"
 		setupGuiFrames()
@@ -448,10 +450,16 @@ export onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool)
 				-- case ModifierKey.C: pushAuxPanel(AuxPanel.OPEN_PROJECT)
 			}
 
+		case "p":
+			if mod == {
+				case ModifierKey.NONE: gui.setActive(guiState, "main", not gui.getElement(guiState, "main", gui.Frame).active)
+			}
+
 		case "f1":
 			if mod == {
 				case ModifierKey.NONE:
 					showStats = not showStats
+					love.window.setVSync(showStats ? 0 : 1)
 					scheduleSaveWorkspace()
 			}
 
@@ -655,10 +663,50 @@ export onUpdate :: (dt:float) {
 
 
 export onDraw :: () {
+	static statsAll:   LG.Stats
+	static statsWorld: LG.Stats
+
 	local ww, wh  = LG.getDimensions()
 	local project = openProjects[currentProjectIndex]
 
 	LG.reset()
+
+	-- World.
+	do {
+		LG.setCanvas(canvasWorld)
+
+		local r, g, b = hsvToRgb(project.bgColorH, project.bgColorS, project.bgColorV)
+		LG.clear(r, g, b)
+
+		LG.translate((ww-MAIN_PANEL_WIDTH)/2, wh/2)
+		if not project.pixelateWorld  LG.scale(project.zoom)
+
+		local time = LT.getTime()
+
+		for project.systems {
+			if it.visible {
+				LG.setBlendMode(it.blendMode)
+				LG.draw(it.particles)
+			}
+		}
+
+		particleDrawTime = LT.getTime()-time -- Not sure how accurate this actually is. This value is still very low even while the actual FPS is tanking a lot.
+		-- !if DEV  LG.getStats(statsWorld)
+
+		--[[ DEBUG
+		LG.setColor(1, 1, 1, .15)
+		LG.line(project.movementPoint1X, project.movementPoint1Y, project.movementPoint2X, project.movementPoint2Y)
+		LG.line(project.movementPoint2X, project.movementPoint2Y, project.movementPoint3X, project.movementPoint3Y)
+		LG.line(project.movementPoint3X, project.movementPoint3Y, project.movementPoint4X, project.movementPoint4Y)
+		LG.setColor(1, 1, 1, .3)
+		LG.print("1", project.movementPoint1X, project.movementPoint1Y)
+		LG.print("2", project.movementPoint2X, project.movementPoint2Y)
+		LG.print("3", project.movementPoint3X, project.movementPoint3Y)
+		LG.print("4", project.movementPoint4X, project.movementPoint4Y)
+		--]]
+
+		LG.reset()
+	}
 
 	-- GUI.
 	do {
@@ -684,28 +732,45 @@ export onDraw :: () {
 			else
 				LG.setColor(0, 0, 0, .7)
 
-			local drawStatsLine = [x,y,fontH] (s:string, ...:int|float|string) {
-				LG.print(format(s, ...), x, y)
+			local drawStatsLine = [x,y,fontH] (pre:string, s:string, ...:int|float|string) {
+				LG.print(pre, x, y)
+				if s  LG.print(format(s, ...), x+fontNormal.getWidth!(pre), y)
 				y += fontH+1
 			}
 
 			local _, _, windowMode = love.window.getMode()
 			local ratio            = 1 / presentTime / windowMode.refreshrate
-			drawStatsLine("FPS: %d", LT.getFPS())
-			drawStatsLine("ParticleSystemUpdateTime: %.3f ms", 1000*particleUpdateTime)
-			drawStatsLine("ParticleSystemDrawTime: %.3f ms",   1000*particleDrawTime)
-			if not windowMode.refreshrate {
-				drawStatsLine("LoveGraphicsPresentTime: %.3f ms", 1000*presentTime)
-			} elseif ratio >= 10 {
-				drawStatsLine("LoveGraphicsPresentTime: %.3f ms (%.0f.0 x framerate)", 1000*presentTime, ratio)
-			} elseif ratio >= 2 {
-				drawStatsLine("LoveGraphicsPresentTime: %.3f ms (%.1f0 x framerate)",  1000*presentTime, ratio)
-			} else {
-				drawStatsLine("LoveGraphicsPresentTime: %.3f ms (%.2f x framerate)",   1000*presentTime, ratio)
+
+			drawStatsLine("FPS: ", "%d", LT.getFPS())
+
+			!if DEV {
+				local stats = statsAll
+				if stats ~= NULL {
+					drawStatsLine("drawcalls (batched): ",    "%d (%d)",  stats.drawcalls, stats.drawcallsbatched)
+					drawStatsLine("switches canvas/shader: ", "%d/%d",    stats.canvasswitches, stats.shaderswitches)
+					drawStatsLine("texture memory: ",         "%.2f MiB", stats.texturememory/1024^2)
+					drawStatsLine("images/fonts/canvases: ",  "%d/%d/%d", stats.images, stats.fonts, stats.canvases)
+				}
 			}
-			drawStatsLine("ParticleCountTotal: %d", particleCountTotal)
-			for project.systems  drawStatsLine("ParticleCount_%d: %d", itIndex, it.particles.getCount!())
-			drawStatsLine("(hide this with F1)")
+
+			drawStatsLine("ParticleSystemUpdateTime: ", "%.3f ms", 1000*particleUpdateTime)
+			drawStatsLine("ParticleSystemDrawTime: ",   "%.3f ms", 1000*particleDrawTime)
+
+			if not windowMode.refreshrate {
+				drawStatsLine("LoveGraphicsPresentTime: ", "%.3f ms", 1000*presentTime)
+			} elseif ratio >= 10 {
+				drawStatsLine("LoveGraphicsPresentTime: ", "%.3f ms (%.0f.0 x framerate)", 1000*presentTime, ratio)
+			} elseif ratio >= 2 {
+				drawStatsLine("LoveGraphicsPresentTime: ", "%.3f ms (%.1f0 x framerate)",  1000*presentTime, ratio)
+			} else {
+				drawStatsLine("LoveGraphicsPresentTime: ", "%.3f ms (%.2f x framerate)",   1000*presentTime, ratio)
+			}
+
+			drawStatsLine("ParticleCountTotal: ", "%d", particleCountTotal)
+
+			for project.systems  drawStatsLine("ParticleCount_", "%d: %d", itIndex, it.particles.getCount!())
+
+			!if not DEV  drawStatsLine("(hide this with F1)", "")
 		}
 
 		-- Panel(s).
@@ -773,43 +838,6 @@ export onDraw :: () {
 		LG.reset()
 	}
 
-	-- World.
-	do {
-		LG.setCanvas(canvasWorld)
-
-		local r, g, b = hsvToRgb(project.bgColorH, project.bgColorS, project.bgColorV)
-		LG.clear(r, g, b)
-
-		LG.translate((ww-MAIN_PANEL_WIDTH)/2, wh/2)
-		if not project.pixelateWorld  LG.scale(project.zoom)
-
-		local time = LT.getTime()
-
-		for project.systems {
-			if it.visible {
-				LG.setBlendMode(it.blendMode)
-				LG.draw(it.particles)
-			}
-		}
-		LG.setBlendMode(LG.BlendMode.ALPHA)
-
-		particleDrawTime = LT.getTime()-time -- Not sure how accurate this actually is. This value is still very low even while the actual FPS is tanking a lot.
-
-		--[[ DEBUG
-		LG.setColor(1, 1, 1, .15)
-		LG.line(project.movementPoint1X, project.movementPoint1Y, project.movementPoint2X, project.movementPoint2Y)
-		LG.line(project.movementPoint2X, project.movementPoint2Y, project.movementPoint3X, project.movementPoint3Y)
-		LG.line(project.movementPoint3X, project.movementPoint3Y, project.movementPoint4X, project.movementPoint4Y)
-		LG.setColor(1, 1, 1, .3)
-		LG.print("1", project.movementPoint1X, project.movementPoint1Y)
-		LG.print("2", project.movementPoint2X, project.movementPoint2Y)
-		LG.print("3", project.movementPoint3X, project.movementPoint3Y)
-		LG.print("4", project.movementPoint4X, project.movementPoint4Y)
-		--]]
-
-		LG.reset()
-	}
-
 	-- Put stuff on the screen!
 	LG.clear()
 	LG.setBlendMode(LG.BlendMode.ALPHA, LG.BlendAlphaMode.PREMULTIPLIED)
@@ -821,6 +849,8 @@ export onDraw :: () {
 	}
 
 	LG.draw(canvasGui)
+
+	!if DEV  LG.getStats(statsAll)
 
 	local time = LT.getTime()
 	LG.present()

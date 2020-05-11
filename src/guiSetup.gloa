@@ -218,7 +218,7 @@ export setupGuiFrames :: () {
 								guiState.color!({ name="color7", data=7, labelLeft="#7", active=false }),
 								guiState.color!({ name="color8", data=8, labelLeft="#8", active=false }),
 							}),
-							guiState.colorPreview!({ linkColors={"color1","color2","color3","color4"} }),
+							guiState.colorPreview!({ name="colorPreview", linkColors={"color1","color2","color3","color4"} }),
 						}),
 						guiState.radio!({ name="blendMode", labelLeft="blend mode",
 							buttons = {
@@ -897,6 +897,12 @@ export setupGuiCallbacks :: () {
 		}
 	}
 
+	guiState.onRefresh.colorPreview = (preview:gui.ColorPreview) {
+		local project     = openProjects[currentProjectIndex]
+		local system      = project.systems[project.systemIndex]
+		preview.blendMode = system.blendMode
+	}
+
 	guiState.onRefresh.blendMode = (radio:gui.Radio) {
 		local project  = openProjects[currentProjectIndex]
 		local system   = project.systems[project.systemIndex]
@@ -907,6 +913,8 @@ export setupGuiCallbacks :: () {
 	guiState.onAction.blendMode = (radio:gui.Radio, i:int) {
 		local project    = openProjects[currentProjectIndex]
 		local system     = project.systems[project.systemIndex]
-		system.blendMode = cast(LG.BlendMode) radio.buttons[i].value
+		local blendMode  = cast(LG.BlendMode) radio.buttons[i].value
+		system.blendMode = blendMode
+		gui.getElement(guiState, "colorPreview", gui.ColorPreview).blendMode = blendMode
 	}
 }

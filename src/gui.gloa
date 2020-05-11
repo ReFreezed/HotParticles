@@ -267,6 +267,7 @@ export ColorPreview :: struct {
 	using Widget,
 
 	linkColors: []string,
+	blendMode = LG.BlendMode.ALPHA,
 }
 
 
@@ -1260,7 +1261,9 @@ local drawElement :: (state:State, el:Element) {
 			drawCheckerBox(preview.layoutX, preview.layoutY, preview.layoutWidth, preview.layoutHeight)
 
 			LG.setShader(shader)
+			LG.setBlendMode(preview.blendMode)
 			LG.draw(imagePixel, preview.layoutX, preview.layoutY, 0, preview.layoutWidth, preview.layoutHeight)
+			LG.setBlendMode(LG.BlendMode.ALPHA)
 			LG.setShader()
 
 		case Direction:
