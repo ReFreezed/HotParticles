@@ -44,7 +44,7 @@ local SCROLLBAR_MIN_LENGTH :: 30
 
 local SECTION_LABEL_WIDTH :: 100
 
-local SLIDER_WIDTH        :: 12
+local SLIDER_MIN_WIDTH    :: 12
 local SLIDER_MIN_LENGTH   :: 70
 local COLOR_PREVIEW_WIDTH :: 24
 
@@ -201,10 +201,13 @@ export Separator :: struct {
 
 
 export Button :: struct {
+	name    = "", -- Inherited from parent if empty.
 	label   = "",
 	image   = "",
 	tooltip = "",
 	value: any,
+
+	imageScale = 1.0,
 }
 
 export Alignment :: enum { CENTER, LEFT, RIGHT }
@@ -214,8 +217,10 @@ export Buttons :: struct {
 
 	buttons: []Button,
 	align = Alignment.CENTER,
+	vertical = false,
 
-	buttonWidth: float, -- Round when necessary!
+	buttonWidth:  float, -- Round when necessary!
+	buttonHeight: float, -- Round when necessary!
 }
 
 export Radio :: struct {
@@ -259,6 +264,8 @@ export Color :: struct {
 
 	alpha = true,
 	color: []float = {0,0,1,1}, -- {r,g,b,a}
+
+	sliderWidth = 0.0, -- Round when necessary!
 }
 
 
@@ -350,11 +357,14 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int, isTouch:bool) {
 			case Radio: !through
 			case Buttons:
 				local buttons = cast(Buttons) widget
-				hoveredSubid  = math.clamp(math.floor(1+(mx-buttons.layoutX)/buttons.buttonWidth), 1, #buttons.buttons)
+				if buttons.vertical
+					hoveredSubid = math.clamp(math.floor(1 + (my-buttons.layoutY-getScrollOffset(buttons)) / buttons.buttonHeight), 1, #buttons.buttons)
+				else
+					hoveredSubid = math.clamp(math.floor(1 + (mx-buttons.layoutX                         ) / buttons.buttonWidth ), 1, #buttons.buttons)
 
 			case Color:
 				local colorEl = cast(Color) widget
-				local iFloat  = 1 + (my - (colorEl.layoutY + getScrollOffset(colorEl))) / SLIDER_WIDTH
+				local iFloat  = 1 + (my - (colorEl.layoutY + getScrollOffset(colorEl))) / SLIDER_MIN_WIDTH
 				hoveredSubid  = math.clamp(math.floor(iFloat), 1, (colorEl.alpha ? 4 : 3))
 		}
 
@@ -370,8 +380,8 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int, isTouch:bool) {
 	if widget ~= NULL  if widget.type == {
 		case Slider:
 			local slider = cast(Slider) widget
-			local x1     = slider.layoutX +                      SLIDER_WIDTH // 2
-			local x2     = slider.layoutX + slider.layoutWidth - SLIDER_WIDTH // 2
+			local x1     = slider.layoutX +                      SLIDER_MIN_WIDTH // 2
+			local x2     = slider.layoutX + slider.layoutWidth - SLIDER_MIN_WIDTH // 2
 			local value  = (mx-x1) / (x2-x1)
 
 			if getModifierKey() == ModifierKey.C {
@@ -382,7 +392,7 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int, isTouch:bool) {
 
 			if value ~= slider.value {
 				slider.value = value
-				triggerActionEvent(state, slider, 0)
+				triggerActionEvent(state, slider, "", 0)
 			}
 
 		case Color:
@@ -399,7 +409,7 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int, isTouch:bool) {
 
 			if value ~= colorEl.color[component] {
 				colorEl.color[component] = value
-				triggerActionEvent(state, colorEl, component)
+				triggerActionEvent(state, colorEl, "", component)
 			}
 
 		case Direction:
@@ -411,7 +421,7 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int, isTouch:bool) {
 
 			if angle ~= direction.angle {
 				direction.angle = angle
-				triggerActionEvent(state, direction, 0)
+				triggerActionEvent(state, direction, "", 0)
 			}
 
 		case Scrollable:
@@ -436,7 +446,7 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, isTouch:bool, pr
 			case Buttons:
 				if state.hoveredId {
 					local buttons = cast(Buttons) widget
-					triggerActionEvent(state, buttons, state.activeSubid, save=true)
+					triggerActionEvent(state, buttons, buttons.buttons[state.activeSubid].name, state.activeSubid, save=true)
 				}
 
 			case Radio:
@@ -445,7 +455,7 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, isTouch:bool, pr
 
 					if radio.index ~= state.hoveredSubid {
 						radio.index = state.hoveredSubid
-						triggerActionEvent(state, radio, state.activeSubid, save=true)
+						triggerActionEvent(state, radio, radio.buttons[state.activeSubid].name, state.activeSubid, save=true)
 					}
 				}
 
@@ -454,10 +464,10 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, isTouch:bool, pr
 					local tabs = cast(Tabs) widget
 
 					if tabs.specialLastTab and state.hoveredSubid == #tabs.buttons {
-						triggerActionEvent(state, tabs, state.activeSubid, save=true)
+						triggerActionEvent(state, tabs, tabs.buttons[state.activeSubid].name, state.activeSubid, save=true)
 					} elseif tabs.index ~= state.hoveredSubid {
 						tabs.index = state.hoveredSubid
-						triggerActionEvent(state, tabs, state.activeSubid, save=true)
+						triggerActionEvent(state, tabs, tabs.buttons[state.activeSubid].name, state.activeSubid, save=true)
 					}
 				}
 
@@ -466,7 +476,7 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, isTouch:bool, pr
 					local checkbox   = cast(Checkbox) widget
 					checkbox.checked = not checkbox.checked
 
-					triggerActionEvent(state, checkbox, 0, save=true)
+					triggerActionEvent(state, checkbox, "", 0, save=true)
 				}
 
 			case Slider: !through
@@ -484,14 +494,22 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, isTouch:bool, pr
 				local tabs = cast(Tabs) widget
 
 				if not (tabs.specialLastTab and state.hoveredSubid == #tabs.buttons) {
-					triggerCloseEvent(state, tabs, state.hoveredSubid, save=true)
+					triggerCloseEvent(state, tabs, tabs.buttons[state.hoveredSubid].name, state.hoveredSubid, save=true)
 				}
 		}
 	}
 
 	if mbutton == 2 and not state.activeId and state.hoveredId {
 		local widget = cast(Widget) state.elementsById[state.hoveredId]
-		if widget ~= NULL  triggerOptionEvent(state, widget, state.hoveredSubid)
+		local name   = ""
+
+		if widget.type == {
+			case Tabs:  !through
+			case Radio: !through
+			case Buttons: name = (cast(Buttons)widget).buttons[state.hoveredSubid].name
+		}
+
+		if widget ~= NULL  triggerOptionEvent(state, widget, name, state.hoveredSubid)
 	}
 
 	if state.activeId and mbutton == 1 {
@@ -621,29 +639,38 @@ local calculateNaturalSize :: (state:State, el:Element) {
 		case Buttons:
 			local buttons    = cast(Buttons) el
 			local buttonMaxW = 0
-			local contentH   = 0
+			local buttonMaxH = 0
 
 			for buttons.buttons {
 				local w: int = NULL
 				local h: int = NULL
 
 				if it.label and it.image {
-					w = BUTTON_IMAGE_MAX_SIZE + SPACING + fontNormal.getWidth!(it.label)
-					h = math.max(BUTTON_IMAGE_MAX_SIZE, fontNormal.getHeight!())
+					w, h          = guiImages[it.image].getDimensions!()
+					it.imageScale = math.min(BUTTON_IMAGE_MAX_SIZE/w, BUTTON_IMAGE_MAX_SIZE/h, 1)
+					w             = math.round(w*it.imageScale) + SPACING + fontNormal.getWidth!(it.label)
+					h             = math.max(math.round(h*it.imageScale), fontNormal.getHeight!())
 				} elseif it.image {
-					w = BUTTON_IMAGE_MAX_SIZE
-					h = BUTTON_IMAGE_MAX_SIZE
+					w, h          = guiImages[it.image].getDimensions!()
+					it.imageScale = math.min(BUTTON_IMAGE_MAX_SIZE/w, BUTTON_IMAGE_MAX_SIZE/h, 1)
+					w             = math.round(w*it.imageScale)
+					h             = math.round(h*it.imageScale)
 				} else {
-					w = fontNormal.getWidth!(it.label)
-					h = fontNormal.getHeight!()
+					w             = fontNormal.getWidth!(it.label)
+					h             = fontNormal.getHeight!()
 				}
 
 				buttonMaxW = math.max(buttonMaxW, w)
-				contentH   = math.max(contentH,   h)
+				buttonMaxH = math.max(buttonMaxH, h)
 			}
 
-			buttons.layoutWidth  = #buttons.buttons * (buttonMaxW + 2*SPACING)
-			buttons.layoutHeight = contentH + BUTTON_PADDING_Y * 2
+			if buttons.vertical {
+				buttons.layoutWidth  = buttonMaxW + 2*SPACING
+				buttons.layoutHeight = #buttons.buttons * (buttonMaxH + 2*BUTTON_PADDING_Y)
+			} else {
+				buttons.layoutWidth  = #buttons.buttons * (buttonMaxW + 2*SPACING)
+				buttons.layoutHeight = buttonMaxH + 2*BUTTON_PADDING_Y
+			}
 
 		case Checkbox:
 			local checkbox        = cast(Checkbox) el
@@ -658,12 +685,12 @@ local calculateNaturalSize :: (state:State, el:Element) {
 		case Slider:
 			local slider        = cast(Slider) el
 			slider.layoutWidth  = SLIDER_MIN_LENGTH
-			slider.layoutHeight = SLIDER_WIDTH
+			slider.layoutHeight = SLIDER_MIN_WIDTH
 
 		case Color:
 			local colorEl        = cast(Color) el
 			colorEl.layoutWidth  = SLIDER_MIN_LENGTH
-			colorEl.layoutHeight = (colorEl.alpha ? 4 : 3) * SLIDER_WIDTH
+			colorEl.layoutHeight = (colorEl.alpha ? 4 : 3) * SLIDER_MIN_WIDTH
 
 		case ColorPreview:
 			local preview        = cast(ColorPreview) el
@@ -795,8 +822,14 @@ local positionAndFit :: (state:State, el:Element, x,y,w,h:int) {
 
 		case Radio: !through
 		case Buttons:
-			local buttons       = cast(Buttons) el
-			buttons.buttonWidth = w / #buttons.buttons
+			local buttons = cast(Buttons) el
+			if buttons.vertical {
+				buttons.buttonWidth  = w
+				buttons.buttonHeight = h / #buttons.buttons
+			} else {
+				buttons.buttonWidth  = w / #buttons.buttons
+				buttons.buttonHeight = h
+			}
 
 		case Tabs:
 			local tabs = cast(Tabs) el
@@ -804,6 +837,10 @@ local positionAndFit :: (state:State, el:Element, x,y,w,h:int) {
 				= tabs.specialLastTab
 				? (w-SPECIAL_TAB_WIDTH) / (#tabs.buttons-1)
 				: (w                  ) / (#tabs.buttons  )
+
+		case Color:
+			local colorEl       = cast(Color) el
+			colorEl.sliderWidth = h / (colorEl.alpha ? 4 : 3)
 	}
 }
 
@@ -973,19 +1010,33 @@ local drawElement :: (state:State, el:Element) {
 			local w = buttons.layoutWidth
 			local h = buttons.layoutHeight
 
-			local padding = isTabs ? 8 : SPACING
+			local paddingX = isTabs ? 8 : SPACING
 
 			local bx1:   []int : {}
 			local bx2:   []int : {}
+			local by1:   []int : {}
+			local by2:   []int : {}
 			local bw:    []int : {}
+			local bh:    []int : {}
 			local faded: []bool : {}
 
 			-- Backgrounds.
 			for buttons.buttons {
-				bx1[itIndex]   = math.round(x + buttons.buttonWidth*(itIndex-1))
-				bx2[itIndex]   = math.round(x + buttons.buttonWidth*(itIndex  ))
-				bx2[itIndex]   = math.min(bx2[itIndex], x + w)
+				if buttons.vertical {
+					bx1[itIndex] = x
+					bx2[itIndex] = x + w
+					by1[itIndex] = math.round(y + buttons.buttonHeight*(itIndex-1))
+					by2[itIndex] = math.round(y + buttons.buttonHeight*(itIndex  ))
+					by2[itIndex] = math.min(by2[itIndex], y + h)
+				} else {
+					bx1[itIndex] = math.round(x + buttons.buttonWidth*(itIndex-1))
+					bx2[itIndex] = math.round(x + buttons.buttonWidth*(itIndex  ))
+					bx2[itIndex] = math.min(bx2[itIndex], x + w)
+					by1[itIndex] = y
+					by2[itIndex] = y + h
+				}
 				bw[itIndex]    = bx2[itIndex] - bx1[itIndex]
+				bh[itIndex]    = by2[itIndex] - by1[itIndex]
 				faded[itIndex] = false
 
 				if not (buttons.id == state.hoveredId and itIndex == state.hoveredSubid) {
@@ -1001,10 +1052,15 @@ local drawElement :: (state:State, el:Element) {
 				}
 
 				if isTabs {
-					local topInset = math.min(.6*h, bw[itIndex]/4)
-					LG.polygon(LG.DrawMode.FILL, bx1[itIndex],y+h, bx1[itIndex]+topInset,y, bx2[itIndex]-topInset,y, bx2[itIndex],y+h)
+					local topInset = math.min(.6*bh[itIndex], bw[itIndex]/4)
+					LG.polygon(LG.DrawMode.FILL,
+						bx1[itIndex],          by2[itIndex],
+						bx1[itIndex]+topInset, by1[itIndex],
+						bx2[itIndex]-topInset, by1[itIndex],
+						bx2[itIndex],          by2[itIndex]
+					)
 				} else {
-					LG.rectangle(LG.DrawMode.FILL, bx1[itIndex]+1, y+1, bw[itIndex]-2, h-2, 3)
+					LG.rectangle(LG.DrawMode.FILL, bx1[itIndex]+1, by1[itIndex]+1, bw[itIndex]-2, bh[itIndex]-2, 3)
 				}
 			}
 
@@ -1012,34 +1068,43 @@ local drawElement :: (state:State, el:Element) {
 			LG.setColor(1, 1, 1)
 
 			for buttons.buttons  if it.image {
-				local image  = particleImages[it.image]
+				local image  = guiImages[it.image]
 				local iw, ih = image.getDimensions!()
 				local sx     = BUTTON_IMAGE_MAX_SIZE / iw
 				local sy     = BUTTON_IMAGE_MAX_SIZE / ih
 
-				if it.label
-					LG.draw(image, bx1[itIndex]+padding, y+BUTTON_PADDING_Y, 0, sx, sy)
-				else
-					LG.draw(image, bx1[itIndex] + (bw[itIndex]-BUTTON_IMAGE_MAX_SIZE)//2, y+BUTTON_PADDING_Y, 0, sx, sy)
+				if it.label {
+					LG.draw(image,
+						bx1[itIndex] + paddingX,
+						by1[itIndex] + bh[itIndex] // 2,
+						0, it.imageScale, it.imageScale, 0, ih/2
+					)
+				} else {
+					LG.draw(image,
+						bx1[itIndex] + bw[itIndex] // 2,
+						by1[itIndex] + bh[itIndex] // 2,
+						0, it.imageScale, it.imageScale, iw/2, ih/2
+					)
+				}
 			}
 
 			-- Labels.
 			for buttons.buttons  if it.label {
-				local scissorX1 = bx1[itIndex] + (padding-1)
-				local scissorX2 = bx2[itIndex] - (padding-1)
+				local scissorX1 = bx1[itIndex] + (paddingX-1)
+				local scissorX2 = bx2[itIndex] - (paddingX-1)
 
 				if scissorX2 > scissorX1 {
-					local textY = y + (h - fontNormal.getHeight!()) // 2
+					local textY = by1[itIndex] + (bh[itIndex] - fontNormal.getHeight!()) // 2
 					local textX: int = NULL
 
 					if it.image {
-						textX = bx1[itIndex] + padding + BUTTON_IMAGE_MAX_SIZE + SPACING
+						textX = bx1[itIndex] + paddingX + BUTTON_IMAGE_MAX_SIZE + SPACING
 					} else {
 						using Alignment
 						if buttons.align == {
-							case LEFT:   textX = bx1[itIndex] + padding
-							case RIGHT:  textX = bx1[itIndex] + math.max(math.round(bw[itIndex] - padding - fontNormal.getWidth!(it.label)), padding)
-							case CENTER: textX = bx1[itIndex] + math.max((bw[itIndex] - fontNormal.getWidth!(it.label)) // 2,                padding)
+							case LEFT:   textX = bx1[itIndex] + paddingX
+							case RIGHT:  textX = bx1[itIndex] + math.max(math.round(bw[itIndex] - paddingX - fontNormal.getWidth!(it.label)), paddingX)
+							case CENTER: textX = bx1[itIndex] + math.max((bw[itIndex] - fontNormal.getWidth!(it.label)) // 2,                 paddingX)
 						}
 					}
 
@@ -1088,8 +1153,8 @@ local drawElement :: (state:State, el:Element) {
 
 		case Slider:
 			local slider  = cast(Slider) el
-			local x1      = slider.layoutX +                      SLIDER_WIDTH // 2
-			local x2      = slider.layoutX + slider.layoutWidth - SLIDER_WIDTH // 2
+			local x1      = slider.layoutX +                      SLIDER_MIN_WIDTH // 2
+			local x2      = slider.layoutX + slider.layoutWidth - SLIDER_MIN_WIDTH // 2
 			local w       = x2-x1
 			local value01 = (slider.value-slider.min) / (slider.max-slider.min)
 			local handleX = x1 + math.round(value01 * w)
@@ -1120,7 +1185,7 @@ local drawElement :: (state:State, el:Element) {
 			-- Handle.
 			local grey = (highlight ? .8 : .65)
 			LG.setColor(grey, grey, grey)
-			LG.rectangle(LG.DrawMode.FILL, handleX-1, y-SLIDER_WIDTH/2, 2, SLIDER_WIDTH)
+			LG.rectangle(LG.DrawMode.FILL, handleX-1, y-SLIDER_MIN_WIDTH/2, 2, SLIDER_MIN_WIDTH)
 			-- LG.circle(LG.DrawMode.FILL, handleX, y, 3, 16)
 
 			-- Readout.
@@ -1178,7 +1243,11 @@ local drawElement :: (state:State, el:Element) {
 			local colorEl    = cast(Color) el
 			local components = (colorEl.alpha ? 3 : 4)
 			local x          = colorEl.layoutX
-			local y          = colorEl.layoutY
+			local y1         = colorEl.layoutY
+			local y2         = y1 + math.round(1 * colorEl.sliderWidth)
+			local y3         = y1 + math.round(2 * colorEl.sliderWidth)
+			local y4         = y1 + math.round(3 * colorEl.sliderWidth)
+			local y5         = y1 + colorEl.layoutHeight
 			local w          = colorEl.layoutWidth
 
 			local hue        = colorEl.color[1]
@@ -1188,48 +1257,46 @@ local drawElement :: (state:State, el:Element) {
 
 			local highlight  = (colorEl.id == state.activeId or colorEl.id == state.hoveredId) ? math.max(state.activeSubid, state.hoveredSubid) : 0
 
-			local iw, ih     = imageGradient.getDimensions!()
-			local gradientSx = w/iw
-			local gradientSy = SLIDER_WIDTH/ih
-
-			iw, ih           = imageRainbow.getDimensions!()
-			local rainbowSx  = w/iw
-			local rainbowSy  = SLIDER_WIDTH/ih
-
-			local componentY = y
-
+			local iw, ih     = imageRainbow.getDimensions!()
+			local rainbowSx  = w / iw
+			local rainbowSy  = (y2-y1) / ih
 			LG.setColor(1, 1, 1)
-			LG.draw(imageRainbow, x, componentY, 0, rainbowSx, rainbowSy)
-			drawSliderValue(x, componentY, w, SLIDER_WIDTH, hue, hue*360, "%d°", (highlight == 1))
-			componentY += SLIDER_WIDTH
+			LG.draw(imageRainbow, x, y1, 0, rainbowSx, rainbowSy)
+			drawSliderValue(x, y1, w, y2-y1, hue, hue*360, "%d°", (highlight == 1))
 
-			local r2, g2, b2 = hsvToRgb(hue, 1, 1)
+			local r, g, b    = hsvToRgb(hue, 1, 1)
+			iw, ih           = imageGradient.getDimensions!()
+			local gradientSx = w / iw
+			local gradientSy = (y3-y2) / ih
 			LG.setColor(.5, .5, .5)
-			LG.rectangle(LG.DrawMode.FILL, x, componentY, w, SLIDER_WIDTH)
-			LG.setColor(r2, g2, b2)
-			LG.draw(imageGradient, x, componentY, 0, gradientSx, gradientSy)
-			drawSliderValue(x, componentY, w, SLIDER_WIDTH, saturation, saturation*100, "%d%%", (highlight == 2))
-			componentY += SLIDER_WIDTH
+			LG.rectangle(LG.DrawMode.FILL, x, y2, w, y2-y1)
+			LG.setColor(r, g, b)
+			LG.draw(imageGradient, x, y2, 0, gradientSx, gradientSy)
+			drawSliderValue(x, y2, w, y3-y2, saturation, saturation*100, "%d%%", (highlight == 2))
 
-			r2, g2, b2 = hsvToRgb(hue, saturation, 1)
+			r, g, b    = hsvToRgb(hue, saturation, 1)
+			gradientSy = (y4-y3) / ih
 			LG.setColor(0, 0, 0)
-			LG.rectangle(LG.DrawMode.FILL, x, componentY, w, SLIDER_WIDTH)
-			LG.setColor(r2, g2, b2)
-			LG.draw(imageGradient, x, componentY, 0, gradientSx, gradientSy)
-			drawSliderValue(x, componentY, w, SLIDER_WIDTH, value, value*100, "%d%%", (highlight == 3))
-			componentY += SLIDER_WIDTH
+			LG.rectangle(LG.DrawMode.FILL, x, y3, w, y4-y3)
+			LG.setColor(r, g, b)
+			LG.draw(imageGradient, x, y3, 0, gradientSx, gradientSy)
+			drawSliderValue(x, y3, w, y4-y3, value, value*100, "%d%%", (highlight == 3))
 
 			if colorEl.alpha {
-				local r, g, b = hsvToRgb(hue, saturation, value)
-				drawCheckerBox(x, componentY, w, SLIDER_WIDTH)
+				r, g, b    = hsvToRgb(hue, saturation, value)
+				gradientSy = (y5-y4) / ih
+				drawCheckerBox(x, y4, w, y5-y4)
 				LG.setColor(r, g, b)
-				LG.draw(imageGradient, x, componentY, 0, gradientSx, gradientSy)
-				drawSliderValue(x, componentY, w, SLIDER_WIDTH, a, a*100, "%d%%", (highlight == 4))
+				LG.draw(imageGradient, x, y4, 0, gradientSx, gradientSy)
+				drawSliderValue(x, y4, w, y5-y4, a, a*100, "%d%%", (highlight == 4))
 			}
 
 			if highlight {
+				local hlIndex = math.max(state.hoveredSubid, state.activeSubid)
+				local hlY1    = y1 + math.round((hlIndex-1) * colorEl.sliderWidth)
+				local hlY2    = y1 + math.round((hlIndex  ) * colorEl.sliderWidth)
 				LG.setColor(1, 1, 1, HOVER_OUTLINE_OPACITY_STRONG)
-				LG.rectangle(LG.DrawMode.LINE, x-.5, y+(math.max(state.hoveredSubid, state.activeSubid)-1)*SLIDER_WIDTH-.5, w+1, SLIDER_WIDTH+1)
+				LG.rectangle(LG.DrawMode.LINE, x-.5, hlY1-.5, w+1, hlY2-hlY1+1)
 			}
 
 		case ColorPreview:
@@ -1246,7 +1313,7 @@ local drawElement :: (state:State, el:Element) {
 			for preview.linkColors {
 				local colorEl = cast(Color) state.elementsByName[it]
 
-				if colorEl ~= NULL and colorEl.active {
+				if colorEl ~= NULL and isVisible(colorEl) {
 					colorCount  += 1
 					local color  = colorsForShader[colorCount]
 
@@ -1362,7 +1429,7 @@ export isInsideElement :: (state:State, x,y:int, el:gui.Element) -> bool {
 			return math.distance(x,y, el.layoutX+r,el.layoutY+r) <= r
 
 		case Slider:
-			return x >= el.layoutX and x < el.layoutX+el.layoutWidth and math.abs(y-(el.layoutY+el.layoutHeight/2)) <= SLIDER_WIDTH/2
+			return x >= el.layoutX and x < el.layoutX+el.layoutWidth and math.abs(y-(el.layoutY+el.layoutHeight/2)) <= SLIDER_MIN_WIDTH/2
 
 		case Checkbox:
 			return x >= el.layoutX and x < el.layoutX+el.layoutWidth and math.abs(y-(el.layoutY+el.layoutHeight/2)) <= CHECKBOX_SIZE/2
@@ -1524,22 +1591,22 @@ local triggerRefreshEvent :: (state:State, el:Element) {
 	state.layoutNeedsUpdate = true
 }
 
-local triggerActionEvent :: (state:State, widget:Widget, subid:int, save=false) {
-	local cb = cast((widget:Widget, i:int)) state.onAction[widget.name]
+local triggerActionEvent :: (state:State, widget:Widget, name:string, subid:int, save=false) {
+	local cb = cast((widget:Widget, i:int)) state.onAction[name ?: widget.name]
 	if cb == NULL  return
 
 	cb(widget, subid)
 	if save  scheduleSaveWorkspace()
 }
-local triggerOptionEvent :: (state:State, widget:Widget, subid:int, save=false) {
-	local cb = cast((widget:Widget, i:int)) state.onOption[widget.name]
+local triggerOptionEvent :: (state:State, widget:Widget, name:string, subid:int, save=false) {
+	local cb = cast((widget:Widget, i:int)) state.onOption[name ?: widget.name]
 	if cb == NULL  return
 
 	cb(widget, subid)
 	if save  scheduleSaveWorkspace()
 }
-local triggerCloseEvent :: (state:State, widget:Widget, subid:int, save=false) {
-	local cb = cast((widget:Widget, i:int)) state.onClose[widget.name]
+local triggerCloseEvent :: (state:State, widget:Widget, name:string, subid:int, save=false) {
+	local cb = cast((widget:Widget, i:int)) state.onClose[name ?: widget.name]
 	if cb == NULL  return
 
 	cb(widget, subid)
@@ -1584,6 +1651,17 @@ export refreshAll :: (state:State, onlyActive=true) {
 	for state.frames  if not (onlyActive and not it.active) {
 		refreshRecursively(state, it, onlyActive)
 	}
+}
+
+
+
+export isVisible :: (el:Element) -> bool {
+	while el.parent ~= NULL {
+		if not el.active  return false
+		el = el.parent
+	}
+
+	return el.active
 }
 
 

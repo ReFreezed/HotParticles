@@ -6,7 +6,7 @@
 --============================================================]]
 
 export PARTICLE_IMAGES = {
-	-- Location: gfx/<name>.png
+	-- Location: gfx/particles/<name>.png
 	"light",
 	"moon",
 }
@@ -63,6 +63,7 @@ export imagePixel:    LG.Image = NULL
 export imageRainbow:  LG.Image = NULL
 
 export particleImages: struct { !key:string, !value:LG.Image }
+export guiImages:      struct { !key:string, !value:LG.Image }
 
 local canvasGui:   LG.Canvas = NULL
 local canvasWorld: LG.Canvas = NULL
@@ -360,8 +361,12 @@ export onLoad :: (args:[]string, argsRaw:[]string) {
 	imagePixel    = LG.newImage("gfx/pixel.png")
 	imageRainbow  = LG.newImage("gfx/rainbow.png")
 
+	!load "src/icons"
+	generateIcons()
+
 	for PARTICLE_IMAGES {
-		particleImages[it] = LG.newImage(format("gfx/%s.png", it))
+		particleImages[it] = LG.newImage(format("gfx/particles/%s.png", it))
+		guiImages[it]      = particleImages[it]
 	}
 
 	local ok, gotError, projects = loadWorkspace()

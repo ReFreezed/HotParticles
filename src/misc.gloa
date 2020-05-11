@@ -9,7 +9,11 @@
 --=
 --============================================================]]
 
+
+
 export ModifierKey :: enum { NONE::0, C, A, S, CA, CS, AS, CAS }
+
+
 
 export InputField :: !foreign struct {
 	Alignment :: enum {
@@ -72,6 +76,8 @@ export InputField :: !foreign struct {
 	textinput              :: (self:InputField, text:string) -> (wasHandled:bool, wasEdited:bool) !foreign method "textinput",
 }
 
+
+
 export getModifierKey :: () -> ModifierKey {
 	local ctrl  = LK.isDown("lctrl","rctrl")
 	local alt   = LK.isDown("lalt","ralt")
@@ -87,9 +93,13 @@ export getModifierKey :: () -> ModifierKey {
 		ModifierKey.NONE
 }
 
+
+
 export isInside :: (x,y:int, areaX,areaY,areaW,areaH:int) -> bool {
 	return x >= areaX and y >= areaY and x < areaX+areaW and y < areaY+areaH
 }
+
+
 
 export normalizeDirectoryPath :: (path:string) -> (path:string) {
 	path = replace(path, "\\", "/")
@@ -121,3 +131,75 @@ export normalizeDirectoryPath :: (path:string) -> (path:string) {
 	if segments[1] == NULL  segments[1] = "." -- Prevent an empty string or a trailing slash so it's easy to append stuff to the resulting path.
 	return cast(string)drive .. cast(string)root .. concatinate(segments, "/")
 }
+
+
+
+--[[
+	pixelRow: String with single-digit hexadecimal numbers. Invalid characters count as 0.
+	Example:
+		antialiasedDiagonalLine = Gui.newMonochromeImage{
+			" 5F",
+			"5F5",
+			"F5 ",
+		}
+]]
+export newMonochromeImage :: (pixelRows:[]string) -> LG.Image {
+	return newMonochromeImage(pixelRows, 1, 1, 1)
+}
+export newMonochromeImage :: (pixelRows:[]string, r,g,b:float) -> LG.Image {
+	local imageData = love.image.newImageData(#pixelRows[1], #pixelRows)
+
+	for pixelRow, row: pixelRows {
+		for col = 1, #pixelRow {
+			local ok, pixel = stringToInt(getSubstring(pixelRow, col, col), 16)
+			if not ok  pixel = 0
+
+			imageData.setPixel!(col-1, row-1, r,g,b,pixel/15)
+		}
+	}
+
+	return LG.newImage(imageData)
+}
+
+--[[
+	pixelRow: String with single-character palette indices. Invalid indices count as transparent pixels.
+	palette = { ["char1"]="rgb[a=1]", ... }
+	Example:
+		doubleWideRainbow = Gui.newImageUsingPalette(
+			{
+				"rygcbp",
+				"rygcbp",
+			}, {
+				r = "F00", -- Red
+				y = "FF0", -- Yellow
+				g = "0F0", -- Green
+				c = "0FF", -- Cyan
+				b = "00F", -- Blue
+				p = "F0F", -- Purple
+			}
+		)
+]]
+export newImageUsingPalette :: (pixelRows:[]string, palette:struct{!key:string,!value:string}) -> LG.Image {
+	local TRANSPARENT: []float : {1,1,1,0}
+	local imageData = love.image.newImageData(#pixelRows[1], #pixelRows)
+
+	for pixelRow, row: pixelRows {
+		for col = 1, #pixelRow {
+			local pixel = palette[getSubstring(pixelRow, col, col)]
+			local color = palette[pixel]
+			if color == NULL  color = "0000"
+
+			local _,  r = stringToInt(getSubstring(color, 1, 1))
+			local _,  g = stringToInt(getSubstring(color, 2, 2))
+			local _,  b = stringToInt(getSubstring(color, 3, 3))
+			local ok, a = stringToInt(getSubstring(color, 4, 4))
+			if not ok  a = 0
+
+			imageData.setPixel!(col-1, row-1, r/15,g/15,b/15,a/15)
+		}
+	}
+
+	return LG.newImage(imageData)
+}
+
+

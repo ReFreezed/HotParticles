@@ -1,0 +1,69 @@
+--[[============================================================
+--=
+--=  Icons
+--=
+--=-------------------------------------------------------------
+--=
+--=  Hot Particles - a particle editor for LÖVE
+--=  by Marcus 'ReFreezed' Thunström
+--=
+--============================================================]]
+
+export generateIcons :: () {
+	guiImages.iconAddUp = newMonochromeImage({
+		"  F         ",
+		"  F         ",
+		"FFFFF       ",
+		"  F         ",
+		"  F    FF   ",
+		"      FFFF  ",
+		"     FF  FF ",
+		"    FF    FF",
+		"            ",
+		"            ",
+		"            ",
+		"            ",
+	})
+	guiImages.iconAddDown = newMonochromeImage({
+		"  F         ",
+		"  F         ",
+		"FFFFF       ",
+		"  F         ",
+		"  F FF    FF",
+		"     FF  FF ",
+		"      FFFF  ",
+		"       FF   ",
+		"            ",
+		"            ",
+		"            ",
+		"            ",
+	})
+	guiImages.iconDelete = newMonochromeImage({
+		" F        F ",
+		"FFF      FFF",
+		" FFF    FFF ",
+		"  FFF  FFF  ",
+		"   FFFFFF   ",
+		"    FFFF    ",
+		"    FFFF    ",
+		"   FFFFFF   ",
+		"  FFF  FFF  ",
+		" FFF    FFF ",
+		"FFF      FFF",
+		" F        F ",
+	})
+	guiImages.iconMoveV = newMonochromeImage({
+		"     FF     ",
+		"    FFFF    ",
+		"   FFFFFF   ",
+		"  FFFFFFFF  ",
+		"     FF     ",
+		"     FF     ",
+		"     FF     ",
+		"     FF     ",
+		"  FFFFFFFF  ",
+		"   FFFFFF   ",
+		"    FFFF    ",
+		"     FF     ",
+	})
+}

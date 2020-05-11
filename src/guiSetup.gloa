@@ -206,19 +206,50 @@ export setupGuiFrames :: () {
 					guiState.separator!({ thick=false }),
 
 					guiState.section!({ name="colors", label="Color",
-						guiState.buttons!({ name="colorAdd", buttons={{label="+"}} }),
 						guiState.hbox!({
 							guiState.vbox!({ weight=1,
-								guiState.color!({ name="color1", data=1, labelLeft="#1" }),
-								guiState.color!({ name="color2", data=2, labelLeft="#2" }),
-								guiState.color!({ name="color3", data=3, labelLeft="#3" }),
-								guiState.color!({ name="color4", data=4, labelLeft="#4" }),
-								guiState.color!({ name="color5", data=5, labelLeft="#5", active=false }),
-								guiState.color!({ name="color6", data=6, labelLeft="#6", active=false }),
-								guiState.color!({ name="color7", data=7, labelLeft="#7", active=false }),
-								guiState.color!({ name="color8", data=8, labelLeft="#8", active=false }),
+								guiState.hbox!({ name="colorContainer1", labelLeft="#1",
+									guiState.buttons!({ data=1, buttons={{name="colorDelete",image="iconDelete"},{name="colorMove",image="iconMoveV"}}, vertical=true }),
+									guiState.buttons!({ data=1, buttons={{name="colorAddAbove",image="iconAddUp"},{name="colorAddBelow",image="iconAddDown"}}, vertical=true }),
+									guiState.color!({ name="color1", data=1, weight=1 }),
+								}),
+								guiState.hbox!({ name="colorContainer2", labelLeft="#2",
+									guiState.buttons!({ data=2, buttons={{name="colorDelete",image="iconDelete"},{name="colorMove",image="iconMoveV"}}, vertical=true }),
+									guiState.buttons!({ data=2, buttons={{name="colorAddAbove",image="iconAddUp"},{name="colorAddBelow",image="iconAddDown"}}, vertical=true }),
+									guiState.color!({ name="color2", data=2, weight=1 }),
+								}),
+								guiState.hbox!({ name="colorContainer3", labelLeft="#3",
+									guiState.buttons!({ data=3, buttons={{name="colorDelete",image="iconDelete"},{name="colorMove",image="iconMoveV"}}, vertical=true }),
+									guiState.buttons!({ data=3, buttons={{name="colorAddAbove",image="iconAddUp"},{name="colorAddBelow",image="iconAddDown"}}, vertical=true }),
+									guiState.color!({ name="color3", data=3, weight=1 }),
+								}),
+								guiState.hbox!({ name="colorContainer4", labelLeft="#4",
+									guiState.buttons!({ data=4, buttons={{name="colorDelete",image="iconDelete"},{name="colorMove",image="iconMoveV"}}, vertical=true }),
+									guiState.buttons!({ data=4, buttons={{name="colorAddAbove",image="iconAddUp"},{name="colorAddBelow",image="iconAddDown"}}, vertical=true }),
+									guiState.color!({ name="color4", data=4, weight=1 }),
+								}),
+								guiState.hbox!({ name="colorContainer5", labelLeft="#5", active=false,
+									guiState.buttons!({ data=5, buttons={{name="colorDelete",image="iconDelete"},{name="colorMove",image="iconMoveV"}}, vertical=true }),
+									guiState.buttons!({ data=5, buttons={{name="colorAddAbove",image="iconAddUp"},{name="colorAddBelow",image="iconAddDown"}}, vertical=true }),
+									guiState.color!({ name="color5", data=5, weight=1 }),
+								}),
+								guiState.hbox!({ name="colorContainer6", labelLeft="#6", active=false,
+									guiState.buttons!({ data=6, buttons={{name="colorDelete",image="iconDelete"},{name="colorMove",image="iconMoveV"}}, vertical=true }),
+									guiState.buttons!({ data=6, buttons={{name="colorAddAbove",image="iconAddUp"},{name="colorAddBelow",image="iconAddDown"}}, vertical=true }),
+									guiState.color!({ name="color6", data=6, weight=1 }),
+								}),
+								guiState.hbox!({ name="colorContainer7", labelLeft="#7", active=false,
+									guiState.buttons!({ data=7, buttons={{name="colorDelete",image="iconDelete"},{name="colorMove",image="iconMoveV"}}, vertical=true }),
+									guiState.buttons!({ data=7, buttons={{name="colorAddAbove",image="iconAddUp"},{name="colorAddBelow",image="iconAddDown"}}, vertical=true }),
+									guiState.color!({ name="color7", data=7, weight=1 }),
+								}),
+								guiState.hbox!({ name="colorContainer8", labelLeft="#8", active=false,
+									guiState.buttons!({ data=8, buttons={{name="colorDelete",image="iconDelete"},{name="colorMove",image="iconMoveV"}}, vertical=true }),
+									guiState.buttons!({ data=8, buttons={{name="colorAddAbove",image="iconAddUp"},{name="colorAddBelow",image="iconAddDown"}}, vertical=true }),
+									guiState.color!({ name="color8", data=8, weight=1 }),
+								}),
 							}),
-							guiState.colorPreview!({ name="colorPreview", linkColors={"color1","color2","color3","color4"} }),
+							guiState.colorPreview!({ name="colorPreview", linkColors={"color1","color2","color3","color4","color5","color6","color7","color8"} }),
 						}),
 						guiState.radio!({ name="blendMode", labelLeft="blend mode",
 							buttons = {
@@ -852,29 +883,54 @@ export setupGuiCallbacks :: () {
 		}
 	}
 
-	guiState.onAction.colorAdd = (buttons:gui.Buttons, i:int) {
-		local project  = openProjects[currentProjectIndex]
-		local system   = project.systems[project.systemIndex]
-		local colors   = system.colors
-		local oldCount = #colors // 4
-		local i1       = oldCount*4 - 3
-
-		if colors[8*4] ~= NULL  return
-
-		for 1, 4  insert(colors, colors[i1+it-1])
-		updateParticleColors(system.particles, colors)
-
-		local name = format("color%d", oldCount+1)
-		gui.setActive(guiState, name, true)
-		gui.refreshRecursively(guiState, name)
-	}
 	guiState.onRefresh.colors = (slider:gui.Slider) {
 		local project = openProjects[currentProjectIndex]
 		local system  = project.systems[project.systemIndex]
 		local colors  = system.colors
 		for 1, 8 {
-			gui.getElement(guiState, format("color%d", it), gui.Slider).active = (colors[it*4] ~= NULL)
+			gui.setActive(guiState, format("colorContainer%d", it), (colors[it*4] ~= NULL))
 		}
+	}
+	local addColorAtIndex :: (sourceIndex:int, targetIndex:int) {
+		local project = openProjects[currentProjectIndex]
+		local system  = project.systems[project.systemIndex]
+		local colors  = system.colors
+
+		if colors[8*4] ~= NULL  return
+
+		local i1 = sourceIndex*4 - 3
+		local h  = colors[i1  ]
+		local s  = colors[i1+1]
+		local v  = colors[i1+2]
+		local a  = colors[i1+3]
+
+		i1 = targetIndex*4 - 3
+		insert(colors, i1  , h)
+		insert(colors, i1+1, s)
+		insert(colors, i1+2, v)
+		insert(colors, i1+3, a)
+
+		updateParticleColors(system.particles, colors)
+
+		for i = targetIndex, #colors//4 {
+			local name = format("colorContainer%d", i)
+			gui.setActive(guiState, name, true)
+			gui.refreshRecursively(guiState, name)
+		}
+	}
+	guiState.onAction.colorAddAbove = (buttons:gui.Buttons, i:int) {
+		i = cast(int) buttons.data
+		addColorAtIndex(i, i)
+	}
+	guiState.onAction.colorAddBelow = (buttons:gui.Buttons, i:int) {
+		i = cast(int) buttons.data
+		addColorAtIndex(i, i+1)
+	}
+	guiState.onAction.colorDelete = (buttons:gui.Buttons, i:int) {
+		i = cast(int) buttons.data
+	}
+	guiState.onAction.colorMove = (buttons:gui.Buttons, i:int) {
+		i = cast(int) buttons.data
 	}
 	for i = 1, 8 {
 		guiState.onRefresh[format("color%d", i)] = (colorEl:gui.Color) {
