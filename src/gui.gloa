@@ -69,21 +69,27 @@ export State :: struct {
 	elementsById:   struct { !key: int,    !value: Element },
 	elementsByName: struct { !key: string, !value: Element },
 
-	nextId       = 1,
+	nextId = 1,
+
 	hoveredId    = 0,
 	hoveredSubid = 0,
-	activeId     = 0,
-	activeSubid  = 0,
-	activeMod    = ModifierKey.NONE,
+
+	activeId       = 0,
+	activeSubid    = 0,
+	activeMod      = ModifierKey.NONE,
+	activeStartMx  = 0,
+	activeStartMy  = 0,
+	activeDragging = false,
 
 	layoutNeedsUpdate = true,
 
 	extraScrollableSpace = 0,
 
-	onRefresh: struct { !key:string, !value:any--[[ (el:Element)           ]] },
+	onRefresh: struct { !key:string, !value:any--[[ (el:Element) ]] },
 	onAction:  struct { !key:string, !value:any--[[ (widget:Widget, i:int) ]] },
 	onOption:  struct { !key:string, !value:any--[[ (widget:Widget, i:int) ]] },
 	onClose:   struct { !key:string, !value:any--[[ (widget:Widget, i:int) ]] },
+	onDrag:    struct { !key:string, !value:any--[[ (widget:Widget, i:int, mx,my:int) ]] },
 
 	buttons      :: (state:State, el:Buttons)      -> type_of(el) { return cast(type_of(el)) register(state, el, type_of(el)) },
 	checkbox     :: (state:State, el:Checkbox)     -> type_of(el) { return cast(type_of(el)) register(state, el, type_of(el)) },
@@ -207,6 +213,7 @@ export Button :: struct {
 	image   = "",
 	tooltip = "",
 	value: any,
+	draggable = false,
 
 	imageScale = 1.0,
 }
@@ -217,7 +224,7 @@ export Buttons :: struct {
 	using Widget,
 
 	buttons: []Button,
-	align = Alignment.CENTER,
+	align    = Alignment.CENTER,
 	vertical = false,
 
 	buttonWidth:  float, -- Round when necessary!
@@ -234,7 +241,6 @@ export Tabs :: struct {
 	using Radio,
 
 	specialLastTab = false,
-	reorder        = false,
 }
 
 
@@ -327,9 +333,11 @@ export onMousePressed :: (state:State, mx,my:int, mbutton:int, isTouch:bool, pre
 
 	for state.frames  if isInsideElement(state, mx, my, it) {
 		if mbutton == 1 and state.hoveredId {
-			state.activeId    = state.hoveredId
-			state.activeSubid = state.hoveredSubid
-			state.activeMod   = getModifierKey()
+			state.activeId      = state.hoveredId
+			state.activeSubid   = state.hoveredSubid
+			state.activeMod     = getModifierKey()
+			state.activeStartMx = mx
+			state.activeStartMy = my
 			LM.setGrabbed(true)
 			LK.setKeyRepeat(false)
 			onMouseMoved(state, mx, my, 0, 0, isTouch)
@@ -343,41 +351,50 @@ export onMousePressed :: (state:State, mx,my:int, mbutton:int, isTouch:bool, pre
 export onMouseMoved :: (state:State, mx,my:int, dx,dy:int, isTouch:bool) {
 	updateLayoutIfNeeded(state)
 
-	local found, widget = getWidgetAt(state, mx, my)
+	-- Update hovered ID.
+	local widget = cast(Widget) state.elementsById[state.activeId]
+	if not (
+		widget ~= NULL
+		and (widget.type == Buttons or widget.type == Radio or widget.type == Tabs)
+		and (cast(Buttons)widget).buttons[state.activeSubid].draggable
+	) {
+		local found, ^widget = getWidgetAt(state, mx, my)
 
-	state.hoveredId    = 0
-	state.hoveredSubid = 0
+		state.hoveredId    = 0
+		state.hoveredSubid = 0
 
-	if found {
-		if not state.activeId or widget.id == state.activeId {
-			state.hoveredId = widget.id
-		}
+		if found {
+			if not state.activeId or widget.id == state.activeId {
+				state.hoveredId = widget.id
+			}
 
-		local hoveredSubid = 0
+			local hoveredSubid = 0
 
-		if state.hoveredId  if widget.type == {
-			case Tabs:  !through
-			case Radio: !through
-			case Buttons:
-				local buttons = cast(Buttons) widget
-				if buttons.vertical
-					hoveredSubid = math.clamp(math.floor(1 + (my-buttons.layoutY-getScrollOffset(buttons)) / buttons.buttonHeight), 1, #buttons.buttons)
-				else
-					hoveredSubid = math.clamp(math.floor(1 + (mx-buttons.layoutX                         ) / buttons.buttonWidth ), 1, #buttons.buttons)
+			if state.hoveredId  if widget.type == {
+				case Tabs:  !through
+				case Radio: !through
+				case Buttons:
+					local buttons = cast(Buttons) widget
+					if buttons.vertical
+						hoveredSubid = math.clamp(math.floor(1 + (my-buttons.layoutY-getScrollOffset(buttons)) / buttons.buttonHeight), 1, #buttons.buttons)
+					else
+						hoveredSubid = math.clamp(math.floor(1 + (mx-buttons.layoutX                         ) / buttons.buttonWidth ), 1, #buttons.buttons)
 
-			case Color:
-				local colorEl = cast(Color) widget
-				local iFloat  = 1 + (my - (colorEl.layoutY + getScrollOffset(colorEl))) / SLIDER_MIN_WIDTH
-				hoveredSubid  = math.clamp(math.floor(iFloat), 1, (colorEl.alpha ? 4 : 3))
-		}
+				case Color:
+					local colorEl = cast(Color) widget
+					local iFloat  = 1 + (my - (colorEl.layoutY + getScrollOffset(colorEl))) / SLIDER_MIN_WIDTH
+					hoveredSubid  = math.clamp(math.floor(iFloat), 1, (colorEl.alpha ? 4 : 3))
+			}
 
-		if not state.activeId or hoveredSubid == state.activeSubid {
-			state.hoveredSubid = hoveredSubid
-		} else {
-			state.hoveredId = 0
+			if not state.activeId or hoveredSubid == state.activeSubid {
+				state.hoveredSubid = hoveredSubid
+			} else {
+				state.hoveredId = 0
+			}
 		}
 	}
 
+	-- Drag active widget.
 	widget = cast(Widget) state.elementsById[state.activeId]
 
 	if widget ~= NULL  if widget.type == {
@@ -449,22 +466,37 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int, isTouch:bool) {
 			scrollable.scrollTarget = -math.round((my-handlePosMax/2-scrollable.layoutY) / (visibleH-handlePosMax) * paddedH)
 			limitScroll(scrollable)
 			scrollable.scroll = scrollable.scrollTarget
+
+		case Tabs:  !through
+		case Radio: !through
+		case Buttons:
+			local buttons = cast(Buttons) widget
+
+			if buttons.buttons[state.activeSubid].draggable {
+				if state.activeDragging {
+					triggerDragEvent(state, buttons, buttons.buttons[state.hoveredSubid].name, state.hoveredSubid, mx, my)
+
+				} elseif math.distance(mx,my, state.activeStartMx,state.activeStartMy) > 10 {
+					state.activeDragging = true
+				}
+			}
 	}
 }
 
 export onMouseReleased :: (state:State, mx,my:int, mbutton:int, isTouch:bool, presses:int) {
+	-- LMB.
 	if mbutton == 1 and state.activeId {
 		local widget = cast(Widget) state.elementsById[state.activeId]
 
 		if widget ~= NULL  if widget.type == {
 			case Buttons:
-				if state.hoveredId {
+				if state.hoveredId and not state.activeDragging {
 					local buttons = cast(Buttons) widget
 					triggerActionEvent(state, buttons, buttons.buttons[state.activeSubid].name, state.activeSubid, save=true)
 				}
 
 			case Radio:
-				if state.hoveredId {
+				if state.hoveredId and not state.activeDragging {
 					local radio = cast(Radio) widget
 
 					if radio.index ~= state.hoveredSubid {
@@ -474,7 +506,7 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, isTouch:bool, pr
 				}
 
 			case Tabs:
-				if state.hoveredId {
+				if state.hoveredId and not state.activeDragging {
 					local tabs = cast(Tabs) widget
 
 					if tabs.specialLastTab and state.hoveredSubid == #tabs.buttons {
@@ -500,6 +532,7 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, isTouch:bool, pr
 		}
 	}
 
+	-- MMB.
 	if mbutton == 3 and not state.activeId and state.hoveredId {
 		local widget = cast(Widget) state.elementsById[state.hoveredId]
 
@@ -513,6 +546,7 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, isTouch:bool, pr
 		}
 	}
 
+	-- RMB.
 	if mbutton == 2 and not state.activeId and state.hoveredId {
 		local widget = cast(Widget) state.elementsById[state.hoveredId]
 		local name   = ""
@@ -526,11 +560,17 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, isTouch:bool, pr
 		if widget ~= NULL  triggerOptionEvent(state, widget, name, state.hoveredSubid)
 	}
 
+	-- Release active ID.
 	if state.activeId and mbutton == 1 {
-		state.activeId    = 0
-		state.activeSubid = 0
+		if state.activeDragging  scheduleSaveWorkspace()
+
+		state.activeId       = 0
+		state.activeSubid    = 0
+		state.activeDragging = false
+
 		LM.setGrabbed(false)
 		LK.setKeyRepeat(true)
+
 		onMouseMoved(state, mx, my, 0, 0, isTouch)
 	}
 }
@@ -1625,6 +1665,12 @@ local triggerCloseEvent :: (state:State, widget:Widget, name:string, subid:int, 
 
 	cb(widget, subid)
 	if save  scheduleSaveWorkspace()
+}
+local triggerDragEvent :: (state:State, widget:Widget, name:string, subid:int, mx,my:int) {
+	local cb = cast((widget:Widget, i:int, mx,my:int)) state.onDrag[name ?: widget.name]
+	if cb == NULL  return
+
+	cb(widget, subid, mx, my)
 }
 
 
