@@ -98,7 +98,7 @@ export setupGuiFrames :: () {
 					guiState.separator!({ thick=true }),
 
 					guiState.section!({ label="SpawnRate",
-						guiState.slider!({ name="emissionRate", min=.1, max=1000, readout="%.1f / sec" }),
+						guiState.slider!({ name="emissionRate", min=0, max=1000, readout="%.1f / sec" }),
 					}),
 
 					guiState.separator!({ thick=false }),
@@ -165,7 +165,7 @@ export setupGuiFrames :: () {
 
 					guiState.separator!({ thick=false }),
 
-					guiState.section!({ label="DampLinear",
+					guiState.section!({ label="Damping",
 						guiState.slider!({ name="linearDampingMin", labelLeft="min", min=-50, max=50, readout="%.2f" }),
 						guiState.slider!({ name="linearDampingMax", labelLeft="max", min=-50, max=50, readout="%.2f" }),
 					}),
@@ -192,35 +192,35 @@ export setupGuiFrames :: () {
 
 					guiState.section!({ name="sizes", label="Size",
 						guiState.hbox!({ name="sizeContainer1", data=1, labelLeft="#1",
-							guiState.buttons!({ data=1, buttons={{name="sizeRemove",image="iconDelete",tooltip="Remove size"},{name="sizeAdd",image="iconAdd",tooltip="Add size"}} }),
+							guiState.buttons!({ data=1, buttons={{name="sizeRemove",image="iconDelete",tooltip="Remove size"},{name="sizeAdd",image="iconAdd",tooltip="Add/duplicate size"}} }),
 							guiState.slider!({ name="size1", data=1, min=0, max=8, readout="%.2f", weight=1 }),
 						}),
 						guiState.hbox!({ name="sizeContainer2", data=2, labelLeft="#2", active=false,
-							guiState.buttons!({ data=2, buttons={{name="sizeRemove",image="iconDelete",tooltip="Remove size"},{name="sizeAdd",image="iconAdd",tooltip="Add size"}} }),
+							guiState.buttons!({ data=2, buttons={{name="sizeRemove",image="iconDelete",tooltip="Remove size"},{name="sizeAdd",image="iconAdd",tooltip="Add/duplicate size"}} }),
 							guiState.slider!({ name="size2", data=2, min=0, max=8, readout="%.2f", weight=1 }),
 						}),
 						guiState.hbox!({ name="sizeContainer3", data=3, labelLeft="#3", active=false,
-							guiState.buttons!({ data=3, buttons={{name="sizeRemove",image="iconDelete",tooltip="Remove size"},{name="sizeAdd",image="iconAdd",tooltip="Add size"}} }),
+							guiState.buttons!({ data=3, buttons={{name="sizeRemove",image="iconDelete",tooltip="Remove size"},{name="sizeAdd",image="iconAdd",tooltip="Add/duplicate size"}} }),
 							guiState.slider!({ name="size3", data=3, min=0, max=8, readout="%.2f", weight=1 }),
 						}),
 						guiState.hbox!({ name="sizeContainer4", data=4, labelLeft="#4", active=false,
-							guiState.buttons!({ data=4, buttons={{name="sizeRemove",image="iconDelete",tooltip="Remove size"},{name="sizeAdd",image="iconAdd",tooltip="Add size"}} }),
+							guiState.buttons!({ data=4, buttons={{name="sizeRemove",image="iconDelete",tooltip="Remove size"},{name="sizeAdd",image="iconAdd",tooltip="Add/duplicate size"}} }),
 							guiState.slider!({ name="size4", data=4, min=0, max=8, readout="%.2f", weight=1 }),
 						}),
 						guiState.hbox!({ name="sizeContainer5", data=5, labelLeft="#5", active=false,
-							guiState.buttons!({ data=5, buttons={{name="sizeRemove",image="iconDelete",tooltip="Remove size"},{name="sizeAdd",image="iconAdd",tooltip="Add size"}} }),
+							guiState.buttons!({ data=5, buttons={{name="sizeRemove",image="iconDelete",tooltip="Remove size"},{name="sizeAdd",image="iconAdd",tooltip="Add/duplicate size"}} }),
 							guiState.slider!({ name="size5", data=5, min=0, max=8, readout="%.2f", weight=1 }),
 						}),
 						guiState.hbox!({ name="sizeContainer6", data=6, labelLeft="#6", active=false,
-							guiState.buttons!({ data=6, buttons={{name="sizeRemove",image="iconDelete",tooltip="Remove size"},{name="sizeAdd",image="iconAdd",tooltip="Add size"}} }),
+							guiState.buttons!({ data=6, buttons={{name="sizeRemove",image="iconDelete",tooltip="Remove size"},{name="sizeAdd",image="iconAdd",tooltip="Add/duplicate size"}} }),
 							guiState.slider!({ name="size6", data=6, min=0, max=8, readout="%.2f", weight=1 }),
 						}),
 						guiState.hbox!({ name="sizeContainer7", data=7, labelLeft="#7", active=false,
-							guiState.buttons!({ data=7, buttons={{name="sizeRemove",image="iconDelete",tooltip="Remove size"},{name="sizeAdd",image="iconAdd",tooltip="Add size"}} }),
+							guiState.buttons!({ data=7, buttons={{name="sizeRemove",image="iconDelete",tooltip="Remove size"},{name="sizeAdd",image="iconAdd",tooltip="Add/duplicate size"}} }),
 							guiState.slider!({ name="size7", data=7, min=0, max=8, readout="%.2f", weight=1 }),
 						}),
 						guiState.hbox!({ name="sizeContainer8", data=8, labelLeft="#8", active=false,
-							guiState.buttons!({ data=8, buttons={{name="sizeRemove",image="iconDelete",tooltip="Remove size"},{name="sizeAdd",image="iconAdd",tooltip="Add size"}} }),
+							guiState.buttons!({ data=8, buttons={{name="sizeRemove",image="iconDelete",tooltip="Remove size"},{name="sizeAdd",image="iconAdd",tooltip="Add/duplicate size"}} }),
 							guiState.slider!({ name="size8", data=8, min=0, max=8, readout="%.2f", weight=1 }),
 						}),
 						guiState.slider!({ labelLeft="variation", min=0, max=1, readoutMulti=100, readout="%d%%" }),
@@ -232,43 +232,43 @@ export setupGuiFrames :: () {
 						guiState.hbox!({
 							guiState.vbox!({ name="colors", weight=1,
 								guiState.hbox!({ name="colorContainer1", labelLeft="#1",
-									guiState.buttons!({ data=1, buttons={{name="colorRemove",image="iconDelete",tooltip="Remove color"},{name="colorMove",image="iconMoveV",tooltip="Move color",draggable=true}}, vertical=true }),
-									guiState.buttons!({ data=1, buttons={{name="colorAdd",image="iconAdd",tooltip="Add color"}}, vertical=true }),
+									guiState.buttons!({ data=1, buttons={{name="colorRemove",image="iconDelete",tooltip="Remove color"},{name="colorMove",image="iconMoveV",tooltip="Move color (drag)",draggable=true}}, vertical=true }),
+									guiState.buttons!({ data=1, buttons={{name="colorAdd",image="iconAdd",tooltip="Add/duplicate color"}}, vertical=true }),
 									guiState.color!({ name="color1", data=1, weight=1, linkMultiDrag={"color2","color3","color4","color5","color6","color7","color8"} }),
 								}),
 								guiState.hbox!({ name="colorContainer2", labelLeft="#2", active=false,
-									guiState.buttons!({ data=2, buttons={{name="colorRemove",image="iconDelete",tooltip="Remove color"},{name="colorMove",image="iconMoveV",tooltip="Move color",draggable=true}}, vertical=true }),
-									guiState.buttons!({ data=2, buttons={{name="colorAdd",image="iconAdd",tooltip="Add color"}}, vertical=true }),
+									guiState.buttons!({ data=2, buttons={{name="colorRemove",image="iconDelete",tooltip="Remove color"},{name="colorMove",image="iconMoveV",tooltip="Move color (drag)",draggable=true}}, vertical=true }),
+									guiState.buttons!({ data=2, buttons={{name="colorAdd",image="iconAdd",tooltip="Add/duplicate color"}}, vertical=true }),
 									guiState.color!({ name="color2", data=2, weight=1, linkMultiDrag={"color1","color3","color4","color5","color6","color7","color8"} }),
 								}),
 								guiState.hbox!({ name="colorContainer3", labelLeft="#3", active=false,
-									guiState.buttons!({ data=3, buttons={{name="colorRemove",image="iconDelete",tooltip="Remove color"},{name="colorMove",image="iconMoveV",tooltip="Move color",draggable=true}}, vertical=true }),
-									guiState.buttons!({ data=3, buttons={{name="colorAdd",image="iconAdd",tooltip="Add color"}}, vertical=true }),
+									guiState.buttons!({ data=3, buttons={{name="colorRemove",image="iconDelete",tooltip="Remove color"},{name="colorMove",image="iconMoveV",tooltip="Move color (drag)",draggable=true}}, vertical=true }),
+									guiState.buttons!({ data=3, buttons={{name="colorAdd",image="iconAdd",tooltip="Add/duplicate color"}}, vertical=true }),
 									guiState.color!({ name="color3", data=3, weight=1, linkMultiDrag={"color1","color2","color4","color5","color6","color7","color8"} }),
 								}),
 								guiState.hbox!({ name="colorContainer4", labelLeft="#4", active=false,
-									guiState.buttons!({ data=4, buttons={{name="colorRemove",image="iconDelete",tooltip="Remove color"},{name="colorMove",image="iconMoveV",tooltip="Move color",draggable=true}}, vertical=true }),
-									guiState.buttons!({ data=4, buttons={{name="colorAdd",image="iconAdd",tooltip="Add color"}}, vertical=true }),
+									guiState.buttons!({ data=4, buttons={{name="colorRemove",image="iconDelete",tooltip="Remove color"},{name="colorMove",image="iconMoveV",tooltip="Move color (drag)",draggable=true}}, vertical=true }),
+									guiState.buttons!({ data=4, buttons={{name="colorAdd",image="iconAdd",tooltip="Add/duplicate color"}}, vertical=true }),
 									guiState.color!({ name="color4", data=4, weight=1, linkMultiDrag={"color1","color2","color3","color5","color6","color7","color8"} }),
 								}),
 								guiState.hbox!({ name="colorContainer5", labelLeft="#5", active=false,
-									guiState.buttons!({ data=5, buttons={{name="colorRemove",image="iconDelete",tooltip="Remove color"},{name="colorMove",image="iconMoveV",tooltip="Move color",draggable=true}}, vertical=true }),
-									guiState.buttons!({ data=5, buttons={{name="colorAdd",image="iconAdd",tooltip="Add color"}}, vertical=true }),
+									guiState.buttons!({ data=5, buttons={{name="colorRemove",image="iconDelete",tooltip="Remove color"},{name="colorMove",image="iconMoveV",tooltip="Move color (drag)",draggable=true}}, vertical=true }),
+									guiState.buttons!({ data=5, buttons={{name="colorAdd",image="iconAdd",tooltip="Add/duplicate color"}}, vertical=true }),
 									guiState.color!({ name="color5", data=5, weight=1, linkMultiDrag={"color1","color2","color3","color4","color6","color7","color8"} }),
 								}),
 								guiState.hbox!({ name="colorContainer6", labelLeft="#6", active=false,
-									guiState.buttons!({ data=6, buttons={{name="colorRemove",image="iconDelete",tooltip="Remove color"},{name="colorMove",image="iconMoveV",tooltip="Move color",draggable=true}}, vertical=true }),
-									guiState.buttons!({ data=6, buttons={{name="colorAdd",image="iconAdd",tooltip="Add color"}}, vertical=true }),
+									guiState.buttons!({ data=6, buttons={{name="colorRemove",image="iconDelete",tooltip="Remove color"},{name="colorMove",image="iconMoveV",tooltip="Move color (drag)",draggable=true}}, vertical=true }),
+									guiState.buttons!({ data=6, buttons={{name="colorAdd",image="iconAdd",tooltip="Add/duplicate color"}}, vertical=true }),
 									guiState.color!({ name="color6", data=6, weight=1, linkMultiDrag={"color1","color2","color3","color4","color5","color7","color8"} }),
 								}),
 								guiState.hbox!({ name="colorContainer7", labelLeft="#7", active=false,
-									guiState.buttons!({ data=7, buttons={{name="colorRemove",image="iconDelete",tooltip="Remove color"},{name="colorMove",image="iconMoveV",tooltip="Move color",draggable=true}}, vertical=true }),
-									guiState.buttons!({ data=7, buttons={{name="colorAdd",image="iconAdd",tooltip="Add color"}}, vertical=true }),
+									guiState.buttons!({ data=7, buttons={{name="colorRemove",image="iconDelete",tooltip="Remove color"},{name="colorMove",image="iconMoveV",tooltip="Move color (drag)",draggable=true}}, vertical=true }),
+									guiState.buttons!({ data=7, buttons={{name="colorAdd",image="iconAdd",tooltip="Add/duplicate color"}}, vertical=true }),
 									guiState.color!({ name="color7", data=7, weight=1, linkMultiDrag={"color1","color2","color3","color4","color5","color6","color8"} }),
 								}),
 								guiState.hbox!({ name="colorContainer8", labelLeft="#8", active=false,
-									guiState.buttons!({ data=8, buttons={{name="colorRemove",image="iconDelete",tooltip="Remove color"},{name="colorMove",image="iconMoveV",tooltip="Move color",draggable=true}}, vertical=true }),
-									guiState.buttons!({ data=8, buttons={{name="colorAdd",image="iconAdd",tooltip="Add color"}}, vertical=true }),
+									guiState.buttons!({ data=8, buttons={{name="colorRemove",image="iconDelete",tooltip="Remove color"},{name="colorMove",image="iconMoveV",tooltip="Move color (drag)",draggable=true}}, vertical=true }),
+									guiState.buttons!({ data=8, buttons={{name="colorAdd",image="iconAdd",tooltip="Add/duplicate color"}}, vertical=true }),
 									guiState.color!({ name="color8", data=8, weight=1, linkMultiDrag={"color1","color2","color3","color4","color5","color6","color7"} }),
 								}),
 							}),
@@ -296,7 +296,7 @@ export setupGuiCallbacks :: () {
 		for openProjects {
 			insert(tabs.buttons, cast(gui.Button){ label=it.displayedName, draggable=true })
 		}
-		insert(tabs.buttons, cast(gui.Button){ image="iconAdd" })
+		insert(tabs.buttons, cast(gui.Button){ image="iconAdd", tooltip="New project" })
 
 		tabs.index = currentProjectIndex
 	}
@@ -463,7 +463,7 @@ export setupGuiCallbacks :: () {
 		for project.systems {
 			insert(tabs.buttons, cast(gui.Button){ system=it, draggable=true })
 		}
-		insert(tabs.buttons, cast(gui.Button){ image="iconAdd" })
+		insert(tabs.buttons, cast(gui.Button){ image="iconAdd", tooltip="New particle system" })
 
 		tabs.index = project.systemIndex
 	}

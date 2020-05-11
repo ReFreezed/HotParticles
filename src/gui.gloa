@@ -57,6 +57,8 @@ local DIRECTION_RADIUS :: 25
 local BUTTON_IMAGE_MAX_SIZE :: 20 -- Also the size of particle previews.
 local SPECIAL_TAB_WIDTH     :: 32
 
+local TAB_BOTTOM_LINE_WIDTH :: 2
+
 local HOVER_OUTLINE_OPACITY        :: .3
 local HOVER_OUTLINE_OPACITY_STRONG :: .5
 
@@ -80,6 +82,12 @@ export State :: struct {
 	activeStartMx  = 0,
 	activeStartMy  = 0,
 	activeDragging = false,
+
+	currentTooltip = "",
+	tooltipTime    = 0.00,
+	tooltipX       = 0,
+	tooltipY1      = 0, -- Primary.
+	tooltipY2      = 0, -- Fallback.
 
 	layoutNeedsUpdate = true,
 
@@ -523,6 +531,47 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int, isTouch:bool) {
 				}
 			}
 	}
+
+	-- Update tooltip.
+	state.currentTooltip = ""
+
+	if state.hoveredId and not state.activeId {
+		widget = cast(Widget) state.elementsById[state.hoveredId]
+
+		if widget.type == Buttons or widget.type == Radio or widget.type == Tabs {
+			local buttons        = cast(Buttons) widget
+			state.currentTooltip = buttons.buttons[state.hoveredSubid].tooltip
+
+			if buttons.vertical {
+				state.tooltipX  = buttons.layoutX
+				state.tooltipY1 = math.round(buttons.layoutY + (state.hoveredSubid-1) * buttons.buttonHeight)
+				state.tooltipY2 = math.round(buttons.layoutY + (state.hoveredSubid  ) * buttons.buttonHeight)
+			} else {
+				state.tooltipX  = math.round(buttons.layoutX + (state.hoveredSubid-1) * buttons.buttonWidth)
+				state.tooltipY1 = buttons.layoutY
+				state.tooltipY2 = buttons.layoutY + buttons.layoutHeight
+			}
+		}
+
+		if not state.currentTooltip {
+			state.currentTooltip = widget.tooltip
+			state.tooltipX       = widget.layoutX
+			state.tooltipY1      = widget.layoutY
+			state.tooltipY2      = widget.layoutY + widget.layoutHeight
+		}
+
+		if state.currentTooltip {
+			local offset     = getScrollOffset(widget)
+			state.tooltipY1 += offset
+			state.tooltipY2 += offset
+		}
+	}
+
+	if not state.currentTooltip {
+		state.tooltipTime = 0
+	} else {
+		if state.tooltipTime == 0  state.tooltipTime = LT.getTime()
+	}
 }
 
 export onMouseReleased :: (state:State, mx,my:int, mbutton:int, isTouch:bool, presses:int) {
@@ -804,6 +853,7 @@ local calculateNaturalSize :: (state:State, el:Element) {
 	}
 
 	el.layoutWidth += el.inset
+	if el.type == Tabs  el.layoutHeight += TAB_BOTTOM_LINE_WIDTH
 }
 
 local positionAndFit :: (state:State, el:Element, x,y,w,h:int) {
@@ -822,6 +872,7 @@ local positionAndFit :: (state:State, el:Element, x,y,w,h:int) {
 
 	x += el.inset
 	w -= el.inset
+	if el.type == Tabs  h -= TAB_BOTTOM_LINE_WIDTH
 
 	el.layoutX      = x
 	el.layoutY      = y
@@ -1166,6 +1217,15 @@ local drawElement :: (state:State, el:Element) {
 				} else {
 					LG.rectangle(LG.DrawMode.FILL, bx1[itIndex]+1, by1[itIndex]+1, bw[itIndex]-2, bh[itIndex]-2, 3)
 				}
+			}
+
+			-- Tab bottom line.
+			if isTabs {
+				local frame = tabs.parent
+				while frame.parent ~= NULL  frame = frame.parent
+				LG.setColor(1, 1, 1, .3)
+				LG.rectangle(LG.DrawMode.FILL, frame.layoutX, y+h, frame.layoutWidth, TAB_BOTTOM_LINE_WIDTH) -- Assume we haven't translated on the x axis.
+				-- LG.rectangle(LG.DrawMode.FILL, x-SPACING, y+h, w+2*SPACING, TAB_BOTTOM_LINE_WIDTH)
 			}
 
 			-- Images.
@@ -1549,8 +1609,30 @@ local drawElement :: (state:State, el:Element) {
 
 export draw :: (state:State) {
 	updateLayoutIfNeeded(state)
+
 	for state.frames {
 		if it.active  drawElement(state, it)
+	}
+
+	if state.currentTooltip {
+		local widget = state.elementsById[state.hoveredId]
+		local a      = math.clamp01(((LT.getTime() - state.tooltipTime) - .30) / 0.20)
+
+		if a > 0 and widget ~= NULL {
+			local w = fontNormal.getWidth!(state.currentTooltip) + 2*SPACING
+			local h = fontNormal.getHeight!() + 2*BUTTON_PADDING_Y
+			local x = math.min(state.tooltipX, LG.getWidth() - w)
+			local y = state.tooltipY1 - h - 1
+
+			if y < 0  y = state.tooltipY2 + 1
+
+			LG.setColor(0, 0, 0, .8*a)
+			LG.rectangle(LG.DrawMode.FILL, x-1, y-1, w+2, h+2, 3)
+			LG.setColor(.8, .8, .8, a)
+			LG.rectangle(LG.DrawMode.FILL, x, y, w, h, 2)
+			LG.setColor(0, 0, 0, a)
+			LG.print(state.currentTooltip, x+SPACING, y+BUTTON_PADDING_Y)
+		}
 	}
 }
 
