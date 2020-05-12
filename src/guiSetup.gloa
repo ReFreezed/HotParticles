@@ -16,10 +16,10 @@ export setupGuiFrames :: () {
 
 			guiState.buttons!({ name="saveOpenBar",
 				buttons = {
-					{label="save"},
-					{label="save as..."},
-					{label="open..."},
-					{label="hide settings"},
+					{label="Save"},
+					{label="Save as..."},
+					{label="Open..."},
+					{label="Hide settings"},
 				},
 			}),
 
@@ -70,7 +70,7 @@ export setupGuiFrames :: () {
 					guiState.tabs!({ name="systems", specialLastTab=true }),
 				}),
 
-				guiState.scrollable!({ height=0,--[[Remaining height.]]
+				guiState.scrollable!({
 					guiState.section!({ label="Texture",
 						guiState.radio!({ name="texture" }),
 					}),
@@ -284,6 +284,20 @@ export setupGuiFrames :: () {
 						}),
 					}),
 				}),
+			}),
+		}),
+
+		guiState.frame!({ name="saveProjectAs", width=MAIN_PANEL_WIDTH, active=false,
+			guiState.text!({ text="Save as" }),
+			guiState.inputText!({ name="saveProjectAs_directory", value="C:/that/derp" }),
+			guiState.scrollable!({
+				guiState.buttons!({ vertical=true, align=gui.Alignment.LEFT,
+					buttons = {{label="../"},{label="foo/"},{label="bar.hotparticles"}},
+				}),
+			}),
+			guiState.inputText!({ name="saveProjectAs_filename", value="Bark bark.jpg" }),
+			guiState.buttons!({ height=40,
+				buttons = {{label="Save"},{label="Cancel"}},
 			}),
 		}),
 	}

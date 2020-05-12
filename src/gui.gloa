@@ -83,6 +83,8 @@ export State :: struct {
 	activeStartMy  = 0,
 	activeDragging = false,
 
+	focusId = 0, -- Keyboard focus.
+
 	currentTooltip = "",
 	tooltipTime    = 0.00,
 	tooltipX       = 0,
@@ -140,6 +142,8 @@ export Element :: struct {
 	tooltip   = "",
 	weight    = 0,
 	inset     = 0,
+	width     = 0, -- Zero means automatic.
+	height    = 0, -- Zero means automatic. For scrollables, non-positive means distance from the bottom of the screen.
 	data: any,
 
 	type: Type = NULL,
@@ -166,7 +170,6 @@ export Frame :: struct {
 	using Element,
 
 	layout = Layout.DOCKED,
-	width: int,
 }
 
 
@@ -174,7 +177,7 @@ export Frame :: struct {
 export Scrollable :: struct {
 	using Widget,
 
-	height = 0, -- Non-positive means distance from the bottom of the screen.
+	-- ...
 
 	contentHeight: int,
 
@@ -312,16 +315,30 @@ export InputText :: struct {
 
 	value = "",
 
-	inputField: InputField = NULL,
+	field: InputField = NULL,
 }
 
 
 
 export onKeyPressed :: (state:State, key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool) -> (handled:bool) {
+	-- Modifier keys while pressing a mouse button.
 	if state.activeId {
 		if key == "lctrl" or key == "rctrl" or key == "lshift" or key == "rshift" or key == "lalt" or key == "ralt" {
 			local mx, my = LM.getPosition()
-			onMouseMoved(state, mx, my, 0, 0, false)
+			onMouseMoved(state, mx, my, 0, 0)
+		}
+		return true
+	}
+
+	-- Key events for inputs.
+	if state.focusId {
+		local input = cast(InputText) state.elementsById[state.focusId]
+		if key == "escape" {
+			blur(state, abort=true)
+		} elseif key == "return" or key == "kpenter" {
+			blur(state, abort=false)
+		} else {
+			input.field.keypressed!(key, scancode, isRepeat)
 		}
 		return true
 	}
@@ -329,6 +346,7 @@ export onKeyPressed :: (state:State, key:LK.KeyConstant, scancode:LK.Scancode, i
 	local widget = cast(Widget) state.elementsById[state.hoveredId]
 	local mod    = getModifierKey()
 
+	-- Key events for other widgets.
 	if widget ~= NULL  if widget.type == {
 		case Direction:
 			local direction = cast(Direction) widget
@@ -370,27 +388,52 @@ export onKeyPressed :: (state:State, key:LK.KeyConstant, scancode:LK.Scancode, i
 export onKeyReleased :: (state:State, key:LK.KeyConstant, scancode:LK.Scancode) {
 	if state.activeId and (key == "lctrl" or key == "rctrl" or key == "lshift" or key == "rshift" or key == "lalt" or key == "ralt") {
 		local mx, my = LM.getPosition()
-		onMouseMoved(state, mx, my, 0, 0, false)
+		onMouseMoved(state, mx, my, 0, 0)
 	}
 }
 
 export onTextInput :: (state:State, text:string) -> (handled:bool) {
+	if state.focusId {
+		local input = cast(InputText) state.elementsById[state.focusId]
+		input.field.textinput!(text)
+		return true
+	}
+
 	return false
 }
 
-export onMousePressed :: (state:State, mx,my:int, mbutton:int, isTouch:bool, presses:int) -> (handled:bool) {
+export onMousePressed :: (state:State, mx,my:int, mbutton:int, presses:int) -> (handled:bool) {
 	updateLayoutIfNeeded(state)
 
-	for state.frames  if isInsideElement(state, mx, my, it) {
+	if state.focusId {
+		if state.hoveredId == state.focusId {
+			local input = cast(InputText) state.elementsById[state.focusId]
+			input.field.mousepressed!(mx-(input.layoutX+SPACING), my-(input.layoutY+getScrollOffset(input)), mbutton, presses)
+		} else {
+			blur(state, abort=false)
+		}
+	}
+
+	for < state.frames  if isInsideElement(state, mx, my, it) {
+		if (mbutton == 1 or mbutton == 2) and state.hoveredId and not state.focusId {
+			local input = cast(InputText) state.elementsById[state.hoveredId]
+			if input.type == InputText {
+				focus(state, input)
+				input.field.mousepressed!(mx-(input.layoutX+SPACING), my-(input.layoutY+getScrollOffset(input)), mbutton, presses)
+			}
+		}
+
 		if mbutton == 1 and state.hoveredId {
 			state.activeId      = state.hoveredId
 			state.activeSubid   = state.hoveredSubid
 			state.activeMod     = getModifierKey()
 			state.activeStartMx = mx
 			state.activeStartMy = my
+
 			LM.setGrabbed(true)
 			LK.setKeyRepeat(false)
-			onMouseMoved(state, mx, my, 0, 0, isTouch)
+
+			onMouseMoved(state, mx, my, 0, 0)
 		}
 		return true
 	}
@@ -398,8 +441,13 @@ export onMousePressed :: (state:State, mx,my:int, mbutton:int, isTouch:bool, pre
 	return state.activeId > 0
 }
 
-export onMouseMoved :: (state:State, mx,my:int, dx,dy:int, isTouch:bool) {
+export onMouseMoved :: (state:State, mx,my:int, dx,dy:int) {
 	updateLayoutIfNeeded(state)
+
+	if state.focusId {
+		local input = cast(InputText) state.elementsById[state.focusId]
+		if input.field.mousemoved!(mx-(input.layoutX+SPACING), my-(input.layoutY+getScrollOffset(input)))  return
+	}
 
 	-- Update hovered ID.
 	local widget = cast(Widget) state.elementsById[state.activeId]
@@ -574,7 +622,13 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int, isTouch:bool) {
 	}
 }
 
-export onMouseReleased :: (state:State, mx,my:int, mbutton:int, isTouch:bool, presses:int) {
+export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int) {
+	if state.focusId {
+		local input = cast(InputText) state.elementsById[state.focusId]
+		if input.field.mousereleased!(mx, my, mbutton)
+			onMouseMoved(state, mx, my, 0, 0)
+	}
+
 	-- LMB.
 	if mbutton == 1 and state.activeId {
 		local widget = cast(Widget) state.elementsById[state.activeId]
@@ -662,7 +716,7 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, isTouch:bool, pr
 		LM.setGrabbed(false)
 		LK.setKeyRepeat(true)
 
-		onMouseMoved(state, mx, my, 0, 0, isTouch)
+		onMouseMoved(state, mx, my, 0, 0)
 	}
 }
 
@@ -708,7 +762,7 @@ local calculateNaturalSize :: (state:State, el:Element) {
 				contentH += it.layoutHeight + SPACING
 			}
 
-			frame.layoutWidth  = frame.width ?: contentW + 2*SPACING
+			frame.layoutWidth  = contentW + 2*SPACING
 			frame.layoutHeight = contentH + SPACING
 
 		case Scrollable:
@@ -852,6 +906,10 @@ local calculateNaturalSize :: (state:State, el:Element) {
 		case: errorf("%d", el.type)
 	}
 
+	if el.width                             el.layoutWidth  = el.width
+	if el.height and el.type ~= Scrollable  el.layoutHeight = el.height
+
+	-- The following count as outside the element, even though they take space as if they were part of the element.
 	el.layoutWidth += el.inset
 	if el.type == Tabs  el.layoutHeight += TAB_BOTTOM_LINE_WIDTH
 }
@@ -990,6 +1048,10 @@ local positionAndFit :: (state:State, el:Element, x,y,w,h:int) {
 		case Color:
 			local colorEl       = cast(Color) el
 			colorEl.sliderWidth = h / (colorEl.alpha ? 4 : 3)
+
+		case InputText:
+			local input = cast(InputText) el
+			if input.field ~= NULL  input.field.setWidth!(w)
 	}
 }
 
@@ -1020,7 +1082,7 @@ local updateLayoutIfNeeded :: (state:State) {
 	for state.scrollables  limitScroll(it)
 
 	local mx, my = LM.getPosition()
-	if isOverGui(state, mx, my)  onMouseMoved(state, mx, my, 0, 0, false)
+	if isOverGui(state, mx, my)  onMouseMoved(state, mx, my, 0, 0)
 }
 
 
@@ -1041,8 +1103,14 @@ local update :: (state:State, dt:float) {
 
 	if anyScrolling {
 		local mx, my = LM.getPosition()
-		onMouseMoved(state, mx, my, 0, 0, false)
+		onMouseMoved(state, mx, my, 0, 0)
 	}
+
+	if state.focusId {
+		local input = cast(InputText) state.elementsById[state.focusId]
+		input.field.update!(dt)
+	}
+
 }
 
 
@@ -1346,8 +1414,55 @@ local drawElement :: (state:State, el:Element) {
 			LG.setFont(fontNormal)
 
 		case InputText:
-			-- @Incomplete
 			local input = cast(InputText) el
+			local field = input.field
+
+			local focused = (input.id == state.focusId)
+
+			local x = input.layoutX
+			local y = input.layoutY
+			local w = input.layoutWidth
+			local h = input.layoutHeight
+
+			local valueX = x + SPACING
+
+			-- Background.
+			LG.setColor(0, 0, 0, .5)
+			LG.rectangle(LG.DrawMode.FILL, x, y, w, h, 3)
+
+			LG.pushAll()
+			LG.intersectScissor(x, 0, w, LG.getHeight())
+
+			-- Selection.
+			if focused {
+				local x1, x2 = field.getSelectionOffset!()
+				if x2 > x1 {
+					LG.setColor(1, 1, 0, .5)
+					LG.rectangle(LG.DrawMode.FILL, valueX+x1, y, x2-x1, h)
+				}
+				LG.setColor(1, 1, 1, math.lerp(.3, .9, math.cos01(field.getBlinkPhase!()*math.TAU/1.00)))
+				LG.rectangle(LG.DrawMode.FILL, valueX+field.getCursorOffset!(), y, 1, h)
+			}
+
+			-- Value.
+			local textOffset = focused ? field.getTextOffset!() : 0
+			local text       = focused ? field.getText!() : input.value
+			LG.setColor(1, 1, 1)
+			LG.print(text, valueX+textOffset, y+SPACING)
+
+			-- Cursor.
+			if focused {
+				LG.setColor(1, 1, 1, math.lerp(.3, .9, math.cos01(field.getBlinkPhase!()*math.TAU/1.00)))
+				LG.rectangle(LG.DrawMode.FILL, valueX+field.getCursorOffset!(), y, 1, h)
+			}
+
+			LG.pop()
+
+			-- Hover/focus effect.
+			if input.id == state.hoveredId or focused {
+				LG.setColor(1, 1, 1, HOVER_OUTLINE_OPACITY)
+				LG.rectangle(LG.DrawMode.LINE, x-.5, y-.5, w+1, h+1, 3)
+			}
 
 		case Slider:
 			local slider  = cast(Slider) el
@@ -1736,6 +1851,18 @@ export setActive :: (state:State, name:string, active:bool) {
 
 	el.active               = active
 	state.layoutNeedsUpdate = true
+
+	if not active and state.focusId and (el.id == state.focusId or hasParent(state.elementsById[state.focusId], el)) {
+		blur(state, abort=false)
+	}
+}
+
+local hasParent :: (el:Element, parent:Element) -> bool {
+	while el.parent ~= NULL {
+		if el.parent == parent  return true
+		el = el.parent
+	}
+	return false
 }
 
 
@@ -1888,6 +2015,37 @@ export isVisible :: (el:Element) -> bool {
 	}
 
 	return el.active
+}
+
+
+
+local focus :: (state:State, input:InputText) {
+	if state.focusId == input.id  return
+
+	blur(state, abort=false)
+	state.focusId = input.id
+
+	if input.field == NULL {
+		input.field = InputField()
+		input.field.setFont!(fontNormal)
+		input.field.setWidth!(input.layoutWidth - 2*SPACING)
+	}
+
+	input.field.setText!(input.value)
+}
+
+local blur :: (state:State, abort:bool) {
+	if state.focusId == 0  return
+
+	local input = cast(InputText) state.elementsById[state.focusId]
+	if abort {
+		input.field.setText!(input.value)
+	} else {
+		input.value = input.field.getText!()
+		triggerActionEvent(state, input, "", 0, save=true)
+	}
+
+	state.focusId = 0
 }
 
 

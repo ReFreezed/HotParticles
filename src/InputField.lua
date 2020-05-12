@@ -1,6 +1,6 @@
 --[[============================================================
 --=
---=  InputField class v1.1 (for LÖVE 0.10.2+)
+--=  InputField class v1.1 (for LÖVE 0.10.2+) [EDITED]
 --=  - Written by Marcus 'ReFreezed' Thunström
 --=  - MIT License (See the bottom of this file)
 --=
@@ -684,6 +684,7 @@ end
 
 -- wasHandled = mousereleased( x, y, button )
 function InputField:mousereleased(x, y, buttonN)
+	if (buttonN ~= 1) then return false end
 	if (not self._mouseTextSelectionStart) then
 		return false
 	end

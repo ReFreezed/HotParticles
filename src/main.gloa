@@ -397,19 +397,11 @@ export onLoad :: (args:[]string, argsRaw:[]string) {
 
 
 export onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool) {
-	if gui.onKeyPressed(guiState, key, scancode, isRepeat)  return
-
-	if LM.isGrabbed()  return
-
 	local mod     = getModifierKey()
 	local project = openProjects[currentProjectIndex]
 
 	-- Global keys.
-	if key == {
-		case "escape":
-			-- pushAuxPanel(AuxPanel.EXIT)
-			return
-
+	if not LM.isGrabbed()  if key == {
 		case "q":
 			if mod == {
 				case ModifierKey.C: pushQuitEvent() ; return
@@ -417,16 +409,50 @@ export onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool)
 
 		case "f10":
 			if mod == {
-				case ModifierKey.C:
-					saveWorkspace()
-					LE.restart()
+				case ModifierKey.C: saveWorkspace() ; LE.restart() ; return
+			}
+
+		case "f1":
+			if mod == {
+				case ModifierKey.NONE:
+					showStats = not showStats
+					love.window.setVSync(showStats ? 0 : 1)
+					scheduleSaveWorkspace()
+					return
+			}
+
+		case "f2":
+			if mod == {
+				case ModifierKey.NONE:
+					showPanelNumbers = not showPanelNumbers
+					scheduleSaveWorkspace()
 					return
 			}
 	}
 
-	-- if isAuxPanelVisible()  return
+	if gui.onKeyPressed(guiState, key, scancode, isRepeat)  return
+	if LM.isGrabbed()  return
+
+	-- Context-sensitive global keys.
+	if key == {
+		case "escape":
+			-- pushAuxPanel(AuxPanel.EXIT)
+			return
+
+		case "r":
+			if mod == {
+				case ModifierKey.NONE:
+					for project.systems {
+						it.particles.reset!()
+						it.particles.start!()
+					}
+					return
+			}
+	}
 
 	-- Keys in normal view.
+	-- if not is_normal_view  return -- @Incomplete
+
 	if key == {
 		case "tab":
 			if mod == {
@@ -434,12 +460,6 @@ export onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool)
 				case ModifierKey.S:    setCurrentSystem ((project.systemIndex-2) % #project.systems + 1)
 				case ModifierKey.C:    setCurrentProject((currentProjectIndex-0) % #openProjects    + 1)
 				case ModifierKey.CS:   setCurrentProject((currentProjectIndex-2) % #openProjects    + 1)
-			}
-
-		case "r":
-			if mod == {
-				case ModifierKey.NONE:
-					for project.systems { it.particles.reset!() ; it.particles.start!() }
 			}
 
 		case "h":
@@ -464,21 +484,6 @@ export onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool)
 			if mod == {
 				case ModifierKey.NONE: gui.setActive(guiState, "main", not gui.getElement(guiState, "main", gui.Frame).active)
 			}
-
-		case "f1":
-			if mod == {
-				case ModifierKey.NONE:
-					showStats = not showStats
-					love.window.setVSync(showStats ? 0 : 1)
-					scheduleSaveWorkspace()
-			}
-
-		case "f2":
-			if mod == {
-				case ModifierKey.NONE:
-					showPanelNumbers = not showPanelNumbers
-					scheduleSaveWorkspace()
-			}
 	}
 }
 
@@ -491,19 +496,22 @@ export onTextInput :: (text:string) {
 }
 
 export onMousePressed :: (mx,my:int, mbutton:int, isTouch:bool, presses:int) {
+	if isTouch         return
 	if LM.isGrabbed()  return
 
-	if gui.onMousePressed(guiState, mx, my, mbutton, isTouch, presses)  return
+	if gui.onMousePressed(guiState, mx, my, mbutton, presses)  return
 
 	if mbutton == 1 {
 		isPositioningParticles = true
 		LM.setGrabbed(true)
 		LK.setKeyRepeat(false)
-		onMouseMoved(mx,my, 0,0, isTouch)
+		onMouseMoved(mx,my, 0,0, false)
 	}
 }
 
 export onMouseMoved :: (mx,my:int, dx,dy:int, isTouch:bool) {
+	if isTouch  return
+
 	if isPositioningParticles {
 		local project = openProjects[currentProjectIndex]
 
@@ -514,19 +522,21 @@ export onMouseMoved :: (mx,my:int, dx,dy:int, isTouch:bool) {
 		return
 	}
 
-	gui.onMouseMoved(guiState, mx, my, dx, dy, isTouch)
+	gui.onMouseMoved(guiState, mx, my, dx, dy)
 }
 
 export onMouseReleased :: (mx,my:int, mbutton:int, isTouch:bool, presses:int) {
+	if isTouch  return
+
 	if isPositioningParticles and mbutton == 1 {
 		isPositioningParticles = false
 		LM.setGrabbed(false)
 		LK.setKeyRepeat(true)
-		gui.onMouseMoved(guiState, mx, my, 0, 0, isTouch)
+		gui.onMouseMoved(guiState, mx, my, 0, 0)
 		return
 	}
 
-	gui.onMouseReleased(guiState, mx, my, mbutton, isTouch, presses)
+	gui.onMouseReleased(guiState, mx, my, mbutton, presses)
 }
 
 export onMouseWheel :: (dx,dy:int) {
@@ -535,7 +545,7 @@ export onMouseWheel :: (dx,dy:int) {
 	if gui.onMouseWheel(guiState, dx, dy)  return
 
 	local mx, my = LM.getPosition()
-	if gui.isOverGui(guiState, mx,my)  return
+	if gui.isOverGui(guiState, mx, my)  return
 
 	local mod = getModifierKey()
 	if mod ~= ModifierKey.NONE  return
