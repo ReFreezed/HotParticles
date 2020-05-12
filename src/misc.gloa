@@ -203,3 +203,37 @@ export newImageUsingPalette :: (pixelRows:[]string, palette:struct{!key:string,!
 }
 
 
+
+export compareFilenames :: (a,b:string) -> bool {
+	for 1, math.min(#a, #b) {
+		local aByte = a[it]
+		local bByte = b[it]
+
+		-- Case-insensitive ASCII.
+		if aByte >= !char "a" and aByte <= !char "z"  aByte = aByte - !char "a" + !char "A"
+		if bByte >= !char "a" and bByte <= !char "z"  bByte = bByte - !char "a" + !char "A"
+
+		if aByte ~= bByte {
+			local aIsDigit          = (aByte >= !char "0" and aByte <= !char "9")
+			local bIsDigit          = (bByte >= !char "0" and bByte <= !char "9")
+			local aIsAlphaOrUnicode = aIsDigit or (aByte >= !char "a" and aByte <= !char "z") or aByte >= 128
+			local bIsAlphaOrUnicode = bIsDigit or (bByte >= !char "a" and bByte <= !char "z") or bByte >= 128
+
+			if aIsAlphaOrUnicode ~= bIsAlphaOrUnicode  return bIsAlphaOrUnicode
+
+			-- Natural sorting for numbers.
+			if aIsDigit and bIsDigit {
+				local _, aIntStr = matchPattern(a, "^%d+", it)
+				local _, bIntStr = matchPattern(b, "^%d+", it)
+				local _, aInt    = stringToInt(cast(string)aIntStr)
+				local _, bInt    = stringToInt(cast(string)bIntStr)
+				return aInt < bInt
+			}
+
+			return toLower(getSubstring(a, it, it)) < toLower(getSubstring(b, it, it))
+		}
+	}
+	return toLower(a) < toLower(b)
+}
+
+

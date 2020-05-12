@@ -7,6 +7,7 @@
 
 export MAX_BUFFER_SIZE      :: 16000 -- Default buffer size for ParticleSystem is 1000. @Incomplete: make this configurable.
 export MAIN_PANEL_WIDTH     :: 450
+export DIALOG_WIDTH         :: 400
 export WORKSPACE_SAVE_DELAY :: 0.50
 
 
@@ -39,6 +40,7 @@ export !self
 export !load "src/misc"
 export !load "src/workspace"
 export gui :: !load "src/gui"
+!load "src/guiSetup"
 
 !run {
 	!import "compiler"
@@ -120,6 +122,8 @@ export Project :: struct {
 	movementScaleY = 1.0,
 	movementSpeed  = 1.0,
 
+	path = "",
+
 	-- Runtime-only:
 	systemIndex = 1,
 
@@ -128,8 +132,8 @@ export Project :: struct {
 	zoomTarget = 1.0,
 
 	displayedName = "",
-	path          = "",
 	fileIsSaved   = false, -- Saved at least once (or loaded from a saved file). It's possible that the file physically don't exist (maybe deleted or moved).
+	preview       = false,
 
 	movementPhase    = 0.0,
 	-- For irregular movement:
@@ -145,7 +149,7 @@ export Project :: struct {
 
 	!call :: () -> Project {
 		static n = 0 ; n += 1
-		return {displayedName=format("(unnamed %d)", n)}
+		return {displayedName=format("(untitled %d)", n)}
 	}
 }
 
@@ -343,11 +347,13 @@ export onLoad :: (args:[]string, argsRaw:[]string) {
 	io.disableBuffering(io.STDERR)
 
 	print("Running Hot Particles")
-	!if DEV  love.window.setTitle(love.window.getTitle().." (DEBUG BUILD)")
+	!if DEV  love.window.setTitle(love.window.getTitle().." [DEBUG]")
 
 	LK.setKeyRepeat(true)
 
 	defaultSearchPaths = physfs.getSearchPaths()
+
+	LF.createDirectory("projects")
 
 	fontSmall  = LG.newFont(10)
 	fontNormal = LG.newFont(12)
@@ -384,12 +390,9 @@ export onLoad :: (args:[]string, argsRaw:[]string) {
 
 	love.window.setVSync(showStats ? 0 : 1)
 
-	do {
-		!load "src/guiSetup"
-		setupGuiFrames()
-		setupGuiCallbacks()
-		gui.refreshAll(guiState)
-	}
+	setupGuiFrames()
+	setupGuiCallbacks()
+	gui.refreshAll(guiState)
 
 	setCurrentProject(currentProjectIndex, force=true)
 }
@@ -436,7 +439,7 @@ export onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool)
 	-- Context-sensitive global keys.
 	if key == {
 		case "escape":
-			-- pushAuxPanel(AuxPanel.EXIT)
+			if not popPanel()  pushPanel("exit")
 			return
 
 		case "r":
@@ -450,9 +453,9 @@ export onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool)
 			}
 	}
 
-	-- Keys in normal view.
-	-- if not is_normal_view  return -- @Incomplete
+	if panelStack  return
 
+	-- Keys in normal view.
 	if key == {
 		case "tab":
 			if mod == {
@@ -471,13 +474,13 @@ export onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool)
 
 		case "s":
 			if mod == {
-				-- case ModifierKey.C:  if project.fileIsSaved  saveProject(project, overwrite=true)  else  pushAuxPanel(AuxPanel.SAVE_PROJECT_AS)
-				-- case ModifierKey.CS: pushAuxPanel(AuxPanel.SAVE_PROJECT_AS)
+				case ModifierKey.C:  if project.fileIsSaved  saveProject(project, overwrite=true)  else  pushPanel("saveProjectAs")
+				case ModifierKey.CS: pushPanel("saveProjectAs")
 			}
 
 		case "o":
 			if mod == {
-				-- case ModifierKey.C: pushAuxPanel(AuxPanel.OPEN_PROJECT)
+				case ModifierKey.C: pushPanel("openProject")
 			}
 
 		case "p":
@@ -576,7 +579,7 @@ export onUpdate :: (dt:float) {
 
 	local project = openProjects[currentProjectIndex]
 
-	do {
+	if gui.getTopmostActiveModal(guiState) == NULL {
 		local systemsActive = false
 
 		local time = LT.getTime()

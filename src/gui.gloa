@@ -25,9 +25,12 @@
 
 	draw
 	getElement, getElementAt, getWidgetAt
+	getTopmostActiveModal
+	isElementVisible
 	isInsideElement, isOverGui
 	onKeyPressed, onKeyReleased, onTextInput
 	onMousePressed, onMouseMoved, onMouseReleased, onMouseWheel
+	pressButton
 	refresh, refreshRecursively, refreshAll
 	setActive
 
@@ -36,6 +39,7 @@
 local SPACING       :: 3
 local SPACING_LARGE :: 10
 
+local BUTTON_RADIUS    :: 3
 local BUTTON_PADDING_Y :: 2
 
 local SCROLLABLE_PADDING   :: 5 -- Vertical.
@@ -95,11 +99,14 @@ export State :: struct {
 
 	extraScrollableSpace = 0,
 
-	onRefresh: struct { !key:string, !value:any--[[ (el:Element) ]] },
-	onAction:  struct { !key:string, !value:any--[[ (widget:Widget, i:int) ]] },
-	onOption:  struct { !key:string, !value:any--[[ (widget:Widget, i:int) ]] },
-	onClose:   struct { !key:string, !value:any--[[ (widget:Widget, i:int) ]] },
-	onDrag:    struct { !key:string, !value:any--[[ (widget:Widget, i:int, mx,my:int) ]] },
+	onRefresh:  struct { !key:string, !value:any--[[ (el:Element) ]] },
+	onActive:   struct { !key:string, !value:any--[[ (el:Element) ]] },
+	onInactive: struct { !key:string, !value:any--[[ (el:Element) ]] },
+	onSubmit:   struct { !key:string, !value:any--[[ (widget:Widget) ]] },
+	onAction:   struct { !key:string, !value:any--[[ (widget:Widget, i:int) ]] },
+	onOption:   struct { !key:string, !value:any--[[ (widget:Widget, i:int) ]] },
+	onClose:    struct { !key:string, !value:any--[[ (widget:Widget, i:int) ]] },
+	onDrag:     struct { !key:string, !value:any--[[ (widget:Widget, i:int, mx,my:int) ]] },
 
 	buttons      :: (state:State, el:Buttons)      -> type_of(el) { return cast(type_of(el)) register(state, el, type_of(el)) },
 	checkbox     :: (state:State, el:Checkbox)     -> type_of(el) { return cast(type_of(el)) register(state, el, type_of(el)) },
@@ -170,6 +177,8 @@ export Frame :: struct {
 	using Element,
 
 	layout = Layout.DOCKED,
+	modal  = false,
+	temp   = false,
 }
 
 
@@ -207,7 +216,8 @@ export Vbox :: struct {
 export Text :: struct {
 	using Element,
 
-	text = "",
+	text  = "",
+	large = false,
 }
 
 export Separator :: struct {
@@ -334,9 +344,10 @@ export onKeyPressed :: (state:State, key:LK.KeyConstant, scancode:LK.Scancode, i
 	if state.focusId {
 		local input = cast(InputText) state.elementsById[state.focusId]
 		if key == "escape" {
-			blur(state, abort=true)
+			blurFocus(state, abort=true)
 		} elseif key == "return" or key == "kpenter" {
-			blur(state, abort=false)
+			blurFocus(state, abort=false)
+			triggerSubmitEvent(state, input)
 		} else {
 			input.field.keypressed!(key, scancode, isRepeat)
 		}
@@ -410,7 +421,7 @@ export onMousePressed :: (state:State, mx,my:int, mbutton:int, presses:int) -> (
 			local input = cast(InputText) state.elementsById[state.focusId]
 			input.field.mousepressed!(mx-(input.layoutX+SPACING), my-(input.layoutY+getScrollOffset(input)), mbutton, presses)
 		} else {
-			blur(state, abort=false)
+			blurFocus(state, abort=false)
 		}
 	}
 
@@ -418,7 +429,7 @@ export onMousePressed :: (state:State, mx,my:int, mbutton:int, presses:int) -> (
 		if (mbutton == 1 or mbutton == 2) and state.hoveredId and not state.focusId {
 			local input = cast(InputText) state.elementsById[state.hoveredId]
 			if input.type == InputText {
-				focus(state, input)
+				setFocus(state, input)
 				input.field.mousepressed!(mx-(input.layoutX+SPACING), my-(input.layoutY+getScrollOffset(input)), mbutton, presses)
 			}
 		}
@@ -438,15 +449,25 @@ export onMousePressed :: (state:State, mx,my:int, mbutton:int, presses:int) -> (
 		return true
 	}
 
-	return state.activeId > 0
+	return state.activeId > 0 or getTopmostActiveModal(state) ~= NULL
 }
 
 export onMouseMoved :: (state:State, mx,my:int, dx,dy:int) {
 	updateLayoutIfNeeded(state)
 
+	local updateMouseCursor :: (state:State) {
+		if state.hoveredId and (state.focusId == state.hoveredId or state.elementsById[state.hoveredId].type == InputText)
+			LM.setCursor(LM.getSystemCursor(LM.CursorType.I_BEAM))
+		else
+			LM.setCursor()
+	}
+
 	if state.focusId {
 		local input = cast(InputText) state.elementsById[state.focusId]
-		if input.field.mousemoved!(mx-(input.layoutX+SPACING), my-(input.layoutY+getScrollOffset(input)))  return
+		if input.field.mousemoved!(mx-(input.layoutX+SPACING), my-(input.layoutY+getScrollOffset(input))) {
+			updateMouseCursor(state)
+			return
+		}
 	}
 
 	-- Update hovered ID.
@@ -534,7 +555,7 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int) {
 				for colorEl.linkMultiDrag {
 					local other = cast(Color) state.elementsByName[it]
 
-					if other ~= NULL and other.type == Color and other.color[component] ~= value and isVisible(other) {
+					if other ~= NULL and other.type == Color and other.color[component] ~= value and isElementVisible(other) {
 						other.color[component] = value
 						triggerActionEvent(state, other, "", component)
 					}
@@ -620,6 +641,8 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int) {
 	} else {
 		if state.tooltipTime == 0  state.tooltipTime = LT.getTime()
 	}
+
+	updateMouseCursor(state)
 }
 
 export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int) {
@@ -824,8 +847,9 @@ local calculateNaturalSize :: (state:State, el:Element) {
 
 		case Text:
 			local textEl        = cast(Text) el
-			textEl.layoutWidth  = fontNormal.getWidth!(textEl.text)
-			textEl.layoutHeight = fontNormal.getHeight!()
+			local font          = textEl.large ? fontLarge : fontNormal
+			textEl.layoutWidth  = font.getWidth!(textEl.text)
+			textEl.layoutHeight = font.getHeight!()
 
 		case Separator:
 			local separator        = cast(Separator) el
@@ -1138,12 +1162,13 @@ local drawElement :: (state:State, el:Element) {
 			local frame = cast(Frame) el
 
 			if frame.layout == Layout.FLOATING {
-				LG.setColor(0, 0, 0, .4)
-				LG.rectangle(LG.DrawMode.FILL, frame.layoutX-10, frame.layoutY-10, frame.layoutWidth+20, frame.layoutHeight+20)
+				local BORDER :: 10
+				LG.setColor(.1, .1, .1, .9)
+				LG.rectangle(LG.DrawMode.FILL, frame.layoutX-BORDER, frame.layoutY-BORDER, frame.layoutWidth+2*BORDER, frame.layoutHeight+2*BORDER, SPACING+BUTTON_RADIUS+BORDER)
 			}
 
 			LG.setColor(.2, .2, .2)
-			LG.rectangle(LG.DrawMode.FILL, frame.layoutX, frame.layoutY, frame.layoutWidth, frame.layoutHeight)
+			LG.rectangle(LG.DrawMode.FILL, frame.layoutX, frame.layoutY, frame.layoutWidth, frame.layoutHeight, (frame.layout == Layout.FLOATING ? SPACING+BUTTON_RADIUS : 0))
 
 			LG.pushAll()
 			LG.intersectScissor(frame.layoutX, frame.layoutY, frame.layoutWidth, frame.layoutHeight)
@@ -1210,8 +1235,10 @@ local drawElement :: (state:State, el:Element) {
 
 		case Text:
 			local textEl = cast(Text) el
+			LG.setFont(textEl.large ? fontLarge : fontNormal)
 			LG.setColor(1, 1, 1)
 			LG.print(textEl.text, textEl.layoutX, textEl.layoutY)
+			LG.setFont(fontNormal)
 
 		case Separator:
 			local separator = cast(Separator) el
@@ -1283,7 +1310,7 @@ local drawElement :: (state:State, el:Element) {
 						bx2[itIndex],          by2[itIndex]
 					)
 				} else {
-					LG.rectangle(LG.DrawMode.FILL, bx1[itIndex]+1, by1[itIndex]+1, bw[itIndex]-2, bh[itIndex]-2, 3)
+					LG.rectangle(LG.DrawMode.FILL, bx1[itIndex]+1, by1[itIndex]+1, bw[itIndex]-2, bh[itIndex]-2, BUTTON_RADIUS)
 				}
 			}
 
@@ -1428,7 +1455,7 @@ local drawElement :: (state:State, el:Element) {
 
 			-- Background.
 			LG.setColor(0, 0, 0, .5)
-			LG.rectangle(LG.DrawMode.FILL, x, y, w, h, 3)
+			LG.rectangle(LG.DrawMode.FILL, x, y, w, h, BUTTON_RADIUS)
 
 			LG.pushAll()
 			LG.intersectScissor(x, 0, w, LG.getHeight())
@@ -1461,7 +1488,7 @@ local drawElement :: (state:State, el:Element) {
 			-- Hover/focus effect.
 			if input.id == state.hoveredId or focused {
 				LG.setColor(1, 1, 1, HOVER_OUTLINE_OPACITY)
-				LG.rectangle(LG.DrawMode.LINE, x-.5, y-.5, w+1, h+1, 3)
+				LG.rectangle(LG.DrawMode.LINE, x-.5, y-.5, w+1, h+1, BUTTON_RADIUS)
 			}
 
 		case Slider:
@@ -1626,7 +1653,7 @@ local drawElement :: (state:State, el:Element) {
 			for preview.linkColors {
 				local colorEl = cast(Color) state.elementsByName[it]
 
-				if colorEl ~= NULL and isVisible(colorEl) {
+				if colorEl ~= NULL and isElementVisible(colorEl) {
 					colorCount  += 1
 					local color  = colorsForShader[colorCount]
 
@@ -1663,7 +1690,7 @@ local drawElement :: (state:State, el:Element) {
 			if direction.linkSpread {
 				local other = cast(Slider) state.elementsByName[direction.linkSpread]
 
-				if other ~= NULL and other.type == Slider and other.value ~= 0 and isVisible(other) {
+				if other ~= NULL and other.type == Slider and other.value ~= 0 and isElementVisible(other) {
 					LG.setColor(1, 1, 1, .25)
 					LG.arc(LG.DrawMode.FILL, x, y, .8*r, angle-other.value/2, angle+other.value/2, 32)
 				}
@@ -1671,7 +1698,7 @@ local drawElement :: (state:State, el:Element) {
 			} elseif direction.linkOther {
 				local other = cast(Direction) state.elementsByName[direction.linkOther]
 
-				if other ~= NULL and other.type == Direction and other.angle ~= angle and isVisible(other) {
+				if other ~= NULL and other.type == Direction and other.angle ~= angle and isElementVisible(other) {
 					LG.setColor(1, 1, 1, .25)
 					LG.arc(LG.DrawMode.FILL, x, y, .8*r, angle, other.angle, 32)
 				}
@@ -1725,8 +1752,15 @@ local drawElement :: (state:State, el:Element) {
 export draw :: (state:State) {
 	updateLayoutIfNeeded(state)
 
-	for state.frames {
-		if it.active  drawElement(state, it)
+	local ww, wh   = LG.getDimensions()
+	local topModal = getTopmostActiveModal(state)
+
+	for state.frames  if it.active {
+		if it == topModal {
+			LG.setColor(.2, .2, .2, .6)
+			LG.rectangle(LG.DrawMode.FILL, 0, 0, ww, wh)
+		}
+		drawElement(state, it)
 	}
 
 	if state.currentTooltip {
@@ -1736,13 +1770,13 @@ export draw :: (state:State) {
 		if a > 0 and widget ~= NULL {
 			local w = fontNormal.getWidth!(state.currentTooltip) + 2*SPACING
 			local h = fontNormal.getHeight!() + 2*BUTTON_PADDING_Y
-			local x = math.min(state.tooltipX, LG.getWidth() - w)
+			local x = math.min(state.tooltipX, ww-w)
 			local y = state.tooltipY1 - h - 1
 
 			if y < 0  y = state.tooltipY2 + 1
 
 			LG.setColor(0, 0, 0, .8*a)
-			LG.rectangle(LG.DrawMode.FILL, x-1, y-1, w+2, h+2, 3)
+			LG.rectangle(LG.DrawMode.FILL, x-1, y-1, w+2, h+2, BUTTON_RADIUS)
 			LG.setColor(.8, .8, .8, a)
 			LG.rectangle(LG.DrawMode.FILL, x, y, w, h, 2)
 			LG.setColor(0, 0, 0, a)
@@ -1790,11 +1824,14 @@ export isOverGui :: (state:State, x,y:int) -> bool {
 export getElement :: (state:State, name:string, $T:Type) -> T {
 	return cast(T) state.elementsByName[name]
 }
+export getElement :: (state:State, name:string) -> Element { -- @Compiler @Incomplete: Default values for baked arguments.
+	return state.elementsByName[name]
+}
 
 export getElementAt :: (state:State, x,y:int) -> (found:bool, el:Element) {
 	updateLayoutIfNeeded(state)
 
-	for < state.frames {
+	for < state.frames  if it.active {
 		local helper :: (state:State, el:Element, x,y:int) -> Element {
 			if not isInsideElement(state, x, y, el)  return NULL
 
@@ -1810,6 +1847,8 @@ export getElementAt :: (state:State, x,y:int) -> (found:bool, el:Element) {
 
 		local el = helper(state, it, x, y)
 		if el ~= NULL  return true, el
+
+		if it.modal  return false, NULL
 	}
 
 	return false, NULL
@@ -1840,21 +1879,31 @@ export getWidgetAt :: (state:State, x,y:int) -> (found:bool, widget:Widget) {
 
 
 
-export setActive :: (state:State, name:string, active:bool) {
+export setActive :: (state:State, name:string, active:bool) -> (success:bool) {
 	local el = state.elementsByName[name]
 	if el == NULL {
 		printf("Error: No element '%s'.", name)
-		return
+		return false
 	}
 
-	if el.active == active  return
+	return setActive(state, el, active)
+}
+export setActive :: (state:State, el:Element, active:bool) -> (success:bool) {
+	if el.active == active  return true
 
 	el.active               = active
 	state.layoutNeedsUpdate = true
 
 	if not active and state.focusId and (el.id == state.focusId or hasParent(state.elementsById[state.focusId], el)) {
-		blur(state, abort=false)
+		blurFocus(state, abort=false)
 	}
+
+	if active
+		triggerActiveEvent(state, el)
+	else
+		triggerInactiveEvent(state, el)
+
+	return true
 }
 
 local hasParent :: (el:Element, parent:Element) -> bool {
@@ -1938,6 +1987,26 @@ local triggerRefreshEvent :: (state:State, el:Element) {
 	state.layoutNeedsUpdate = true
 }
 
+local triggerActiveEvent :: (state:State, el:Element) {
+	local cb = cast((el:Element)) state.onActive[el.name]
+	if cb == NULL  return
+
+	cb(el)
+}
+local triggerInactiveEvent :: (state:State, el:Element) {
+	local cb = cast((el:Element)) state.onInactive[el.name]
+	if cb == NULL  return
+
+	cb(el)
+}
+
+local triggerSubmitEvent :: (state:State, widget:Widget) {
+	local cb = cast((widget:Widget)) state.onSubmit[widget.name]
+	if cb == NULL  return
+
+	cb(widget)
+}
+
 local triggerActionEvent :: (state:State, widget:Widget, name:string, subid:int, save=false) {
 	local cb = cast((widget:Widget, i:int)) state.onAction[name ?: widget.name]
 	if cb == NULL  return
@@ -2008,7 +2077,7 @@ export refreshAll :: (state:State, onlyActive=true) {
 
 
 
-export isVisible :: (el:Element) -> bool {
+export isElementVisible :: (el:Element) -> bool {
 	while el.parent ~= NULL {
 		if not el.active  return false
 		el = el.parent
@@ -2019,10 +2088,24 @@ export isVisible :: (el:Element) -> bool {
 
 
 
-local focus :: (state:State, input:InputText) {
+export setFocus :: (state:State, name:string) {
+	local input = cast(InputText) state.elementsByName[name]
+	if input == NULL {
+		printf("Error: No element '%s'.", name)
+		return
+	}
+
+	if input.type ~= InputText {
+		printf("Error: Element '%s' is not InputText.", name)
+		return
+	}
+
+	setFocus(state, input)
+}
+export setFocus :: (state:State, input:InputText) {
 	if state.focusId == input.id  return
 
-	blur(state, abort=false)
+	blurFocus(state, abort=false)
 	state.focusId = input.id
 
 	if input.field == NULL {
@@ -2034,7 +2117,7 @@ local focus :: (state:State, input:InputText) {
 	input.field.setText!(input.value)
 }
 
-local blur :: (state:State, abort:bool) {
+export blurFocus :: (state:State, abort=false) {
 	if state.focusId == 0  return
 
 	local input = cast(InputText) state.elementsById[state.focusId]
@@ -2046,6 +2129,38 @@ local blur :: (state:State, abort:bool) {
 	}
 
 	state.focusId = 0
+}
+
+
+
+export getTopmostActiveModal :: (state:State) -> Frame {
+	for < state.frames {
+		if it.active and it.modal  return it
+	}
+	return NULL
+}
+
+
+
+export pressButton :: (state:State, buttonsElementName:string, i:int) {
+	local buttons = cast(Buttons) state.elementsByName[buttonsElementName]
+	if buttons == NULL {
+		printf("Error: No element '%s'.", buttonsElementName)
+		return
+	}
+
+	if not (buttons.type == Buttons or buttons.type == Radio or buttons.type == Tabs) {
+		printf("Error: '%s' is not a buttons element.", buttonsElementName)
+		return
+	}
+
+	local button = buttons.buttons[i]
+	if button == NULL or true {
+		printf("Error: No button at index %d in '%s'.", i, buttonsElementName)
+		return
+	}
+
+	triggerActionEvent(state, buttons, button.name, i, save=true)
 }
 
 

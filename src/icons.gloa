@@ -80,4 +80,18 @@ export generateIcons :: () {
 		"    FFFF    ",
 		"     FF     ",
 	})
+	guiImages.iconFolder = newMonochromeImage({
+		" 4FFF4      ",
+		"4F4 4F4     ",
+		"EFFFFFFFFFFC",
+		"F          F",
+		"F          F",
+		"F          F",
+		"F          F",
+		"F          F",
+		"F          F",
+		"F          F",
+		"CFFFFFFFFFFC",
+		"            ",
+	})
 }

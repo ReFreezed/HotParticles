@@ -9,6 +9,8 @@
 --=
 --============================================================]]
 
+local BIG_BUTTON_HEIGHT :: 40
+
 export setupGuiFrames :: () {
 	guiState.frames = {
 		guiState.frame!({ name="main", width=MAIN_PANEL_WIDTH,
@@ -288,22 +290,89 @@ export setupGuiFrames :: () {
 		}),
 
 		guiState.frame!({ name="saveProjectAs", width=MAIN_PANEL_WIDTH, active=false,
-			guiState.text!({ text="Save as" }),
+			guiState.text!({ text="Save as", large=true }),
+			guiState.separator!({ thick=true }),
 			guiState.inputText!({ name="saveProjectAs_directory", value="C:/that/derp" }),
 			guiState.scrollable!({
-				guiState.buttons!({ vertical=true, align=gui.Alignment.LEFT,
+				guiState.buttons!({ name="saveProjectAs_items", vertical=true, align=gui.Alignment.LEFT,
 					buttons = {{label="../"},{label="foo/"},{label="bar.hotparticles"}},
 				}),
 			}),
 			guiState.inputText!({ name="saveProjectAs_filename", value="Bark bark.jpg" }),
-			guiState.buttons!({ height=40,
-				buttons = {{label="Save"},{label="Cancel"}},
+			guiState.buttons!({ height=BIG_BUTTON_HEIGHT,
+				buttons = {{name="saveProjectAs_save",label="Save"},{name="util_popPanel",label="Cancel"}},
+			}),
+		}),
+
+		guiState.frame!({ name="exit", width=DIALOG_WIDTH, layout=gui.Layout.FLOATING, modal=true, active=false,
+			guiState.buttons!({ height=BIG_BUTTON_HEIGHT,
+				buttons = {{name="exit_exit",label="Exit"},{name="util_popPanel",label="Cancel"}},
 			}),
 		}),
 	}
 }
 
+export panelStack: []string
+
+export pushPanel :: (name:string) {
+	assert(not indexOf(panelStack, name))
+	if not gui.setActive(guiState, name, true)  return
+
+	insert(panelStack, name)
+}
+
+export pushTempDialog :: (title:string, text:string, buttonList:[]gui.Button, cb:(choice:int)) {
+	static tempN = 0 ; tempN += 1
+
+	local name        = format("temp%d", tempN)
+	local nameButtons = name.."_buttons"
+
+	local frame: gui.Frame = guiState.frame!({ name=name, temp=true, layout=gui.Layout.FLOATING, modal=true, width=DIALOG_WIDTH, active=false,
+		guiState.text!({ text=title, large=true }),
+		guiState.separator!({ thick=true }),
+		guiState.text!({ text=text }),
+		guiState.separator!({ thick=false }),
+		guiState.buttons!({ name=nameButtons, height=BIG_BUTTON_HEIGHT, buttons={ unpack(buttonList) } }),
+	})
+	insert(guiState.frames, frame)
+
+	guiState.onAction[nameButtons] = [cb,nameButtons] (buttons:gui.Buttons, choice:int) {
+		guiState.onAction[nameButtons]   = NULL
+		guiState.onInactive[nameButtons] = NULL
+		popPanel()
+		cb(choice)
+	}
+	guiState.onInactive[name] = [cb,nameButtons] (frame:gui.Frame) {
+		guiState.onAction[nameButtons]   = NULL
+		guiState.onInactive[nameButtons] = NULL
+		cb(0)
+	}
+
+	pushPanel(name)
+}
+
+export popPanel :: (nameForAssert="") -> (success:bool) {
+	local ok, name = remove(panelStack)
+	if nameForAssert  assert(name == nameForAssert)
+	if not ok  return false
+
+	local frame = gui.getElement(guiState, name, gui.Frame)
+	gui.setActive(guiState, frame, false)
+
+	if frame.temp {
+		local found, i = indexOf(guiState.frames, frame)
+		assert(found)
+		remove(guiState.frames, i)
+	}
+
+	return true
+}
+
 export setupGuiCallbacks :: () {
+	--==============================================================
+	--= Main/project
+	--==============================================================
+
 	guiState.onRefresh.projects = (tabs:gui.Tabs) {
 		tabs.buttons = {}
 
@@ -370,23 +439,19 @@ export setupGuiCallbacks :: () {
 	}
 
 	guiState.onRefresh.saveOpenBar = (buttons:gui.Buttons) {
-		buttons.buttons[4].label = showProjectSettings ? "hide settings" : "show settings"
+		buttons.buttons[4].label = showProjectSettings ? "Hide settings" : "Show settings"
 		gui.setActive(guiState, "projectSettings", showProjectSettings)
 	}
 	guiState.onAction.saveOpenBar = (buttons:gui.Buttons, i:int) {
+		local project = openProjects[currentProjectIndex]
 		if i == {
-			case 1:
-				-- @Incomplete: save
-
-			case 2:
-				-- @Incomplete: save as...
-
-			case 3:
-				-- @Incomplete: open...
+			case 1: if project.fileIsSaved  saveProject(project, overwrite=true)  else  pushPanel("saveProjectAs")
+			case 2: pushPanel("saveProjectAs")
+			case 3: pushPanel("openProject")
 
 			case 4:
-				showProjectSettings = not showProjectSettings
-				buttons.buttons[4].label = showProjectSettings ? "hide settings" : "show settings"
+				showProjectSettings      = not showProjectSettings
+				buttons.buttons[4].label = showProjectSettings ? "Hide settings" : "Show settings"
 				gui.setActive(guiState, "projectSettings", showProjectSettings)
 		}
 	}
@@ -1129,5 +1194,168 @@ export setupGuiCallbacks :: () {
 		local blendMode  = cast(LG.BlendMode) radio.buttons[i].value
 		system.blendMode = blendMode
 		gui.getElement(guiState, "colorPreview", gui.ColorPreview).blendMode = blendMode
+	}
+
+	--==============================================================
+	--= Save project
+	--==============================================================
+	do {
+		local Item :: struct { isDir=false, name="" }
+		static dirCurrent:  string = NULL
+		static dirFallback: string = NULL
+
+		guiState.onActive.saveProjectAs = (frame:gui.Frame) {
+			local project           = openProjects[currentProjectIndex]
+			local path              = project.path
+			local ok, dir, filename = matchPattern(path, "^(.+)/([^/]+)$")
+
+			if not ok {
+				dir      = LF.getSaveDirectory().."/projects"
+				filename = "untitled.hotparticles"
+			}
+
+			dirCurrent  = cast(string) dir
+			dirFallback = LF.getSaveDirectory()
+
+			local filenameInput = gui.getElement(guiState, "saveProjectAs_filename", gui.InputText)
+			filenameInput.value = cast(string) filename
+
+			gui.refreshRecursively(guiState, "saveProjectAs_items")
+			gui.setFocus(guiState, filenameInput)
+			filenameInput.field.selectAll!()
+			-- filenameInput.field.setSelection!(0, utf8.len(basename)) -- @UX
+		}
+		guiState.onInactive.saveProjectAs = (frame:gui.Frame) {
+			-- @Incomplete: Unload project preview, if there is one.
+			-- @Incomplete: Project previews!
+		}
+
+		guiState.onRefresh.saveProjectAs_directory = (input:gui.InputText, i:int) {
+			input.value = dirCurrent
+		}
+		guiState.onSubmit.saveProjectAs_directory = (input:gui.InputText, i:int) {
+			dirCurrent = input.value
+			gui.refreshRecursively(guiState, "saveProjectAs_items")
+		}
+		guiState.onRefresh.saveProjectAs_items = (buttons:gui.Buttons) {
+			local dir = dirCurrent
+
+			if not connectToRemoteDirectory(dir) {
+				dir = dirFallback
+				if not connectToRemoteDirectory(dir) {
+					dir = LF.getSaveDirectory().."/projects"
+					if not connectToRemoteDirectory(dir) {
+						dir = LF.getSaveDirectory()
+						if not connectToRemoteDirectory(dir) {
+							dir = LF.getWorkingDirectory()
+							assert(connectToRemoteDirectory(dir))
+						}
+					}
+				}
+			}
+			defer disconnectFromRemoteDirectory()
+			dirCurrent  = dir
+			dirFallback = dir -- Last successfully connected directory.
+
+			local dirs:      []string
+			local filenames: []string
+
+			for LF.getDirectoryItems("") {
+				static info: LF.FileInfo
+
+				if LF.getInfo(it, info) == nil {
+					-- void  The file may be a system file or something.
+				} elseif info.type == LF.FileType.DIRECTORY {
+					if not findPattern(it, "^%$")  insert(dirs, it)
+				} elseif info.type == LF.FileType.FILE {
+					if findPattern(it, "%.hotparticles$")  insert(filenames, it)
+				}
+			}
+
+			sort(dirs,      compareFilenames)
+			sort(filenames, compareFilenames)
+
+			buttons.buttons = {}
+			insert(buttons.buttons, cast(gui.Button){ value=cast(Item){isDir=true,name=".."}, label="..", image="iconFolder" })
+
+			for dirs       insert(buttons.buttons, cast(gui.Button){ value=cast(Item){isDir=true, name=it}, label=it, image="iconFolder" })
+			for filenames  insert(buttons.buttons, cast(gui.Button){ value=cast(Item){isDir=false,name=it}, label=it })
+
+			gui.refreshRecursively(guiState, "saveProjectAs_directory")
+		}
+		guiState.onAction.saveProjectAs_items = (buttons:gui.Buttons, i:int) {
+			local item = cast(Item) buttons.buttons[i].value
+
+			if not item.isDir {
+				-- @UX: Double-click file to overwrite?
+				gui.getElement(guiState, "saveProjectAs_filename", gui.InputText).value = item.name
+			} elseif item.name == ".." {
+				dirCurrent = replacePattern(dirCurrent, "/[^/]+$", "")
+				gui.refreshRecursively(guiState, "saveProjectAs_items")
+			} else {
+				dirCurrent = dirCurrent.."/"..item.name
+				gui.refreshRecursively(guiState, buttons)
+			}
+		}
+		guiState.onSubmit.saveProjectAs_filename = (input:gui.InputText) {
+			save()
+		}
+		guiState.onAction.saveProjectAs_save = (buttons:gui.Buttons, i:int) {
+			save()
+		}
+		local save :: () {
+			local input    = gui.getElement(guiState, "saveProjectAs_filename", gui.InputText)
+			local filename = input.value
+			filename       = replacePattern(replacePattern(filename, "^%s+", ""), "%s+$", "")
+
+			if filename == "" {
+				input.value = filename
+				gui.setFocus(guiState, input)
+				return
+			}
+
+			if not findPattern(filename, "%.hotparticles$") {
+				filename    = filename..".hotparticles"
+				input.value = filename
+			}
+
+			local project = openProjects[currentProjectIndex]
+			project.path  = dirCurrent.."/"..filename
+
+			local ok, fileExists = saveProject(project)
+			if ok {
+				popPanel()
+
+			} elseif fileExists {
+				local BUTTONS: []gui.Button = {{label="Overwrite"},{label="Cancel"}}
+
+				pushTempDialog("Confirm save as", filename.." already exists. Overwite it?", BUTTONS, (i:int) {
+					if i ~= 1  return
+
+					local project = openProjects[currentProjectIndex]
+					saveProject(project, overwrite=true)
+					popPanel("saveProjectAs")
+				})
+
+			} else {
+				-- void  Stay in the dialog.
+			}
+		}
+	}
+
+	--==============================================================
+	--= Exit
+	--==============================================================
+
+	guiState.onAction.exit_exit = (buttons:gui.Buttons, i:int) {
+		pushQuitEvent()
+	}
+
+	--==============================================================
+	--= Utils
+	--==============================================================
+
+	guiState.onAction.util_popPanel = (el:gui.Element, i:int) {
+		popPanel()
 	}
 }
