@@ -8,7 +8,7 @@
 export MAX_BUFFER_SIZE      :: 16000 -- Default buffer size for ParticleSystem is 1000. @Incomplete: make this configurable.
 export MAIN_PANEL_WIDTH     :: 450
 export DIALOG_WIDTH         :: 400
-export WORKSPACE_SAVE_DELAY :: 0.50
+export WORKSPACE_SAVE_DELAY :: 1.00
 
 
 

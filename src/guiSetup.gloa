@@ -18,10 +18,10 @@ export setupGuiFrames :: () {
 
 			guiState.buttons!({ name="saveOpenBar",
 				buttons = {
-					{label="Save"},
-					{label="Save as..."},
-					{label="Open..."},
-					{label="Hide settings"},
+					{label="Save",          tooltip="Ctrl+S"},
+					{label="Save as...",    tooltip="Ctrl+Shift+S"},
+					{label="Open...",       tooltip="Ctrl+O"},
+					{label="Hide settings", tooltip=""},
 				},
 			}),
 
@@ -91,6 +91,12 @@ export setupGuiFrames :: () {
 
 					guiState.separator!({ thick=false }),
 
+					guiState.section!({ label="SpawnRate",
+						guiState.slider!({ name="emissionRate", min=0, max=1000, readout="%.1f / sec" }),
+					}),
+
+					guiState.separator!({ thick=false }),
+
 					guiState.section!({ label="Lifetime",
 						guiState.slider!({ name="emitterLifetime",     labelLeft="emitter",     min=0, max=20, readout="%.2f sec", readoutZero="∞" }),
 						guiState.slider!({ name="particleLifetimeMin", labelLeft="paricle min", min=0, max=20, readout="%.2f sec" }),
@@ -98,12 +104,6 @@ export setupGuiFrames :: () {
 					}),
 
 					guiState.separator!({ thick=true }),
-
-					guiState.section!({ label="SpawnRate",
-						guiState.slider!({ name="emissionRate", min=0, max=1000, readout="%.1f / sec" }),
-					}),
-
-					guiState.separator!({ thick=false }),
 
 					guiState.section!({ label="Area",
 						guiState.radio!({ name="areaDistribution",
@@ -359,12 +359,7 @@ export popPanel :: (nameForAssert="") -> (success:bool) {
 	local frame = gui.getElement(guiState, name, gui.Frame)
 	gui.setActive(guiState, frame, false)
 
-	if frame.temp {
-		local found, i = indexOf(guiState.frames, frame)
-		assert(found)
-		remove(guiState.frames, i)
-	}
-
+	if frame.temp  gui.deleteFrame(guiState, frame)
 	return true
 }
 
@@ -396,6 +391,11 @@ export setupGuiCallbacks :: () {
 
 		setCurrentProject(#openProjects)
 	}
+	-- guiState.onOption.projects = (tabs:gui.Tabs, i:int) {
+	-- 	gui.showContextMenu(guiState, {"Close","Duplicate"}, (i:int) {
+	-- 		-- @Incomplete
+	-- 	})
+	-- }
 	guiState.onClose.projects = (tabs:gui.Tabs, i:int) {
 		if i == #tabs.buttons  return
 

@@ -33,6 +33,7 @@
 	pressButton
 	refresh, refreshRecursively, refreshAll
 	setActive
+	showContextMenu
 
 --============================================================]]
 
@@ -66,6 +67,13 @@ local TAB_BOTTOM_LINE_WIDTH :: 2
 local HOVER_OUTLINE_OPACITY        :: .3
 local HOVER_OUTLINE_OPACITY_STRONG :: .5
 
+export clipboardValue = 0.0
+export clipboardAngle = 0.0
+export clipboardColor: []float = {0,0,0,0}
+export hasClipboardValue = false
+export hasClipboardAngle = false
+export hasClipboardColor = false
+
 
 
 export State :: struct {
@@ -98,6 +106,8 @@ export State :: struct {
 	layoutNeedsUpdate = true,
 
 	extraScrollableSpace = 0,
+
+	contextMenu: Frame = NULL,
 
 	onRefresh:  struct { !key:string, !value:any--[[ (el:Element) ]] },
 	onActive:   struct { !key:string, !value:any--[[ (el:Element) ]] },
@@ -133,13 +143,22 @@ local register :: (state:State, el:Element, T:Type) -> Element {
 	state.elementsById[el.id] = el
 	if el.name  state.elementsByName[el.name] = el
 
-	if T == Scrollable  insert(state.scrollables, cast(Scrollable) el)
+	if T == Scrollable  insert(state.scrollables, cast(Scrollable)el)
 
 	state.nextId += 1
 	return el
 }
 
+local unregisterTree :: (state:State, el:Element) {
+	state.elementsById[el.id] = NULL
+	if el.name  state.elementsByName[el.name] = NULL
 
+	for el  unregisterTree(state, it)
+}
+
+
+
+export Style :: enum { NORMAL, CONTEXT_MENU }
 
 export Element :: struct {
 	active    = true,
@@ -151,6 +170,11 @@ export Element :: struct {
 	inset     = 0,
 	width     = 0, -- Zero means automatic.
 	height    = 0, -- Zero means automatic. For scrollables, non-positive means distance from the bottom of the screen.
+	minWidth  = 0,
+	minHeight = 0,
+	maxWidth  = -1, -- Negative means no limit.
+	maxHeight = -1, -- Negative means no limit.
+	style     = Style.NORMAL,
 	data: any,
 
 	type: Type = NULL,
@@ -179,6 +203,8 @@ export Frame :: struct {
 	layout = Layout.DOCKED,
 	modal  = false,
 	temp   = false,
+	x      = -1, -- Negative means centered. Only used if floating.
+	y      = -1, -- Negative means centered. Only used if floating.
 }
 
 
@@ -435,20 +461,30 @@ export onMousePressed :: (state:State, mx,my:int, mbutton:int, presses:int) -> (
 		}
 
 		if mbutton == 1 and state.hoveredId {
-			state.activeId      = state.hoveredId
-			state.activeSubid   = state.hoveredSubid
-			state.activeMod     = getModifierKey()
-			state.activeStartMx = mx
-			state.activeStartMy = my
+			local buttons = cast(Buttons) state.elementsById[state.hoveredId]
 
-			LM.setGrabbed(true)
-			LK.setKeyRepeat(false)
+			if buttons.type == Buttons and buttons.style == Style.CONTEXT_MENU {
+				triggerActionEvent(state, buttons, buttons.buttons[state.hoveredSubid].name, state.hoveredSubid, save=true)
 
-			onMouseMoved(state, mx, my, 0, 0)
+			} else {
+				state.activeId      = state.hoveredId
+				state.activeSubid   = state.hoveredSubid
+				state.activeMod     = getModifierKey()
+				state.activeStartMx = mx
+				state.activeStartMy = my
+
+				LM.setGrabbed(true)
+				LK.setKeyRepeat(false)
+
+				onMouseMoved(state, mx, my, 0, 0)
+			}
 		}
+
+		if it ~= state.contextMenu  hideContextMenu(state)
 		return true
 	}
 
+	hideContextMenu(state)
 	return state.activeId > 0 or getTopmostActiveModal(state) ~= NULL
 }
 
@@ -725,7 +761,80 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int) {
 			case Buttons: name = (cast(Buttons)widget).buttons[state.hoveredSubid].name
 		}
 
-		if widget ~= NULL  triggerOptionEvent(state, widget, name, state.hoveredSubid)
+		if widget ~= NULL and not triggerOptionEvent(state, widget, name, state.hoveredSubid) {
+			if widget.type == {
+				case Direction:
+					local direction = cast(Direction) widget
+
+					showContextMenu(guiState, {"Copy angle","Paste angle"}, [state,direction] (i:int) {
+						if i == {
+							case 1:
+								clipboardAngle    = direction.angle
+								hasClipboardAngle = true
+							case 2:
+								if hasClipboardAngle {
+									direction.angle = clipboardAngle
+									triggerActionEvent(state, direction, "", 0)
+								}
+						}
+					})
+
+				case Slider:
+					local slider = cast(Slider) widget
+
+					showContextMenu(guiState, {"Copy value","Paste value"}, [state,slider] (i:int) {
+						if i == {
+							case 1:
+								clipboardValue    = slider.value
+								hasClipboardValue = true
+							case 2:
+								if hasClipboardValue {
+									slider.value = clipboardValue
+									triggerActionEvent(state, slider, "", 0)
+								}
+						}
+					})
+
+				case Color:
+					local COMPONENT_TITLES: Table(int, string) : {
+						[1] = "hue",
+						[2] = "saturation",
+						[3] = "value strength",
+						[4] = "opacity",
+					}
+
+					local colorEl   = cast(Color) widget
+					local component = state.hoveredSubid
+
+					local items = {
+						"Copy "..COMPONENT_TITLES[component],
+						"Copy color",
+						"Paste "..COMPONENT_TITLES[component],
+						"Paste color",
+					}
+
+					showContextMenu(guiState, items, [state,colorEl,component] (i:int) {
+						if i == {
+							case 1:
+								clipboardValue    = colorEl.color[component]
+								hasClipboardValue = true
+							case 2:
+								for 1, 4  clipboardColor[it] = colorEl.color[it]
+								hasClipboardColor = true
+							case 3:
+								if hasClipboardValue {
+									colorEl.color[component] = clipboardValue
+									triggerActionEvent(state, colorEl, "", component)
+								}
+							case 4:
+								if hasClipboardColor  for 1, 4 {
+									colorEl.color[it] = clipboardColor[it]
+									triggerActionEvent(state, colorEl, "", it)
+								}
+						}
+					})
+			}
+		}
 	}
 
 	-- Release active ID.
@@ -933,6 +1042,11 @@ local calculateNaturalSize :: (state:State, el:Element) {
 	if el.width                             el.layoutWidth  = el.width
 	if el.height and el.type ~= Scrollable  el.layoutHeight = el.height
 
+	el.width  = math.max(el.width,  el.minWidth)
+	el.height = math.max(el.height, el.minHeight)
+	if el.maxWidth  >= 0  el.width  = math.min(el.width,  el.maxWidth)
+	if el.maxHeight >= 0  el.height = math.min(el.height, el.maxHeight)
+
 	-- The following count as outside the element, even though they take space as if they were part of the element.
 	el.layoutWidth += el.inset
 	if el.type == Tabs  el.layoutHeight += TAB_BOTTOM_LINE_WIDTH
@@ -970,8 +1084,8 @@ local positionAndFit :: (state:State, el:Element, x,y,w,h:int) {
 					x = 0
 					y = 0
 				case Layout.FLOATING:
-					x = (LG.getWidth()  - w) // 2
-					y = (LG.getHeight() - h) // 2
+					x = frame.x >= 0 ? frame.x : (LG.getWidth()  - w) // 2
+					y = frame.y >= 0 ? frame.y : (LG.getHeight() - h) // 2
 			}
 
 			frame.layoutX = x
@@ -1161,14 +1275,23 @@ local drawElement :: (state:State, el:Element) {
 		case Frame:
 			local frame = cast(Frame) el
 
-			if frame.layout == Layout.FLOATING {
+			if frame.layout == Layout.FLOATING and frame.modal {
 				local BORDER :: 10
 				LG.setColor(.1, .1, .1, .9)
 				LG.rectangle(LG.DrawMode.FILL, frame.layoutX-BORDER, frame.layoutY-BORDER, frame.layoutWidth+2*BORDER, frame.layoutHeight+2*BORDER, SPACING+BUTTON_RADIUS+BORDER)
 			}
 
-			LG.setColor(.2, .2, .2)
-			LG.rectangle(LG.DrawMode.FILL, frame.layoutX, frame.layoutY, frame.layoutWidth, frame.layoutHeight, (frame.layout == Layout.FLOATING ? SPACING+BUTTON_RADIUS : 0))
+			if frame.style == Style.CONTEXT_MENU
+				LG.setColor(.7, .7, .7)
+			else
+				LG.setColor(.2, .2, .2)
+
+			if frame.style == Style.CONTEXT_MENU
+				LG.rectangle(LG.DrawMode.FILL, frame.layoutX, frame.layoutY, frame.layoutWidth, frame.layoutHeight)
+			elseif frame.layout == Layout.FLOATING
+				LG.rectangle(LG.DrawMode.FILL, frame.layoutX, frame.layoutY, frame.layoutWidth, frame.layoutHeight, SPACING+BUTTON_RADIUS)
+			else
+				LG.rectangle(LG.DrawMode.FILL, frame.layoutX, frame.layoutY, frame.layoutWidth, frame.layoutHeight)
 
 			LG.pushAll()
 			LG.intersectScissor(frame.layoutX, frame.layoutY, frame.layoutWidth, frame.layoutHeight)
@@ -1355,30 +1478,32 @@ local drawElement :: (state:State, el:Element) {
 
 			LG.setColor(1, 1, 1)
 
-			for buttons.buttons  if it.system ~= NULL {
+			for buttons.buttons  if it.system ~= NULL and it.system.visible {
 				local system = it.system
-				if system.visible {
-					local emitterX, emitterY = system.particles.getPosition!()
+				local emitterX, emitterY: float
 
-					LG.pushAll()
-					LG.intersectScissor(
-						bx1[itIndex] + (bw[itIndex] - BUTTON_IMAGE_MAX_SIZE) // 2,
-						by1[itIndex] + (bh[itIndex] - BUTTON_IMAGE_MAX_SIZE) // 2 + getScrollOffset(buttons),
-						BUTTON_IMAGE_MAX_SIZE,
-						BUTTON_IMAGE_MAX_SIZE
-					)
-
-					LG.clear(r, g, b)
-					LG.setBlendMode(system.blendMode)
-
-					LG.draw(system.particles,
-						bx1[itIndex] + bw[itIndex]/2 - emitterX*scale,
-						by1[itIndex] + bh[itIndex]/2 - emitterY*scale,
-						0, scale
-					)
-
-					LG.pop()
+				if project.movementPreset == Movement.NONE {
+					emitterX, emitterY = system.particles.getPosition!()
 				}
+
+				LG.pushAll()
+				LG.intersectScissor(
+					bx1[itIndex] + (bw[itIndex] - BUTTON_IMAGE_MAX_SIZE) // 2,
+					by1[itIndex] + (bh[itIndex] - BUTTON_IMAGE_MAX_SIZE) // 2 + getScrollOffset(buttons),
+					BUTTON_IMAGE_MAX_SIZE,
+					BUTTON_IMAGE_MAX_SIZE
+				)
+
+				LG.clear(r, g, b)
+				LG.setBlendMode(system.blendMode)
+
+				LG.draw(system.particles,
+					bx1[itIndex] + bw[itIndex]/2 - emitterX*scale,
+					by1[itIndex] + bh[itIndex]/2 - emitterY*scale,
+					0, scale
+				)
+
+				LG.pop()
 			}
 
 			-- Labels.
@@ -1403,6 +1528,8 @@ local drawElement :: (state:State, el:Element) {
 
 					if faded[itIndex]
 						LG.setColor(1, 1, 1, .8)
+					elseif buttons.style == Style.CONTEXT_MENU
+						LG.setColor(0, 0, 0)
 					else
 						LG.setColor(1, 1, 1)
 
@@ -1764,10 +1891,9 @@ export draw :: (state:State) {
 	}
 
 	if state.currentTooltip {
-		local widget = state.elementsById[state.hoveredId]
-		local a      = math.clamp01(((LT.getTime() - state.tooltipTime) - .30) / 0.20)
+		local a = math.clamp01(((LT.getTime() - state.tooltipTime) - .30) / 0.20)
 
-		if a > 0 and widget ~= NULL {
+		if a > 0 {
 			local w = fontNormal.getWidth!(state.currentTooltip) + 2*SPACING
 			local h = fontNormal.getHeight!() + 2*BUTTON_PADDING_Y
 			local x = math.min(state.tooltipX, ww-w)
@@ -1898,6 +2024,14 @@ export setActive :: (state:State, el:Element, active:bool) -> (success:bool) {
 		blurFocus(state, abort=false)
 	}
 
+	if el.type == Frame {
+		local frame    = cast(Frame) el
+		local found, i = indexOf(state.frames, frame)
+		assert(found)
+		remove(state.frames, i)
+		insert(state.frames, frame)
+	}
+
 	if active
 		triggerActiveEvent(state, el)
 	else
@@ -2014,12 +2148,13 @@ local triggerActionEvent :: (state:State, widget:Widget, name:string, subid:int,
 	cb(widget, subid)
 	if save  scheduleSaveWorkspace()
 }
-local triggerOptionEvent :: (state:State, widget:Widget, name:string, subid:int, save=false) {
+local triggerOptionEvent :: (state:State, widget:Widget, name:string, subid:int, save=false) -> (handled:bool) {
 	local cb = cast((widget:Widget, i:int)) state.onOption[name ?: widget.name]
-	if cb == NULL  return
+	if cb == NULL  return false
 
 	cb(widget, subid)
 	if save  scheduleSaveWorkspace()
+	return true
 }
 local triggerCloseEvent :: (state:State, widget:Widget, name:string, subid:int, save=false) {
 	local cb = cast((widget:Widget, i:int)) state.onClose[name ?: widget.name]
@@ -2161,6 +2296,67 @@ export pressButton :: (state:State, buttonsElementName:string, i:int) {
 	}
 
 	triggerActionEvent(state, buttons, button.name, i, save=true)
+}
+
+
+
+export showContextMenu :: (state:State, items:[]string, cb:(i:int)) {
+	local mx, my = LM.getPosition()
+	showContextMenu(state, mx, my, items, cb)
+}
+export showContextMenu :: (state:State, x,y:int, items:[]string, cb:(i:int)) {
+	hideContextMenu(state)
+
+	local buttonList: []Button
+	for items  insert(buttonList, cast(Button){ label=it })
+
+	local contextMenu = state.frame!({ data=cb, x=x, y=y, minWidth=200, layout=Layout.FLOATING, style=Style.CONTEXT_MENU,
+		guiState.buttons!({ name="__contextMenuButtons", vertical=true, align=Alignment.LEFT, style=Style.CONTEXT_MENU,
+			buttons = {unpack(buttonList)},
+		}),
+	})
+
+	state.contextMenu = contextMenu
+	insert(state.frames, contextMenu)
+
+	state.layoutNeedsUpdate = true
+	updateLayoutIfNeeded(state)
+
+	x       = contextMenu.layoutX
+	y       = contextMenu.layoutY
+	local w = contextMenu.layoutWidth
+	local h = contextMenu.layoutHeight
+
+	if x   > LG.getWidth()-w  state.layoutNeedsUpdate, contextMenu.x = true, LG.getWidth()-w
+	if y+h > LG.getHeight()   state.layoutNeedsUpdate, contextMenu.y = true, y - h
+
+	state.onAction.__contextMenuButtons = [state,cb] (buttons:Buttons, i:int) {
+		state.contextMenu.data = NULL
+		hideContextMenu(state)
+		cb(i)
+		scheduleSaveWorkspace()
+	}
+}
+
+local hideContextMenu :: (state:State) {
+	local contextMenu = state.contextMenu
+	if contextMenu == NULL  return
+
+	deleteFrame(state, contextMenu)
+	state.contextMenu = NULL
+
+	local cb = cast((i:int)) contextMenu.data
+	if cb ~= NULL  cb(0)
+}
+
+
+
+export deleteFrame :: (state:State, frame:Frame) {
+	local found, i = indexOf(state.frames, frame)
+	if not found  return
+
+	unregisterTree(state, frame)
+	remove(state.frames, i)
 }
 
 
