@@ -204,7 +204,7 @@ export saveProject :: (project:Project, overwrite=false) -> (success:bool, fileE
 
 	gui.refreshRecursively(guiState, "projects")
 	scheduleSaveWorkspace()
-	setMessageText("Project saved")
+	setMessageText("Saved '%s'", project.displayedName)
 	return true, false
 }
 

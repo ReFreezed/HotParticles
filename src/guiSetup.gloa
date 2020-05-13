@@ -293,7 +293,7 @@ export setupGuiFrames :: () {
 			guiState.separator!({ thick=true }),
 			guiState.inputText!({ name="saveProjectAs_directory" }),
 			guiState.scrollable!({
-				guiState.buttons!({ name="saveProjectAs_items", vertical=true, align=gui.Alignment.LEFT }),
+				guiState.buttons!({ name="saveProjectAs_items", vertical=true, align=gui.Alignment.LEFT, style=gui.Style.LIST }),
 			}),
 			guiState.inputText!({ name="saveProjectAs_filename" }),
 			guiState.buttons!({ height=BIG_BUTTON_HEIGHT,
@@ -306,7 +306,7 @@ export setupGuiFrames :: () {
 			guiState.separator!({ thick=true }),
 			guiState.inputText!({ name="openProject_directory" }),
 			guiState.scrollable!({
-				guiState.buttons!({ name="openProject_items", vertical=true, align=gui.Alignment.LEFT }),
+				guiState.buttons!({ name="openProject_items", vertical=true, align=gui.Alignment.LEFT, style=gui.Style.LIST }),
 			}),
 			guiState.inputText!({ name="openProject_filename" }),
 			guiState.buttons!({ height=BIG_BUTTON_HEIGHT,
@@ -1312,8 +1312,20 @@ export setupGuiCallbacks :: () {
 			buttons.buttons = {}
 			insert(buttons.buttons, cast(gui.Button){ value=cast(Item){isDir=true,name=".."}, label="..", image="iconFolder" })
 
-			for dirs       insert(buttons.buttons, cast(gui.Button){ value=cast(Item){isDir=true, name=it}, label=it, image="iconFolder" })
-			for filenames  insert(buttons.buttons, cast(gui.Button){ value=cast(Item){isDir=false,name=it}, label=it })
+			for dirs {
+				insert(buttons.buttons, cast(gui.Button){
+					value = cast(Item) {isDir=true, name=it},
+					label = it,
+					image = "iconFolder",
+				})
+			}
+			for filenames {
+				insert(buttons.buttons, cast(gui.Button){
+					value = cast(Item) {isDir=false, name=it},
+					label = getSubstring(it, 1, #it - #".hotparticles"),
+					suffix = ".hotparticles",
+				})
+			}
 
 			gui.refreshRecursively(guiState, (isSave ? "saveProjectAs_directory" : "openProject_directory"))
 		}
@@ -1336,6 +1348,7 @@ export setupGuiCallbacks :: () {
 		}
 		guiState.onAction.openProject_items = guiState.onAction.saveProjectAs_items
 
+		guiState.onDouble.saveProjectAs_items    = (buttons:gui.Buttons, i:int) { save() }
 		guiState.onSubmit.saveProjectAs_filename = (input:gui.InputText)        { save() }
 		guiState.onAction.saveProjectAs_save     = (buttons:gui.Buttons, i:int) { save() }
 		local save :: () {
@@ -1377,6 +1390,7 @@ export setupGuiCallbacks :: () {
 			}
 		}
 
+		guiState.onDouble.openProject_items    = (buttons:gui.Buttons, i:int) { load() }
 		guiState.onSubmit.openProject_filename = (input:gui.InputText)        { load() }
 		guiState.onAction.openProject_open     = (buttons:gui.Buttons, i:int) { load() }
 		local load :: () {
@@ -1411,7 +1425,7 @@ export setupGuiCallbacks :: () {
 
 			local project = _app.projects[1]
 			if project == NULL {
-				setErrorText("Project is empty")
+				setErrorText("File is missing data")
 				return
 			}
 

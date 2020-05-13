@@ -34,7 +34,7 @@
 	pressButton
 	refresh, refreshRecursively, refreshAll
 	setActive
-	showContextMenu
+	showContextMenu, hideContextMenu
 
 --============================================================]]
 
@@ -115,6 +115,7 @@ export State :: struct {
 	onInactive: struct { !key:string, !value:any--[[ (el:Element) ]] },
 	onSubmit:   struct { !key:string, !value:any--[[ (widget:Widget) ]] },
 	onAction:   struct { !key:string, !value:any--[[ (widget:Widget, i:int) ]] },
+	onDouble:   struct { !key:string, !value:any--[[ (widget:Widget, i:int) ]] },
 	onOption:   struct { !key:string, !value:any--[[ (widget:Widget, i:int) ]] },
 	onClose:    struct { !key:string, !value:any--[[ (widget:Widget, i:int) ]] },
 	onDrag:     struct { !key:string, !value:any--[[ (widget:Widget, i:int, mx,my:int) ]] },
@@ -159,7 +160,7 @@ local unregisterTree :: (state:State, el:Element) {
 
 
 
-export Style :: enum { NORMAL, CONTEXT_MENU }
+export Style :: enum { NORMAL, CONTEXT_MENU, LIST }
 
 export Element :: struct {
 	active    = true,
@@ -259,6 +260,7 @@ export Separator :: struct {
 export Button :: struct {
 	name    = "", -- Inherited from parent if empty.
 	label   = "",
+	suffix  = "", -- Appears faded after the label.
 	image   = "",
 	tooltip = "",
 	value: any,
@@ -266,6 +268,9 @@ export Button :: struct {
 	system: System = NULL,
 
 	imageScale = 1.0,
+
+	labelWidth  = 0,
+	suffixWidth = 0,
 }
 
 export Alignment :: enum { CENTER, LEFT, RIGHT }
@@ -368,6 +373,11 @@ export onKeyPressed :: (state:State, key:LK.KeyConstant, scancode:LK.Scancode, i
 		return true
 	}
 
+	if key == "escape" and state.contextMenu ~= NULL {
+		hideContextMenu(state)
+		return true
+	}
+
 	-- Key events for inputs.
 	if state.focusId {
 		local input = cast(InputText) state.elementsById[state.focusId]
@@ -465,8 +475,11 @@ export onMousePressed :: (state:State, mx,my:int, mbutton:int, presses:int) -> (
 		if mbutton == 1 and state.hoveredId {
 			local buttons = cast(Buttons) state.elementsById[state.hoveredId]
 
-			if buttons.type == Buttons and buttons.style == Style.CONTEXT_MENU {
+			if buttons.type == Buttons and (buttons.style == Style.CONTEXT_MENU or buttons.style == Style.LIST) {
 				triggerActionEvent(state, buttons, buttons.buttons[state.hoveredSubid].name, state.hoveredSubid, save=true)
+				if presses % 2 == 0 {
+					triggerDoublePressEvent(state, buttons, buttons.buttons[state.hoveredSubid].name, state.hoveredSubid, save=true)
+				}
 
 			} else {
 				state.activeId      = state.hoveredId
@@ -978,13 +991,16 @@ local calculateNaturalSize :: (state:State, el:Element) {
 				local w: int = NULL
 				local h: int = NULL
 
+				it.labelWidth  = fontNormal.getWidth!(it.label)
+				it.suffixWidth = fontNormal.getWidth!(it.suffix)
+
 				if it.system ~= NULL {
 					w             = BUTTON_IMAGE_MAX_SIZE
 					h             = BUTTON_IMAGE_MAX_SIZE
-				} elseif it.label and it.image {
+				} elseif (it.label or it.suffix) and it.image {
 					w, h          = guiImages[it.image].getDimensions!()
 					it.imageScale = math.min(BUTTON_IMAGE_MAX_SIZE/w, BUTTON_IMAGE_MAX_SIZE/h, 1)
-					w             = math.round(w*it.imageScale) + SPACING + fontNormal.getWidth!(it.label)
+					w             = math.round(w*it.imageScale) + SPACING + it.labelWidth+it.suffixWidth
 					h             = math.max(math.round(h*it.imageScale), fontNormal.getHeight!())
 				} elseif it.image {
 					w, h          = guiImages[it.image].getDimensions!()
@@ -992,7 +1008,7 @@ local calculateNaturalSize :: (state:State, el:Element) {
 					w             = math.round(w*it.imageScale)
 					h             = math.round(h*it.imageScale)
 				} else {
-					w             = fontNormal.getWidth!(it.label)
+					w             = it.labelWidth + it.suffixWidth
 					h             = fontNormal.getHeight!()
 				}
 
@@ -1415,9 +1431,13 @@ local drawElement :: (state:State, el:Element) {
 				bh[itIndex]    = by2[itIndex] - by1[itIndex]
 				faded[itIndex] = false
 
+				local showBg = true
+
 				if not (buttons.id == state.hoveredId and itIndex == state.hoveredSubid) {
 					faded[itIndex] = (isRadio or isTabs) and radio.index ~= itIndex
-					if faded[itIndex]
+					if buttons.style ~= Style.NORMAL
+						showBg = false
+					elseif faded[itIndex]
 						LG.setColor(1, 1, 1, .1)
 					else
 						LG.setColor(1, 1, 1, .3)
@@ -1427,7 +1447,9 @@ local drawElement :: (state:State, el:Element) {
 					LG.setColor(0, 0, 0, .5)
 				}
 
-				if isTabs {
+				if not showBg {
+					-- void
+				} elseif isTabs {
 					local topInset = math.min(.5*bh[itIndex], bw[itIndex]/4)
 					LG.polygon(LG.DrawMode.FILL,
 						bx1[itIndex],          by2[itIndex],
@@ -1453,10 +1475,8 @@ local drawElement :: (state:State, el:Element) {
 			for buttons.buttons  if it.image {
 				local image  = guiImages[it.image]
 				local iw, ih = image.getDimensions!()
-				local sx     = BUTTON_IMAGE_MAX_SIZE / iw
-				local sy     = BUTTON_IMAGE_MAX_SIZE / ih
 
-				if it.label {
+				if it.label or it.suffix {
 					LG.draw(image,
 						bx1[itIndex] + paddingX,
 						by1[itIndex] + bh[itIndex] // 2,
@@ -1508,7 +1528,7 @@ local drawElement :: (state:State, el:Element) {
 			}
 
 			-- Labels.
-			for buttons.buttons  if it.label {
+			for buttons.buttons  if it.label or it.suffix {
 				local scissorX1 = bx1[itIndex] + (paddingX-1)
 				local scissorX2 = bx2[itIndex] - (paddingX-1)
 
@@ -1517,26 +1537,35 @@ local drawElement :: (state:State, el:Element) {
 					local textX: int = NULL
 
 					if it.image {
-						textX = bx1[itIndex] + paddingX + BUTTON_IMAGE_MAX_SIZE + SPACING
+						local iw = guiImages[it.image].getWidth!()
+						textX    = math.ceil(bx1[itIndex] + paddingX + iw*it.imageScale + SPACING)
 					} else {
 						using Alignment
 						if buttons.align == {
 							case LEFT:   textX = bx1[itIndex] + paddingX
-							case RIGHT:  textX = bx1[itIndex] + math.max(math.round(bw[itIndex] - paddingX - fontNormal.getWidth!(it.label)), paddingX)
-							case CENTER: textX = bx1[itIndex] + math.max((bw[itIndex] - fontNormal.getWidth!(it.label)) // 2,                 paddingX)
+							case RIGHT:  textX = bx1[itIndex] + math.max(math.round(bw[itIndex] - paddingX - (it.labelWidth+it.suffixWidth)), paddingX)
+							case CENTER: textX = bx1[itIndex] + math.max((bw[itIndex] - (it.labelWidth+it.suffixWidth)) // 2,                 paddingX)
 						}
 					}
 
+					local grey, a: float
 					if faded[itIndex]
-						LG.setColor(1, 1, 1, .8)
+						grey, a = 1, .8
 					elseif buttons.style == Style.CONTEXT_MENU
-						LG.setColor(0, 0, 0)
+						grey, a = 0, 1
 					else
-						LG.setColor(1, 1, 1)
+						grey, a = 1, 1
 
 					LG.pushAll()
 					LG.intersectScissor(scissorX1, 0, scissorX2-scissorX1, LG.getHeight())
-					LG.print(it.label, textX, textY)
+					if it.label {
+						LG.setColor(grey, grey, grey, a)
+						LG.print(it.label, textX, textY)
+					}
+					if it.suffix {
+						LG.setColor(grey, grey, grey, a*.6)
+						LG.print(it.suffix, textX+it.labelWidth, textY)
+					}
 					LG.pop()
 				}
 			}
@@ -2149,6 +2178,13 @@ local triggerActionEvent :: (state:State, widget:Widget, name:string, subid:int,
 	cb(widget, subid)
 	if save  scheduleSaveWorkspace()
 }
+local triggerDoublePressEvent :: (state:State, widget:Widget, name:string, subid:int, save=false) {
+	local cb = cast((widget:Widget, i:int)) state.onDouble[name ?: widget.name]
+	if cb == NULL  return
+
+	cb(widget, subid)
+	if save  scheduleSaveWorkspace()
+}
 local triggerOptionEvent :: (state:State, widget:Widget, name:string, subid:int, save=false) -> (handled:bool) {
 	local cb = cast((widget:Widget, i:int)) state.onOption[name ?: widget.name]
 	if cb == NULL  return false
@@ -2339,15 +2375,17 @@ export showContextMenu :: (state:State, x,y:int, items:[]string, cb:(i:int)) {
 	}
 }
 
-local hideContextMenu :: (state:State) {
+export hideContextMenu :: (state:State) -> (success:bool) {
 	local contextMenu = state.contextMenu
-	if contextMenu == NULL  return
+	if contextMenu == NULL  return false
 
 	deleteFrame(state, contextMenu)
 	state.contextMenu = NULL
 
 	local cb = cast((i:int)) contextMenu.data
 	if cb ~= NULL  cb(0)
+
+	return true
 }
 
 
