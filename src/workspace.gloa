@@ -157,12 +157,12 @@ export saveWorkspace :: () {
 	local buffer: []string
 	insert(buffer, format("%d\n", LAST_FILE_VERSION))
 
-	insert(buffer, "stats")               ; writeValue(buffer, eol=true, showStats)
-	insert(buffer, "showProjectSettings") ; writeValue(buffer, eol=true, showProjectSettings)
-	insert(buffer, "showPanelNumbers")    ; writeValue(buffer, eol=true, showPanelNumbers)
-	insert(buffer, "project")             ; writeValue(buffer, eol=true, currentProjectIndex)
+	insert(buffer, "stats")               ; writeValue(buffer, eol=true, app.showStats)
+	insert(buffer, "showProjectSettings") ; writeValue(buffer, eol=true, app.showProjectSettings)
+	insert(buffer, "showPanelNumbers")    ; writeValue(buffer, eol=true, app.showPanelNumbers)
+	insert(buffer, "project")             ; writeValue(buffer, eol=true, app.currentProjectIndex)
 
-	for project: openProjects  writeProject(buffer, project, writePath=true)
+	for app.projects  writeProject(buffer, it, writePath=true)
 
 	local ok, err = LF.write("workspace", concatinate(buffer))
 	if not ok  setErrorText("Could not save workspace: %s", err)
@@ -193,7 +193,7 @@ export saveProject :: (project:Project, overwrite=false) -> (success:bool, fileE
 	local buffer: []string
 	insert(buffer, format("%d\n", LAST_FILE_VERSION))
 
-	writeProject(buffer, project, writePath=true)
+	writeProject(buffer, project, writePath=false)
 
 	local ^ok, err = LF.write(cast(string)filename, concatinate(buffer))
 	if not ok  return setErrorMessage(false, "Could not write project to file: %s", err)
@@ -209,7 +209,7 @@ export saveProject :: (project:Project, overwrite=false) -> (success:bool, fileE
 
 
 
-local parsingError :: (path:string, ln:int, s:string, ...:int|float|string) -> (success:bool, gotError:bool, projects:[]Project) {
+local parsingError :: (path:string, ln:int, s:string, ...:int|float|string) -> (success:bool, gotError:bool, app:App) {
 	printf("Error: %s:%d: "..s, path, ln, ...)
 	return false, true, NULL
 }
@@ -283,11 +283,12 @@ local readFloatArray :: (line:string, ptr:int) -> (success:bool, ptr:int, arr:[]
 	return true, ptr, arr
 }
 
-export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, projects:[]Project) {
+export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) {
 	local file, err = LF.newFile(path, LF.FileMode.READ)
 	if file == NULL  return false, false, NULL
 
-	local projects: []Project
+	local app: App !shadow
+	local projects = app.projects
 
 	local project: Project = NULL
 	local system:  System  = NULL
@@ -338,27 +339,26 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, projects:
 		if not ok  return parsingError(path, ln, "Bad parameter line format: %s", line)
 
 		if project == NULL {
-			-- @Robustness: Don't set globals here. Store global settings in a struct instead.
 			if param == {
 				case "stats":
 					local ^ok, ^ptr, flag = readBool(line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 					if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
-					showStats = flag
+					app.showStats = flag
 
 				case "showProjectSettings":
 					local ^ok, ^ptr, flag = readBool(line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 					if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
-					showProjectSettings = flag
+					app.showProjectSettings = flag
 
 				case "showPanelNumbers":
 					local ^ok, ^ptr, flag = readBool(line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 					if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
-					showPanelNumbers = flag
+					app.showPanelNumbers = flag
 
 				case "project":
 					local ^ok, ^ptr, i = readInt(line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 					if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
-					currentProjectIndex = i
+					app.currentProjectIndex = i
 
 				case:
 					return parsingError(path, ln, "Unknown program parameter '%s'.", param)
@@ -579,7 +579,7 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, projects:
 		if not project.systems  return parsingError(path, ln, "Missing systems for at least one project.")
 	}
 
-	return true, false, projects
+	return true, false, app
 }
 
 

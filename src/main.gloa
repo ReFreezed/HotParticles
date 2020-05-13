@@ -93,12 +93,15 @@ local freezeDtThisFrame = false
 local zoomTime = -9999.00
 
 -- Saved settings.
-export openProjects: []Project
-export currentProjectIndex = 1
+export App :: struct {
+	projects: []Project,
+	currentProjectIndex = 1,
 
-export showProjectSettings = false
-export showStats           = false
-export showPanelNumbers    = true
+	showProjectSettings = false,
+	showStats           = false,
+	showPanelNumbers    = true,
+}
+export app: App
 
 
 
@@ -197,7 +200,7 @@ export updateParticleColors :: (ps:LG.ParticleSystem, colors:[]float) {
 }
 
 export updateParticleImageFilters :: () {
-	local filter = openProjects[currentProjectIndex].pixelateTextures ? LG.FilterMode.NEAREST : LG.FilterMode.LINEAR
+	local filter = app.projects[app.currentProjectIndex].pixelateTextures ? LG.FilterMode.NEAREST : LG.FilterMode.LINEAR
 
 	for particleImageNames {
 		LG.Image.setFilter(particleImages[it], filter, filter)
@@ -228,7 +231,7 @@ export addNewSystem :: (project:Project) {
 
 export addNewProject :: () -> Project {
 	local project = Project()
-	insert(openProjects, project)
+	insert(app.projects, project)
 
 	addNewSystem(project)
 
@@ -249,7 +252,7 @@ export createCanvases :: () {
 	canvasGui   = LG.newCanvas(ww, wh, SETTINGS)
 	canvasWorld = LG.newCanvas(math.max(ww-MAIN_PANEL_WIDTH, 1), wh)
 
-	if openProjects[currentProjectIndex].pixelateWorld {
+	if app.projects[app.currentProjectIndex].pixelateWorld {
 		canvasWorld.setFilter!(LG.FilterMode.NEAREST, LG.FilterMode.NEAREST)
 	}
 
@@ -259,7 +262,7 @@ export createCanvases :: () {
 
 
 export moveEmittersTo :: (x,y:float) {
-	for openProjects[currentProjectIndex].systems  it.particles.moveTo!(x, y)
+	for app.projects[app.currentProjectIndex].systems  it.particles.moveTo!(x, y)
 }
 
 
@@ -389,28 +392,29 @@ export onLoad :: (args:[]string, argsRaw:[]string) {
 		}
 	}
 
-	local ok, gotError, projects = loadWorkspace("workspace")
+	local ok, gotError, _app = loadWorkspace("workspace")
 	if ok {
-		openProjects = projects
+		app = _app
+		assert(app.projects[1] ~= NULL)
 	} else {
 		if gotError  setErrorText("Could not load previous workspace")
 		addNewProject()
 	}
 
-	love.window.setVSync(showStats ? 0 : 1)
+	love.window.setVSync(app.showStats ? 0 : 1)
 
 	setupGuiFrames()
 	setupGuiCallbacks()
 	gui.refreshAll(guiState)
 
-	setCurrentProject(currentProjectIndex, force=true)
+	setCurrentProject(app.currentProjectIndex, force=true)
 }
 
 
 
 export onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool) {
 	local mod     = getModifierKey()
-	local project = openProjects[currentProjectIndex]
+	local project = app.projects[app.currentProjectIndex]
 
 	-- Global keys.
 	if not LM.isGrabbed()  if key == {
@@ -427,8 +431,8 @@ export onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool)
 		case "f1":
 			if mod == {
 				case ModifierKey.NONE:
-					showStats = not showStats
-					love.window.setVSync(showStats ? 0 : 1)
+					app.showStats = not app.showStats
+					love.window.setVSync(app.showStats ? 0 : 1)
 					scheduleSaveWorkspace()
 					return
 			}
@@ -436,7 +440,7 @@ export onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool)
 		case "f2":
 			if mod == {
 				case ModifierKey.NONE:
-					showPanelNumbers = not showPanelNumbers
+					app.showPanelNumbers = not app.showPanelNumbers
 					scheduleSaveWorkspace()
 					return
 			}
@@ -470,8 +474,8 @@ export onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool)
 			if mod == {
 				case ModifierKey.NONE: setCurrentSystem ((project.systemIndex-0) % #project.systems + 1)
 				case ModifierKey.S:    setCurrentSystem ((project.systemIndex-2) % #project.systems + 1)
-				case ModifierKey.C:    setCurrentProject((currentProjectIndex-0) % #openProjects    + 1)
-				case ModifierKey.CS:   setCurrentProject((currentProjectIndex-2) % #openProjects    + 1)
+				case ModifierKey.C:    setCurrentProject((app.currentProjectIndex-0) % #app.projects    + 1)
+				case ModifierKey.CS:   setCurrentProject((app.currentProjectIndex-2) % #app.projects    + 1)
 			}
 
 		case "h":
@@ -525,7 +529,7 @@ export onMouseMoved :: (mx,my:int, dx,dy:int, isTouch:bool) {
 	if isTouch  return
 
 	if isPositioningParticles {
-		local project = openProjects[currentProjectIndex]
+		local project = app.projects[app.currentProjectIndex]
 
 		local x = (mx - (LG.getWidth()+MAIN_PANEL_WIDTH)/2) / project.zoom
 		local y = (my - (LG.getHeight()                )/2) / project.zoom
@@ -562,7 +566,7 @@ export onMouseWheel :: (dx,dy:int) {
 	local mod = getModifierKey()
 	if mod ~= ModifierKey.NONE  return
 
-	local project = openProjects[currentProjectIndex]
+	local project = app.projects[app.currentProjectIndex]
 
 	-- Stick slightly to 100% zoom.
 	if project.zoomLevel == 0 and LT.getTime()-zoomTime < 0.15 {
@@ -586,7 +590,7 @@ export onUpdate :: (dt:float) {
 		freezeDtThisFrame = false
 	}
 
-	local project = openProjects[currentProjectIndex]
+	local project = app.projects[app.currentProjectIndex]
 
 	if gui.getTopmostActiveModal(guiState) == NULL {
 		local systemsActive = false
@@ -709,7 +713,7 @@ export onDraw :: () {
 	static statsWorld: LG.Stats
 
 	local ww, wh  = LG.getDimensions()
-	local project = openProjects[currentProjectIndex]
+	local project = app.projects[app.currentProjectIndex]
 
 	LG.reset()
 
@@ -758,7 +762,7 @@ export onDraw :: () {
 		LG.setFont(fontNormal)
 
 		-- Stats.
-		if showStats {
+		if app.showStats {
 			local particleCountTotal = 0
 			for project.systems  particleCountTotal += it.particles.getCount!()
 
@@ -932,9 +936,9 @@ export main :: () {
 
 
 export setCurrentProject :: (i:int, force=false) {
-	if currentProjectIndex == i and not force  return
+	if app.currentProjectIndex == i and not force  return
 
-	currentProjectIndex = i
+	app.currentProjectIndex = i
 	gui.getElement(guiState, "projects", gui.Tabs).index = i
 
 	gui.refreshRecursively(guiState, "projectSettings")
@@ -943,11 +947,11 @@ export setCurrentProject :: (i:int, force=false) {
 	scheduleRecreateCanvases = true
 	updateParticleImageFilters()
 
-	setCurrentSystem(openProjects[i].systemIndex, force=true)
+	setCurrentSystem(app.projects[i].systemIndex, force=true)
 }
 
 export setCurrentSystem :: (i:int, force=true) {
-	local project = openProjects[currentProjectIndex]
+	local project = app.projects[app.currentProjectIndex]
 	if project.systemIndex == i and not force  return
 
 	project.systemIndex = i

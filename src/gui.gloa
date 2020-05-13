@@ -1472,7 +1472,7 @@ local drawElement :: (state:State, el:Element) {
 
 			-- Particle previews.
 			-- @Cleanup: All this is a bit misplaced in the GUI. Maybe provide an onDraw event for elements so systems and projects can stay outside this file.
-			local project = openProjects[currentProjectIndex]
+			local project = app.projects[app.currentProjectIndex]
 			local scale   = 2 * BUTTON_IMAGE_MAX_SIZE / math.min(LG.getWidth() - MAIN_PANEL_WIDTH, LG.getHeight()) * project.zoom
 			local r, g, b = hsvToRgb(project.bgColorH, project.bgColorS, project.bgColorV)
 
@@ -1656,7 +1656,7 @@ local drawElement :: (state:State, el:Element) {
 			-- LG.circle(LG.DrawMode.FILL, handleX, y, 3, 16)
 
 			-- Readout.
-			if showPanelNumbers {
+			if app.showPanelNumbers {
 				local formatString = slider.readout
 				if slider.value == 0 and slider.readoutZero  formatString = slider.readoutZero
 
@@ -1680,7 +1680,7 @@ local drawElement :: (state:State, el:Element) {
 				-- @Incomplete: Make this more like the new sliders.
 				local a = (highlight ? .9 : .7)
 
-				if showPanelNumbers and readoutFormat {
+				if app.showPanelNumbers and readoutFormat {
 					local text = format(readoutFormat, readout)
 					local x    = math.round(sliderX+(sliderW-fontSmall.getWidth!(text))/2)
 					local y    = math.round(sliderY+(sliderH-fontSmall.getHeight!())/2)
@@ -1849,7 +1849,7 @@ local drawElement :: (state:State, el:Element) {
 			LG.line(x, y, x+r*math.cos(angle), y+r*math.sin(angle))
 
 			-- Readout.
-			if showPanelNumbers {
+			if app.showPanelNumbers {
 				local text  = format("%d°", angle*360/math.TAU)
 				local textX = x - fontSmall.getWidth!(text) // 2
 				local textY = (angle % math.TAU < math.PI) ? direction.layoutY+5 : direction.layoutY+2*r-5-fontSmall.getHeight!()

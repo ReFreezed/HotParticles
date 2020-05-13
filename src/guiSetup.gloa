@@ -380,12 +380,12 @@ export setupGuiCallbacks :: () {
 	guiState.onRefresh.projects = (tabs:gui.Tabs) {
 		tabs.buttons = {}
 
-		for openProjects {
+		for app.projects {
 			insert(tabs.buttons, cast(gui.Button){ label=it.displayedName, draggable=true })
 		}
 		insert(tabs.buttons, cast(gui.Button){ image="iconAdd", tooltip="New project" })
 
-		tabs.index = currentProjectIndex
+		tabs.index = app.currentProjectIndex
 	}
 	guiState.onAction.projects = (tabs:gui.Tabs, i:int) {
 		if i < #tabs.buttons {
@@ -398,7 +398,7 @@ export setupGuiCallbacks :: () {
 		insert(tabs.buttons, #tabs.buttons, cast(gui.Button){ label=project.displayedName, draggable=true })
 		guiState.layoutNeedsUpdate = true
 
-		setCurrentProject(#openProjects)
+		setCurrentProject(#app.projects)
 	}
 	-- guiState.onOption.projects = (tabs:gui.Tabs, i:int) {
 	-- 	gui.showContextMenu(guiState, {"Close","Duplicate"}, (i:int) {
@@ -408,69 +408,69 @@ export setupGuiCallbacks :: () {
 	guiState.onClose.projects = (tabs:gui.Tabs, i:int) {
 		if i == #tabs.buttons  return
 
-		local isCurrent = (i == currentProjectIndex)
+		local isCurrent = (i == app.currentProjectIndex)
 
 		-- @UX: Confirm closing project if there are changes.
-		remove(openProjects, i)
+		remove(app.projects, i)
 
-		if openProjects[1] == NULL
+		if app.projects[1] == NULL
 			addNewProject()
-		elseif i < currentProjectIndex
-			currentProjectIndex -= 1
+		elseif i < app.currentProjectIndex
+			app.currentProjectIndex -= 1
 		else
-			currentProjectIndex = math.min(currentProjectIndex, #openProjects)
+			app.currentProjectIndex = math.min(app.currentProjectIndex, #app.projects)
 
 		gui.refreshRecursively(guiState, "projects")
-		if isCurrent  setCurrentProject(currentProjectIndex, force=true)
+		if isCurrent  setCurrentProject(app.currentProjectIndex, force=true)
 	}
 	guiState.onDrag.projects = (tabs:gui.Tabs, i:int, mx,my:int) {
-		local targetIndex = math.clamp(math.floor(1 + (mx - tabs.layoutX) / tabs.buttonWidth), 1, #openProjects)
+		local targetIndex = math.clamp(math.floor(1 + (mx - tabs.layoutX) / tabs.buttonWidth), 1, #app.projects)
 		if targetIndex == i  return
 
-		local isCurrent = (i == currentProjectIndex)
+		local isCurrent = (i == app.currentProjectIndex)
 
-		local _, project = remove(openProjects, i)
+		local _, project = remove(app.projects, i)
 		local _, button  = remove(tabs.buttons, i)
-		insert(openProjects, targetIndex, project)
+		insert(app.projects, targetIndex, project)
 		insert(tabs.buttons, targetIndex, button)
 
 		if isCurrent
-			currentProjectIndex = targetIndex
-		elseif i > currentProjectIndex and targetIndex <= currentProjectIndex
-			currentProjectIndex += 1
-		elseif i < currentProjectIndex and targetIndex >= currentProjectIndex
-			currentProjectIndex -= 1
+			app.currentProjectIndex = targetIndex
+		elseif i > app.currentProjectIndex and targetIndex <= app.currentProjectIndex
+			app.currentProjectIndex += 1
+		elseif i < app.currentProjectIndex and targetIndex >= app.currentProjectIndex
+			app.currentProjectIndex -= 1
 
-		tabs.index = currentProjectIndex
+		tabs.index = app.currentProjectIndex
 
 		guiState.activeSubid  = targetIndex
 		guiState.hoveredSubid = targetIndex
 	}
 
 	guiState.onRefresh.saveOpenBar = (buttons:gui.Buttons) {
-		buttons.buttons[4].label = showProjectSettings ? "Hide settings" : "Show settings"
-		gui.setActive(guiState, "projectSettings", showProjectSettings)
+		buttons.buttons[4].label = app.showProjectSettings ? "Hide settings" : "Show settings"
+		gui.setActive(guiState, "projectSettings", app.showProjectSettings)
 	}
 	guiState.onAction.saveOpenBar = (buttons:gui.Buttons, i:int) {
-		local project = openProjects[currentProjectIndex]
+		local project = app.projects[app.currentProjectIndex]
 		if i == {
 			case 1: if project.fileIsSaved  saveProject(project, overwrite=true)  else  pushPanel("saveProjectAs")
 			case 2: pushPanel("saveProjectAs")
 			case 3: pushPanel("openProject")
 
 			case 4:
-				showProjectSettings      = not showProjectSettings
-				buttons.buttons[4].label = showProjectSettings ? "Hide settings" : "Show settings"
-				gui.setActive(guiState, "projectSettings", showProjectSettings)
+				app.showProjectSettings  = not app.showProjectSettings
+				buttons.buttons[4].label = app.showProjectSettings ? "Hide settings" : "Show settings"
+				gui.setActive(guiState, "projectSettings", app.showProjectSettings)
 		}
 	}
 
 	guiState.onRefresh.pixelateWorld = (checkbox:gui.Checkbox) {
-		local project    = openProjects[currentProjectIndex]
+		local project    = app.projects[app.currentProjectIndex]
 		checkbox.checked = project.pixelateWorld
 	}
 	guiState.onAction.pixelateWorld = (checkbox:gui.Checkbox, i:int) {
-		local project            = openProjects[currentProjectIndex]
+		local project            = app.projects[app.currentProjectIndex]
 		project.pixelateWorld    = checkbox.checked
 		scheduleRecreateCanvases = true
 
@@ -481,11 +481,11 @@ export setupGuiCallbacks :: () {
 		}
 	}
 	guiState.onRefresh.pixelateTextures = (checkbox:gui.Checkbox) {
-		local project    = openProjects[currentProjectIndex]
+		local project    = app.projects[app.currentProjectIndex]
 		checkbox.checked = project.pixelateTextures
 	}
 	guiState.onAction.pixelateTextures = (checkbox:gui.Checkbox, i:int) {
-		local project            = openProjects[currentProjectIndex]
+		local project            = app.projects[app.currentProjectIndex]
 		project.pixelateTextures    = checkbox.checked
 		scheduleRecreateCanvases = true
 
@@ -497,55 +497,55 @@ export setupGuiCallbacks :: () {
 	}
 
 	guiState.onRefresh.bgColor = (colorEl:gui.Color) {
-		local project    = openProjects[currentProjectIndex]
+		local project    = app.projects[app.currentProjectIndex]
 		colorEl.color[1] = project.bgColorH
 		colorEl.color[2] = project.bgColorS
 		colorEl.color[3] = project.bgColorV
 	}
 	guiState.onAction.bgColor = (colorEl:gui.Color, i:int) {
-		local project    = openProjects[currentProjectIndex]
+		local project    = app.projects[app.currentProjectIndex]
 		project.bgColorH = colorEl.color[1]
 		project.bgColorS = colorEl.color[2]
 		project.bgColorV = colorEl.color[3]
 	}
 
 	guiState.onRefresh.emitterMovement = (radio:gui.Radio) {
-		local project  = openProjects[currentProjectIndex]
+		local project  = app.projects[app.currentProjectIndex]
 		local found, i = indexWith(radio.buttons, "value", project.movementPreset)
 		assert(found)
 		radio.index = i
 	}
 	guiState.onAction.emitterMovement = (radio:gui.Radio, i:int) {
-		local project          = openProjects[currentProjectIndex]
+		local project          = app.projects[app.currentProjectIndex]
 		project.movementPreset = cast(Movement) radio.buttons[i].value
 	}
 	guiState.onRefresh.emitterMovementSx = (slider:gui.Slider) {
-		local project = openProjects[currentProjectIndex]
+		local project = app.projects[app.currentProjectIndex]
 		slider.value  = project.movementScaleX
 	}
 	guiState.onAction.emitterMovementSx = (slider:gui.Slider, i:int) {
-		local project          = openProjects[currentProjectIndex]
+		local project          = app.projects[app.currentProjectIndex]
 		project.movementScaleX = slider.value
 	}
 	guiState.onRefresh.emitterMovementSy = (slider:gui.Slider) {
-		local project = openProjects[currentProjectIndex]
+		local project = app.projects[app.currentProjectIndex]
 		slider.value  = project.movementScaleY
 	}
 	guiState.onAction.emitterMovementSy = (slider:gui.Slider, i:int) {
-		local project          = openProjects[currentProjectIndex]
+		local project          = app.projects[app.currentProjectIndex]
 		project.movementScaleY = slider.value
 	}
 	guiState.onRefresh.emitterMovementSpeed = (slider:gui.Slider) {
-		local project = openProjects[currentProjectIndex]
+		local project = app.projects[app.currentProjectIndex]
 		slider.value  = project.movementSpeed
 	}
 	guiState.onAction.emitterMovementSpeed = (slider:gui.Slider, i:int) {
-		local project         = openProjects[currentProjectIndex]
+		local project         = app.projects[app.currentProjectIndex]
 		project.movementSpeed = slider.value
 	}
 
 	guiState.onRefresh.systems = (tabs:gui.Tabs) {
-		local project = openProjects[currentProjectIndex]
+		local project = app.projects[app.currentProjectIndex]
 		tabs.buttons  = {}
 
 		for project.systems {
@@ -556,7 +556,7 @@ export setupGuiCallbacks :: () {
 		tabs.index = project.systemIndex
 	}
 	guiState.onAction.systems = (tabs:gui.Tabs, i:int) {
-		local project = openProjects[currentProjectIndex]
+		local project = app.projects[app.currentProjectIndex]
 
 		if i < #tabs.buttons {
 			setCurrentSystem(i)
@@ -570,13 +570,13 @@ export setupGuiCallbacks :: () {
 	guiState.onOption.systems = (tabs:gui.Tabs, i:int) {
 		if i == #tabs.buttons  return
 
-		local project              = openProjects[currentProjectIndex]
+		local project              = app.projects[app.currentProjectIndex]
 		project.systems[i].visible = not project.systems[i].visible
 	}
 	guiState.onClose.systems = (tabs:gui.Tabs, i:int) {
 		if i == #tabs.buttons  return
 
-		local project   = openProjects[currentProjectIndex]
+		local project   = app.projects[app.currentProjectIndex]
 		local isCurrent = i == project.systemIndex
 
 		-- @UX: Confirm removal of system.
@@ -593,7 +593,7 @@ export setupGuiCallbacks :: () {
 		if isCurrent  setCurrentSystem(project.systemIndex, force=true)
 	}
 	guiState.onDrag.systems = (tabs:gui.Tabs, i:int, mx,my:int) {
-		local project     = openProjects[currentProjectIndex]
+		local project     = app.projects[app.currentProjectIndex]
 		local targetIndex = math.clamp(math.floor(1 + (mx - tabs.layoutX) / tabs.buttonWidth), 1, #project.systems)
 		if targetIndex == i  return
 
@@ -618,7 +618,7 @@ export setupGuiCallbacks :: () {
 	}
 
 	guiState.onRefresh.texture = (radio:gui.Radio) {
-		local project = openProjects[currentProjectIndex]
+		local project = app.projects[app.currentProjectIndex]
 		local system  = project.systems[project.systemIndex]
 		radio.buttons = {}
 
@@ -631,74 +631,74 @@ export setupGuiCallbacks :: () {
 		radio.index = i
 	}
 	guiState.onAction.texture = (radio:gui.Radio, i:int) {
-		local project      = openProjects[currentProjectIndex]
+		local project      = app.projects[app.currentProjectIndex]
 		local system       = project.systems[project.systemIndex]
 		system.textureName = cast(string) radio.buttons[i].value
 		system.particles.setTexture!(particleImages[system.textureName]) -- @Incomplete: Update offset if system.useCustomOffset is set.
 	}
 
 	guiState.onRefresh.insertMode = (radio:gui.Radio) {
-		local project  = openProjects[currentProjectIndex]
+		local project  = app.projects[app.currentProjectIndex]
 		local system   = project.systems[project.systemIndex]
 		local found, i = indexWith(radio.buttons, "value", system.particles.getInsertMode!())
 		assert(found)
 		radio.index = i
 	}
 	guiState.onAction.insertMode = (radio:gui.Radio, i:int) {
-		local project = openProjects[currentProjectIndex]
+		local project = app.projects[app.currentProjectIndex]
 		local system  = project.systems[project.systemIndex]
 		system.particles.setInsertMode!(cast(LG.ParticleInsertMode) radio.buttons[i].value)
 	}
 
 	guiState.onRefresh.emitterLifetime = (slider:gui.Slider) {
-		local project = openProjects[currentProjectIndex]
+		local project = app.projects[app.currentProjectIndex]
 		local system  = project.systems[project.systemIndex]
 		slider.value  = math.max(system.particles.getEmitterLifetime!(), 0)
 	}
 	guiState.onAction.emitterLifetime = (slider:gui.Slider, i:int) {
-		local project = openProjects[currentProjectIndex]
+		local project = app.projects[app.currentProjectIndex]
 		local system  = project.systems[project.systemIndex]
 		system.particles.setEmitterLifetime!(slider.value > 0 ? slider.value : -1.0)
 		if slider.value <= 0  system.particles.start!()
 	}
 	guiState.onRefresh.particleLifetimeMin = (slider:gui.Slider) {
-		local project  = openProjects[currentProjectIndex]
+		local project  = app.projects[app.currentProjectIndex]
 		local system   = project.systems[project.systemIndex]
 		local min, max = system.particles.getParticleLifetime!()
 		slider.value   = min
 	}
 	guiState.onAction.particleLifetimeMin = (slider:gui.Slider, i:int) {
-		local project  = openProjects[currentProjectIndex]
+		local project  = app.projects[app.currentProjectIndex]
 		local system   = project.systems[project.systemIndex]
 		local min, max = system.particles.getParticleLifetime!()
 		system.particles.setParticleLifetime!(slider.value, max)
 	}
 	guiState.onRefresh.particleLifetimeMax = (slider:gui.Slider) {
-		local project  = openProjects[currentProjectIndex]
+		local project  = app.projects[app.currentProjectIndex]
 		local system   = project.systems[project.systemIndex]
 		local min, max = system.particles.getParticleLifetime!()
 		slider.value   = max
 	}
 	guiState.onAction.particleLifetimeMax = (slider:gui.Slider, i:int) {
-		local project  = openProjects[currentProjectIndex]
+		local project  = app.projects[app.currentProjectIndex]
 		local system   = project.systems[project.systemIndex]
 		local min, max = system.particles.getParticleLifetime!()
 		system.particles.setParticleLifetime!(min, slider.value)
 	}
 
 	guiState.onRefresh.emissionRate = (slider:gui.Slider) {
-		local project = openProjects[currentProjectIndex]
+		local project = app.projects[app.currentProjectIndex]
 		local system  = project.systems[project.systemIndex]
 		slider.value  = system.particles.getEmissionRate!()
 	}
 	guiState.onAction.emissionRate = (slider:gui.Slider, i:int) {
-		local project = openProjects[currentProjectIndex]
+		local project = app.projects[app.currentProjectIndex]
 		local system  = project.systems[project.systemIndex]
 		system.particles.setEmissionRate!(slider.value)
 	}
 
 	guiState.onRefresh.areaDistribution = (radio:gui.Radio) {
-		local project  = openProjects[currentProjectIndex]
+		local project  = app.projects[app.currentProjectIndex]
 		local ps       = project.systems[project.systemIndex].particles
 		local found, i = indexWith(radio.buttons, "value", (ps.getEmissionArea!()))
 		assert(found)
@@ -706,7 +706,7 @@ export setupGuiCallbacks :: () {
 		gui.setActive(guiState, "areaParams", i > 1)
 	}
 	guiState.onAction.areaDistribution = (radio:gui.Radio, i:int) {
-		local project = openProjects[currentProjectIndex]
+		local project = app.projects[app.currentProjectIndex]
 		local ps      = project.systems[project.systemIndex].particles
 		local distribution, dx,dy, angle, relative = ps.getEmissionArea!()
 		distribution  = cast(LG.AreaSpreadDistribution) radio.buttons[i].value
@@ -715,296 +715,296 @@ export setupGuiCallbacks :: () {
 		gui.refreshRecursively(guiState, "areaParams")
 	}
 	guiState.onRefresh.areaAngle = (direction:gui.Direction) {
-		local project   = openProjects[currentProjectIndex]
+		local project   = app.projects[app.currentProjectIndex]
 		local ps        = project.systems[project.systemIndex].particles
 		local distribution, dx,dy, angle = ps.getEmissionArea!()
 		direction.angle = angle
 	}
 	guiState.onAction.areaAngle = (direction:gui.Direction, i:int) {
-		local project = openProjects[currentProjectIndex]
+		local project = app.projects[app.currentProjectIndex]
 		local ps      = project.systems[project.systemIndex].particles
 		local distribution, dx,dy, angle, relative = ps.getEmissionArea!()
 		ps.setEmissionArea!(distribution, dx,dy, direction.angle, relative)
 	}
 	guiState.onRefresh.areaDx = (slider:gui.Slider) {
-		local project = openProjects[currentProjectIndex]
+		local project = app.projects[app.currentProjectIndex]
 		local ps      = project.systems[project.systemIndex].particles
 		local distribution, dx = ps.getEmissionArea!()
 		slider.value  = dx
 	}
 	guiState.onAction.areaDx = (slider:gui.Slider, i:int) {
-		local project = openProjects[currentProjectIndex]
+		local project = app.projects[app.currentProjectIndex]
 		local ps      = project.systems[project.systemIndex].particles
 		local distribution, dx,dy, angle, relative = ps.getEmissionArea!()
 		ps.setEmissionArea!(distribution, slider.value,dy, angle, relative)
 	}
 	guiState.onRefresh.areaDy = (slider:gui.Slider) {
-		local project = openProjects[currentProjectIndex]
+		local project = app.projects[app.currentProjectIndex]
 		local ps      = project.systems[project.systemIndex].particles
 		local distribution, dx,dy = ps.getEmissionArea!()
 		slider.value  = dy
 	}
 	guiState.onAction.areaDy = (slider:gui.Slider, i:int) {
-		local project = openProjects[currentProjectIndex]
+		local project = app.projects[app.currentProjectIndex]
 		local ps      = project.systems[project.systemIndex].particles
 		local distribution, dx,dy, angle, relative = ps.getEmissionArea!()
 		ps.setEmissionArea!(distribution, dx,slider.value, angle, relative)
 	}
 	guiState.onRefresh.areaRelative = (checkbox:gui.Checkbox) {
-		local project    = openProjects[currentProjectIndex]
+		local project    = app.projects[app.currentProjectIndex]
 		local ps         = project.systems[project.systemIndex].particles
 		local distribution, dx,dy, angle, relative = ps.getEmissionArea!()
 		checkbox.checked = relative
 	}
 	guiState.onAction.areaRelative = (checkbox:gui.Checkbox, i:int) {
-		local project = openProjects[currentProjectIndex]
+		local project = app.projects[app.currentProjectIndex]
 		local ps      = project.systems[project.systemIndex].particles
 		local distribution, dx,dy, angle, relative = ps.getEmissionArea!()
 		ps.setEmissionArea!(distribution, dx,dy, angle, checkbox.checked)
 	}
 
 	guiState.onRefresh.direction = (direction:gui.Direction) {
-		local project   = openProjects[currentProjectIndex]
+		local project   = app.projects[app.currentProjectIndex]
 		local ps        = project.systems[project.systemIndex].particles
 		direction.angle = ps.getDirection!()
 	}
 	guiState.onAction.direction = (direction:gui.Direction, i:int) {
-		local project = openProjects[currentProjectIndex]
+		local project = app.projects[app.currentProjectIndex]
 		local ps      = project.systems[project.systemIndex].particles
 		ps.setDirection!(direction.angle)
 	}
 	guiState.onRefresh.directionSpread = (slider:gui.Slider) {
-		local project = openProjects[currentProjectIndex]
+		local project = app.projects[app.currentProjectIndex]
 		local ps      = project.systems[project.systemIndex].particles
 		slider.value  = ps.getSpread!()
 	}
 	guiState.onAction.directionSpread = (slider:gui.Slider, i:int) {
-		local project = openProjects[currentProjectIndex]
+		local project = app.projects[app.currentProjectIndex]
 		local ps      = project.systems[project.systemIndex].particles
 		ps.setSpread!(slider.value)
 	}
 
 	guiState.onRefresh.speedMin = (slider:gui.Slider) {
-		local project  = openProjects[currentProjectIndex]
+		local project  = app.projects[app.currentProjectIndex]
 		local ps       = project.systems[project.systemIndex].particles
 		local min, max = ps.getSpeed!()
 		slider.value   = min
 	}
 	guiState.onAction.speedMin = (slider:gui.Slider, i:int) {
-		local project  = openProjects[currentProjectIndex]
+		local project  = app.projects[app.currentProjectIndex]
 		local ps       = project.systems[project.systemIndex].particles
 		local min, max = ps.getSpeed!()
 		ps.setSpeed!(slider.value, max)
 	}
 	guiState.onRefresh.speedMax = (slider:gui.Slider) {
-		local project  = openProjects[currentProjectIndex]
+		local project  = app.projects[app.currentProjectIndex]
 		local ps       = project.systems[project.systemIndex].particles
 		local min, max = ps.getSpeed!()
 		slider.value   = max
 	}
 	guiState.onAction.speedMax = (slider:gui.Slider, i:int) {
-		local project  = openProjects[currentProjectIndex]
+		local project  = app.projects[app.currentProjectIndex]
 		local ps       = project.systems[project.systemIndex].particles
 		local min, max = ps.getSpeed!()
 		ps.setSpeed!(min, slider.value)
 	}
 
 	guiState.onRefresh.accLinearXmin = (slider:gui.Slider) {
-		local project = openProjects[currentProjectIndex]
+		local project = app.projects[app.currentProjectIndex]
 		local ps      = project.systems[project.systemIndex].particles
 		local xmin,ymin, xmax,ymax = ps.getLinearAcceleration!()
 		slider.value  = xmin
 	}
 	guiState.onAction.accLinearXmin = (slider:gui.Slider, i:int) {
-		local project = openProjects[currentProjectIndex]
+		local project = app.projects[app.currentProjectIndex]
 		local ps      = project.systems[project.systemIndex].particles
 		local xmin,ymin, xmax,ymax = ps.getLinearAcceleration!()
 		ps.setLinearAcceleration!(slider.value,ymin, xmax,ymax)
 	}
 	guiState.onRefresh.accLinearXmax = (slider:gui.Slider) {
-		local project = openProjects[currentProjectIndex]
+		local project = app.projects[app.currentProjectIndex]
 		local ps      = project.systems[project.systemIndex].particles
 		local xmin,ymin, xmax,ymax = ps.getLinearAcceleration!()
 		slider.value  = xmax
 	}
 	guiState.onAction.accLinearXmax = (slider:gui.Slider, i:int) {
-		local project = openProjects[currentProjectIndex]
+		local project = app.projects[app.currentProjectIndex]
 		local ps      = project.systems[project.systemIndex].particles
 		local xmin,ymin, xmax,ymax = ps.getLinearAcceleration!()
 		ps.setLinearAcceleration!(xmin,ymin, slider.value,ymax)
 	}
 	guiState.onRefresh.accLinearYmin = (slider:gui.Slider) {
-		local project = openProjects[currentProjectIndex]
+		local project = app.projects[app.currentProjectIndex]
 		local ps      = project.systems[project.systemIndex].particles
 		local xmin,ymin, xmax,ymax = ps.getLinearAcceleration!()
 		slider.value  = ymin
 	}
 	guiState.onAction.accLinearYmin = (slider:gui.Slider, i:int) {
-		local project = openProjects[currentProjectIndex]
+		local project = app.projects[app.currentProjectIndex]
 		local ps      = project.systems[project.systemIndex].particles
 		local xmin,ymin, xmax,ymax = ps.getLinearAcceleration!()
 		ps.setLinearAcceleration!(xmin,slider.value, xmax,ymax)
 	}
 	guiState.onRefresh.accLinearYmax = (slider:gui.Slider) {
-		local project = openProjects[currentProjectIndex]
+		local project = app.projects[app.currentProjectIndex]
 		local ps      = project.systems[project.systemIndex].particles
 		local xmin,ymin, xmax,ymax = ps.getLinearAcceleration!()
 		slider.value  = ymax
 	}
 	guiState.onAction.accLinearYmax = (slider:gui.Slider, i:int) {
-		local project = openProjects[currentProjectIndex]
+		local project = app.projects[app.currentProjectIndex]
 		local ps      = project.systems[project.systemIndex].particles
 		local xmin,ymin, xmax,ymax = ps.getLinearAcceleration!()
 		ps.setLinearAcceleration!(xmin,ymin, xmax,slider.value)
 	}
 
 	guiState.onRefresh.radialAccelerationMin = (slider:gui.Slider) {
-		local project  = openProjects[currentProjectIndex]
+		local project  = app.projects[app.currentProjectIndex]
 		local ps       = project.systems[project.systemIndex].particles
 		local min, max = ps.getRadialAcceleration!()
 		slider.value   = min
 	}
 	guiState.onAction.radialAccelerationMin = (slider:gui.Slider, i:int) {
-		local project = openProjects[currentProjectIndex]
+		local project = app.projects[app.currentProjectIndex]
 		local ps      = project.systems[project.systemIndex].particles
 		local min, max = ps.getRadialAcceleration!()
 		ps.setRadialAcceleration!(slider.value, max)
 	}
 	guiState.onRefresh.radialAccelerationMax = (slider:gui.Slider) {
-		local project  = openProjects[currentProjectIndex]
+		local project  = app.projects[app.currentProjectIndex]
 		local ps       = project.systems[project.systemIndex].particles
 		local min, max = ps.getRadialAcceleration!()
 		slider.value   = max
 	}
 	guiState.onAction.radialAccelerationMax = (slider:gui.Slider, i:int) {
-		local project = openProjects[currentProjectIndex]
+		local project = app.projects[app.currentProjectIndex]
 		local ps      = project.systems[project.systemIndex].particles
 		local min, max = ps.getRadialAcceleration!()
 		ps.setRadialAcceleration!(min, slider.value)
 	}
 
 	guiState.onRefresh.tangentialAccelerationMin = (slider:gui.Slider) {
-		local project  = openProjects[currentProjectIndex]
+		local project  = app.projects[app.currentProjectIndex]
 		local ps       = project.systems[project.systemIndex].particles
 		local min, max = ps.getTangentialAcceleration!()
 		slider.value   = min
 	}
 	guiState.onAction.tangentialAccelerationMin = (slider:gui.Slider, i:int) {
-		local project = openProjects[currentProjectIndex]
+		local project = app.projects[app.currentProjectIndex]
 		local ps      = project.systems[project.systemIndex].particles
 		local min, max = ps.getTangentialAcceleration!()
 		ps.setTangentialAcceleration!(slider.value, max)
 	}
 	guiState.onRefresh.tangentialAccelerationMax = (slider:gui.Slider) {
-		local project  = openProjects[currentProjectIndex]
+		local project  = app.projects[app.currentProjectIndex]
 		local ps       = project.systems[project.systemIndex].particles
 		local min, max = ps.getTangentialAcceleration!()
 		slider.value   = max
 	}
 	guiState.onAction.tangentialAccelerationMax = (slider:gui.Slider, i:int) {
-		local project = openProjects[currentProjectIndex]
+		local project = app.projects[app.currentProjectIndex]
 		local ps      = project.systems[project.systemIndex].particles
 		local min, max = ps.getTangentialAcceleration!()
 		ps.setTangentialAcceleration!(min, slider.value)
 	}
 
 	guiState.onRefresh.linearDampingMin = (slider:gui.Slider) {
-		local project  = openProjects[currentProjectIndex]
+		local project  = app.projects[app.currentProjectIndex]
 		local ps       = project.systems[project.systemIndex].particles
 		local min, max = ps.getLinearDamping!()
 		slider.value   = min
 	}
 	guiState.onAction.linearDampingMin = (slider:gui.Slider, i:int) {
-		local project = openProjects[currentProjectIndex]
+		local project = app.projects[app.currentProjectIndex]
 		local ps      = project.systems[project.systemIndex].particles
 		local min, max = ps.getLinearDamping!()
 		ps.setLinearDamping!(slider.value, max)
 	}
 	guiState.onRefresh.linearDampingMax = (slider:gui.Slider) {
-		local project  = openProjects[currentProjectIndex]
+		local project  = app.projects[app.currentProjectIndex]
 		local ps       = project.systems[project.systemIndex].particles
 		local min, max = ps.getLinearDamping!()
 		slider.value   = max
 	}
 	guiState.onAction.linearDampingMax = (slider:gui.Slider, i:int) {
-		local project = openProjects[currentProjectIndex]
+		local project = app.projects[app.currentProjectIndex]
 		local ps      = project.systems[project.systemIndex].particles
 		local min, max = ps.getLinearDamping!()
 		ps.setLinearDamping!(min, slider.value)
 	}
 
 	guiState.onRefresh.rotationMin = (direction:gui.Direction) {
-		local project   = openProjects[currentProjectIndex]
+		local project   = app.projects[app.currentProjectIndex]
 		local ps        = project.systems[project.systemIndex].particles
 		local min, max  = ps.getRotation!()
 		direction.angle = min
 	}
 	guiState.onAction.rotationMin = (direction:gui.Direction, i:int) {
-		local project  = openProjects[currentProjectIndex]
+		local project  = app.projects[app.currentProjectIndex]
 		local ps       = project.systems[project.systemIndex].particles
 		local min, max = ps.getRotation!()
 		ps.setRotation!(direction.angle, max)
 	}
 	guiState.onRefresh.rotationMax = (direction:gui.Direction) {
-		local project   = openProjects[currentProjectIndex]
+		local project   = app.projects[app.currentProjectIndex]
 		local ps        = project.systems[project.systemIndex].particles
 		local min, max  = ps.getRotation!()
 		direction.angle = max
 	}
 	guiState.onAction.rotationMax = (direction:gui.Direction, i:int) {
-		local project  = openProjects[currentProjectIndex]
+		local project  = app.projects[app.currentProjectIndex]
 		local ps       = project.systems[project.systemIndex].particles
 		local min, max = ps.getRotation!()
 		ps.setRotation!(min, direction.angle)
 	}
 	guiState.onRefresh.rotationRelative = (checkbox:gui.Checkbox) {
-		local project    = openProjects[currentProjectIndex]
+		local project    = app.projects[app.currentProjectIndex]
 		local ps         = project.systems[project.systemIndex].particles
 		checkbox.checked = ps.hasRelativeRotation!()
 	}
 	guiState.onAction.rotationRelative = (checkbox:gui.Checkbox, i:int) {
-		local project = openProjects[currentProjectIndex]
+		local project = app.projects[app.currentProjectIndex]
 		local ps      = project.systems[project.systemIndex].particles
 		ps.setRelativeRotation!(checkbox.checked)
 	}
 
 	guiState.onRefresh.spinMin = (slider:gui.Slider) {
-		local project  = openProjects[currentProjectIndex]
+		local project  = app.projects[app.currentProjectIndex]
 		local ps       = project.systems[project.systemIndex].particles
 		local min, max = ps.getSpin!()
 		slider.value   = min
 	}
 	guiState.onAction.spinMin = (slider:gui.Slider, i:int) {
-		local project  = openProjects[currentProjectIndex]
+		local project  = app.projects[app.currentProjectIndex]
 		local ps       = project.systems[project.systemIndex].particles
 		local min, max = ps.getSpin!()
 		ps.setSpin!(slider.value, max)
 	}
 	guiState.onRefresh.spinMax = (slider:gui.Slider) {
-		local project  = openProjects[currentProjectIndex]
+		local project  = app.projects[app.currentProjectIndex]
 		local ps       = project.systems[project.systemIndex].particles
 		local min, max = ps.getSpin!()
 		slider.value   = max
 	}
 	guiState.onAction.spinMax = (slider:gui.Slider, i:int) {
-		local project  = openProjects[currentProjectIndex]
+		local project  = app.projects[app.currentProjectIndex]
 		local ps       = project.systems[project.systemIndex].particles
 		local min, max = ps.getSpin!()
 		ps.setSpin!(min, slider.value)
 	}
 	guiState.onRefresh.spinVariation = (slider:gui.Slider) {
-		local project = openProjects[currentProjectIndex]
+		local project = app.projects[app.currentProjectIndex]
 		local ps      = project.systems[project.systemIndex].particles
 		slider.value  = ps.getSpinVariation!()
 	}
 	guiState.onAction.spinVariation = (slider:gui.Slider, i:int) {
-		local project = openProjects[currentProjectIndex]
+		local project = app.projects[app.currentProjectIndex]
 		local ps      = project.systems[project.systemIndex].particles
 		ps.setSpinVariation!(slider.value)
 	}
 
 	guiState.onRefresh.sizes = (slider:gui.Slider) {
-		local project = openProjects[currentProjectIndex]
+		local project = app.projects[app.currentProjectIndex]
 		local system  = project.systems[project.systemIndex]
 		local sizes   = {system.particles.getSizesAsVararg!()}
 		for 1, 8 {
@@ -1014,7 +1014,7 @@ export setupGuiCallbacks :: () {
 	guiState.onAction.sizeAdd = (buttons:gui.Buttons, i:int) {
 		i = cast(int) buttons.data
 
-		local project = openProjects[currentProjectIndex]
+		local project = app.projects[app.currentProjectIndex]
 		local ps      = project.systems[project.systemIndex].particles
 		local sizes   = {ps.getSizesAsVararg!()}
 
@@ -1035,7 +1035,7 @@ export setupGuiCallbacks :: () {
 	guiState.onAction.sizeRemove = (buttons:gui.Buttons, i:int) {
 		i = cast(int) buttons.data
 
-		local project = openProjects[currentProjectIndex]
+		local project = app.projects[app.currentProjectIndex]
 		local ps      = project.systems[project.systemIndex].particles
 		local sizes   = {ps.getSizesAsVararg!()}
 
@@ -1054,13 +1054,13 @@ export setupGuiCallbacks :: () {
 	}
 	for i = 1, 8 {
 		guiState.onRefresh[format("size%d", i)] = (slider:gui.Slider) {
-			local project = openProjects[currentProjectIndex]
+			local project = app.projects[app.currentProjectIndex]
 			local system  = project.systems[project.systemIndex]
 			local sizes   = {system.particles.getSizesAsVararg!()}
 			slider.value  = sizes[cast(int)slider.data]
 		}
 		guiState.onAction[format("size%d", i)] = (slider:gui.Slider, i:int) {
-			local project = openProjects[currentProjectIndex]
+			local project = app.projects[app.currentProjectIndex]
 			local system  = project.systems[project.systemIndex]
 			local sizes   = {system.particles.getSizesAsVararg!()}
 			sizes[cast(int)slider.data] = slider.value
@@ -1069,7 +1069,7 @@ export setupGuiCallbacks :: () {
 	}
 
 	guiState.onRefresh.colors = (slider:gui.Slider) {
-		local project = openProjects[currentProjectIndex]
+		local project = app.projects[app.currentProjectIndex]
 		local system  = project.systems[project.systemIndex]
 		local colors  = system.colors
 		for 1, 8 {
@@ -1079,7 +1079,7 @@ export setupGuiCallbacks :: () {
 	guiState.onAction.colorAdd = (buttons:gui.Buttons, i:int) {
 		i = cast(int) buttons.data
 
-		local project = openProjects[currentProjectIndex]
+		local project = app.projects[app.currentProjectIndex]
 		local system  = project.systems[project.systemIndex]
 		local colors  = system.colors
 
@@ -1110,7 +1110,7 @@ export setupGuiCallbacks :: () {
 	guiState.onAction.colorRemove = (buttons:gui.Buttons, i:int) {
 		i = cast(int) buttons.data
 
-		local project = openProjects[currentProjectIndex]
+		local project = app.projects[app.currentProjectIndex]
 		local system  = project.systems[project.systemIndex]
 		local colors  = system.colors
 
@@ -1141,7 +1141,7 @@ export setupGuiCallbacks :: () {
 
 		local colorDragContainer = gui.getElement(guiState, "colors", gui.Vbox)
 
-		local project     = openProjects[currentProjectIndex]
+		local project     = app.projects[app.currentProjectIndex]
 		local system      = project.systems[project.systemIndex]
 		local colors      = system.colors
 		local targetIndex = math.clamp(math.floor(1 + (my - (colorDragContainer.layoutY + gui.getScrollOffset(colorDragContainer))) / colorDragContainer[1].layoutHeight), 1, #colors//4)
@@ -1165,7 +1165,7 @@ export setupGuiCallbacks :: () {
 	}
 	for i = 1, 8 {
 		guiState.onRefresh[format("color%d", i)] = (colorEl:gui.Color) {
-			local project    = openProjects[currentProjectIndex]
+			local project    = app.projects[app.currentProjectIndex]
 			local system     = project.systems[project.systemIndex]
 			local colors     = system.colors
 			local i1         = (4 * cast(int) colorEl.data) - 3
@@ -1175,7 +1175,7 @@ export setupGuiCallbacks :: () {
 			colorEl.color[4] = colors[i1+3]
 		}
 		guiState.onAction[format("color%d", i)] = (colorEl:gui.Color, i:int) {
-			local project  = openProjects[currentProjectIndex]
+			local project  = app.projects[app.currentProjectIndex]
 			local system   = project.systems[project.systemIndex]
 			local colors   = system.colors
 			local i1       = (4 * cast(int) colorEl.data) - 3
@@ -1185,20 +1185,20 @@ export setupGuiCallbacks :: () {
 	}
 
 	guiState.onRefresh.colorPreview = (preview:gui.ColorPreview) {
-		local project     = openProjects[currentProjectIndex]
+		local project     = app.projects[app.currentProjectIndex]
 		local system      = project.systems[project.systemIndex]
 		preview.blendMode = system.blendMode
 	}
 
 	guiState.onRefresh.blendMode = (radio:gui.Radio) {
-		local project  = openProjects[currentProjectIndex]
+		local project  = app.projects[app.currentProjectIndex]
 		local system   = project.systems[project.systemIndex]
 		local found, i = indexWith(radio.buttons, "value", system.blendMode)
 		assert(found)
 		radio.index = i
 	}
 	guiState.onAction.blendMode = (radio:gui.Radio, i:int) {
-		local project    = openProjects[currentProjectIndex]
+		local project    = app.projects[app.currentProjectIndex]
 		local system     = project.systems[project.systemIndex]
 		local blendMode  = cast(LG.BlendMode) radio.buttons[i].value
 		system.blendMode = blendMode
@@ -1216,7 +1216,7 @@ export setupGuiCallbacks :: () {
 		guiState.onActive.saveProjectAs = (frame:gui.Frame) {
 			local isSave = (frame.name == "saveProjectAs")
 
-			local project           = openProjects[currentProjectIndex]
+			local project           = app.projects[app.currentProjectIndex]
 			local path              = project.path
 			local ok, dir, filename = matchPattern(path, "^(.+)/([^/]+)$")
 
@@ -1345,7 +1345,7 @@ export setupGuiCallbacks :: () {
 				input.value = filename
 			}
 
-			local project = openProjects[currentProjectIndex]
+			local project = app.projects[app.currentProjectIndex]
 			project.path  = dirCurrent.."/"..filename
 
 			local ok, fileExists = saveProject(project)
@@ -1358,7 +1358,7 @@ export setupGuiCallbacks :: () {
 				pushTempDialog("Confirm save as", filename.." already exists. Overwite it?", BUTTONS, (i:int) {
 					if i ~= 1  return
 
-					local project = openProjects[currentProjectIndex]
+					local project = app.projects[app.currentProjectIndex]
 					saveProject(project, overwrite=true)
 					popPanel("saveProjectAs")
 				})
@@ -1382,7 +1382,7 @@ export setupGuiCallbacks :: () {
 			}
 
 			local path = dirCurrent.."/"..filename
-			for openProjects  if it.path == path {
+			for app.projects  if it.path == path {
 				popPanel()
 				setCurrentProject(itIndex)
 				return
@@ -1394,24 +1394,24 @@ export setupGuiCallbacks :: () {
 			}
 			defer disconnectFromRemoteDirectory()
 
-			local ok, gotError, projects = loadWorkspace(filename)
+			local ok, gotError, _app = loadWorkspace(filename)
 			if not ok {
 				setErrorText("Could not load '%s'", filename)
 				return
 			}
 
-			local project = projects[1]
+			local project = _app.projects[1]
 			if project == NULL {
 				setErrorText("Project is empty")
 				return
 			}
 
 			project.path = path
-			insert(openProjects, project)
+			insert(app.projects, project)
 
 			popPanel()
 			gui.refreshRecursively(guiState, "projects")
-			setCurrentProject(#openProjects)
+			setCurrentProject(#app.projects)
 		}
 	}
 

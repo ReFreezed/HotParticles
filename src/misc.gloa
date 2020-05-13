@@ -216,8 +216,8 @@ export compareFilenames :: (a,b:string) -> bool {
 		if aByte ~= bByte {
 			local aIsDigit          = (aByte >= !char "0" and aByte <= !char "9")
 			local bIsDigit          = (bByte >= !char "0" and bByte <= !char "9")
-			local aIsAlphaOrUnicode = aIsDigit or (aByte >= !char "a" and aByte <= !char "z") or aByte >= 128
-			local bIsAlphaOrUnicode = bIsDigit or (bByte >= !char "a" and bByte <= !char "z") or bByte >= 128
+			local aIsAlphaOrUnicode = aIsDigit or (aByte >= !char "A" and aByte <= !char "Z") or aByte >= 128
+			local bIsAlphaOrUnicode = bIsDigit or (bByte >= !char "A" and bByte <= !char "Z") or bByte >= 128
 
 			if aIsAlphaOrUnicode ~= bIsAlphaOrUnicode  return bIsAlphaOrUnicode
 
