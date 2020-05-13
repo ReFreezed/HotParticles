@@ -568,9 +568,9 @@ export onMouseReleased :: (mx,my:int, mbutton:int, isTouch:bool, presses:int) {
 }
 
 export onMouseWheel :: (dx,dy:int) {
-	if LM.isGrabbed()  return
-
+	if LM.isGrabbed()                      return
 	if gui.onMouseWheel(guiState, dx, dy)  return
+	if not dy                              return
 
 	local mx, my = LM.getPosition()
 	if gui.isOverGui(guiState, mx, my)  return
@@ -578,20 +578,26 @@ export onMouseWheel :: (dx,dy:int) {
 	local mod = getModifierKey()
 	if mod ~= ModifierKey.NONE  return
 
-	local project = app.projects[app.currentProjectIndex]
+	local project   = app.projects[app.currentProjectIndex]
+	local zoomLevel = project.zoomLevel
+	local now       = LT.getTime()
 
-	-- Stick slightly to 100% zoom.
-	if project.zoomLevel == 0 and LT.getTime()-zoomTime < 0.15 {
-		zoomTime = LT.getTime()
-		return
+	for 1, math.abs(dy) {
+		-- Stick slightly to 100% zoom.
+		if zoomLevel == 0 and now-zoomTime < 0.15  break
+
+		zoomLevel = math.clamp(zoomLevel + math.getSign(dy), (project.pixelateWorld ? -1 : -4), 6)
 	}
 
-	project.zoomLevel  = math.clamp(project.zoomLevel+dy, (project.pixelateWorld ? -1 : -4), 6)
-	project.zoomSource = project.zoom
-	project.zoomTarget = 2^project.zoomLevel
-	zoomTime           = LT.getTime()
+	zoomTime = now
 
-	setActionText("Zoom: %d%%", project.zoomTarget*100)
+	if zoomLevel == project.zoomLevel  return
+
+	project.zoomLevel  = zoomLevel
+	project.zoomSource = project.zoom
+	project.zoomTarget = 2 ^ project.zoomLevel
+
+	setActionText("Zoom: %d%%", project.zoomTarget * 100)
 }
 
 
