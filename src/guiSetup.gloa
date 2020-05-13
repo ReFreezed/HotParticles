@@ -1439,7 +1439,6 @@ export setupGuiCallbacks :: () {
 			local item   = cast(Item) buttons.buttons[i].value
 
 			if not item.isDir {
-				-- @UX: Double-click file to overwrite/load directly without needing to press the save/load button after?
 				gui.getElement(guiState, (isSave ? "saveProjectAs_filename" : "openProject_filename"), gui.InputText).value = item.name
 			} elseif item.name == ".." {
 				dirCurrent = replacePattern(dirCurrent, "/[^/]+$", "")
@@ -1452,7 +1451,7 @@ export setupGuiCallbacks :: () {
 		guiState.onAction.openProject_items = guiState.onAction.saveProjectAs_items
 
 		-- Save.
-		guiState.onDouble.saveProjectAs_items    = (buttons:gui.Buttons, i:int) { save() }
+		guiState.onDouble.saveProjectAs_items    = (buttons:gui.Buttons, i:int) { if not (cast(Item) buttons.buttons[i].value).isDir  save() }
 		guiState.onSubmit.saveProjectAs_filename = (input:gui.InputText)        { save() }
 		guiState.onAction.saveProjectAs_save     = (buttons:gui.Buttons, i:int) { save() }
 		local save :: () {
@@ -1495,7 +1494,7 @@ export setupGuiCallbacks :: () {
 		}
 
 		-- Open.
-		guiState.onDouble.openProject_items    = (buttons:gui.Buttons, i:int) { load() }
+		guiState.onDouble.openProject_items    = (buttons:gui.Buttons, i:int) { if not (cast(Item) buttons.buttons[i].value).isDir  load() }
 		guiState.onSubmit.openProject_filename = (input:gui.InputText)        { load() }
 		guiState.onAction.openProject_open     = (buttons:gui.Buttons, i:int) { load() }
 		local load :: () {

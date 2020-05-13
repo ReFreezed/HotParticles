@@ -480,9 +480,12 @@ export onMousePressed :: (state:State, mx,my:int, mbutton:int, presses:int) -> (
 			local buttons = cast(Buttons) el
 
 			if el.type == Buttons and (buttons.style == Style.CONTEXT_MENU or buttons.style == Style.LIST) {
-				triggerActionEvent(state, buttons, buttons.buttons[state.hoveredSubid].name, state.hoveredSubid, save=true)
+				local handled = false
 				if presses % 2 == 0 {
-					triggerDoublePressEvent(state, buttons, buttons.buttons[state.hoveredSubid].name, state.hoveredSubid, save=true)
+					handled = triggerDoublePressEvent(state, buttons, buttons.buttons[state.hoveredSubid].name, state.hoveredSubid, save=true)
+				}
+				if not handled {
+					triggerActionEvent(state, buttons, buttons.buttons[state.hoveredSubid].name, state.hoveredSubid, save=true)
 				}
 
 			} else {
@@ -2223,12 +2226,13 @@ local triggerActionEvent :: (state:State, widget:Widget, name:string, subid:int,
 	cb(widget, subid)
 	if save  scheduleSaveWorkspace()
 }
-local triggerDoublePressEvent :: (state:State, widget:Widget, name:string, subid:int, save=false) {
+local triggerDoublePressEvent :: (state:State, widget:Widget, name:string, subid:int, save=false) -> (handled:bool) {
 	local cb = cast((widget:Widget, i:int)) state.onDouble[name ?: widget.name]
-	if cb == NULL  return
+	if cb == NULL  return false
 
 	cb(widget, subid)
 	if save  scheduleSaveWorkspace()
+	return true
 }
 local triggerOptionEvent :: (state:State, widget:Widget, name:string, subid:int, save=false) -> (handled:bool) {
 	local cb = cast((widget:Widget, i:int)) state.onOption[name ?: widget.name]
