@@ -42,6 +42,7 @@ export setupGuiFrames :: () {
 						guiState.color!({ name="bgColor", alpha=false, weight=1 }),
 						guiState.colorPreview!({ linkColors={"bgColor"} }),
 					}),
+					guiState.slider!({ name="bgChecker", labelLeft="checker opacity", min=-1, max=1, readoutMulti=100, readout="%d%%" }),
 				}),
 
 				guiState.separator!({ thick=false }),
@@ -507,6 +508,14 @@ export setupGuiCallbacks :: () {
 		project.bgColorH = colorEl.color[1]
 		project.bgColorS = colorEl.color[2]
 		project.bgColorV = colorEl.color[3]
+	}
+	guiState.onRefresh.bgChecker = (slider:gui.Slider) {
+		local project = app.projects[app.currentProjectIndex]
+		slider.value  = project.bgChecker
+	}
+	guiState.onAction.bgChecker = (slider:gui.Slider, i:int) {
+		local project     = app.projects[app.currentProjectIndex]
+		project.bgChecker = slider.value
 	}
 
 	guiState.onRefresh.emitterMovement = (radio:gui.Radio) {

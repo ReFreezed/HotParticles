@@ -55,6 +55,7 @@ local writeProject :: (buffer:[]string, project:Project, writePath:bool) {
 	}
 
 	insert(buffer, "bgColor")          ; writeValue(buffer, eol=true, {project.bgColorH, project.bgColorS, project.bgColorV})
+	insert(buffer, "bgChecker")        ; writeValue(buffer, eol=true, project.bgChecker)
 	insert(buffer, "pixelateWorld")    ; writeValue(buffer, eol=true, project.pixelateWorld)
 	insert(buffer, "pixelateTextures") ; writeValue(buffer, eol=true, project.pixelateTextures)
 	insert(buffer, "zoom")             ; writeValue(buffer, eol=true, project.zoomLevel)
@@ -385,6 +386,11 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 					project.bgColorH = h
 					project.bgColorS = s
 					project.bgColorV = v
+
+				case "bgChecker":
+					local ^ok, ^ptr, amount = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
+					project.bgChecker = amount
 
 				case "pixelateWorld":
 					local ^ok, ^ptr, flag = readBool(line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)

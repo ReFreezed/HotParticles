@@ -111,9 +111,10 @@ export Project :: struct {
 	-- Saved:
 	systems: []System,
 
-	bgColorH = .0,
-	bgColorS = .0,
-	bgColorV = .15,
+	bgColorH  = .0,
+	bgColorS  = .0,
+	bgColorV  = .15,
+	bgChecker = 0.0,
 
 	pixelateWorld    = false,
 	pixelateTextures = false,
@@ -371,7 +372,7 @@ export onLoad :: (args:[]string, argsRaw:[]string) {
 	fontNormal = LG.newFont(12)
 	fontLarge  = LG.newFont(16)
 
-	imageChecker  = LG.newImage("gfx/checker.png") ; imageChecker.setWrap!(LG.WrapMode.REPEAT, LG.WrapMode.REPEAT)
+	imageChecker  = LG.newImage("gfx/checker.png") ; imageChecker.setWrap!(LG.WrapMode.REPEAT, LG.WrapMode.REPEAT) ; imageChecker.setFilter!(LG.FilterMode.NEAREST, LG.FilterMode.NEAREST)
 	imageGradient = LG.newImage("gfx/gradient.png")
 	imagePixel    = LG.newImage("gfx/pixel.png")
 	imageRainbow  = LG.newImage("gfx/rainbow.png")
@@ -724,11 +725,20 @@ export onDraw :: () {
 		local r, g, b = hsvToRgb(project.bgColorH, project.bgColorS, project.bgColorV)
 		LG.clear(r, g, b)
 
+		if project.bgChecker {
+			if project.bgChecker > 0
+				LG.setColor(1, 1, 1, project.bgChecker)
+			else
+				LG.setColor(0, 0, 0, -project.bgChecker)
+			gui.drawChecker(0, 0, ww, wh, 2)
+		}
+
 		LG.translate((ww-MAIN_PANEL_WIDTH)/2, wh/2)
 		if not project.pixelateWorld  LG.scale(project.zoom)
 
 		local time = LT.getTime()
 
+		LG.setColor(1, 1, 1)
 		for project.systems {
 			if it.visible {
 				LG.setBlendMode(it.blendMode)
