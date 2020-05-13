@@ -293,20 +293,20 @@ export setupGuiFrames :: () {
 
 			guiState.separator!({ thick=true }),
 			guiState.hbox!({
+				guiState.text!({ text="Recent", weight=1 }),
+				guiState.buttons!({ name="saveProjectAs_clearRecent", buttons={{label="Clear",tooltip="Clear history"}} }),
+			}),
+			guiState.separator!({ thick=false }),
+			guiState.buttons!({ name="saveProjectAs_recent", vertical=true, align=gui.Alignment.LEFT, style=gui.Style.LIST }),
+
+			guiState.separator!({ thick=true }),
+			guiState.hbox!({
 				guiState.text!({ text="Bookmarks", weight=1 }),
 				guiState.buttons!({ name="saveProjectAs_addBookmark", buttons={{image="iconAdd",tooltip="Add current folder to bookmarks"}} }),
 			}),
 			guiState.scrollable!({ height=80,
 				guiState.buttons!({ name="saveProjectAs_bookmarks", vertical=true, align=gui.Alignment.LEFT, style=gui.Style.LIST }),
 			}),
-
-			guiState.separator!({ thick=true }),
-			guiState.hbox!({
-				guiState.text!({ text="Recent", weight=1 }),
-				guiState.buttons!({ name="saveProjectAs_clearRecent", buttons={{image="iconDelete",tooltip="Clear history"}} }),
-			}),
-			guiState.separator!({ thick=false }),
-			guiState.buttons!({ name="saveProjectAs_recent", vertical=true, align=gui.Alignment.LEFT, style=gui.Style.LIST }),
 
 			guiState.separator!({ thick=true }),
 			guiState.inputText!({ name="saveProjectAs_directory" }),
@@ -326,20 +326,20 @@ export setupGuiFrames :: () {
 
 			guiState.separator!({ thick=true }),
 			guiState.hbox!({
+				guiState.text!({ text="Recent", weight=1 }),
+				guiState.buttons!({ name="openProject_clearRecent", buttons={{label="Clear",tooltip="Clear history"}} }),
+			}),
+			guiState.separator!({ thick=false }),
+			guiState.buttons!({ name="openProject_recent", vertical=true, align=gui.Alignment.LEFT, style=gui.Style.LIST }),
+
+			guiState.separator!({ thick=true }),
+			guiState.hbox!({
 				guiState.text!({ text="Bookmarks", weight=1 }),
 				guiState.buttons!({ name="openProject_addBookmark", buttons={{image="iconAdd",tooltip="Add current folder to bookmarks"}} }),
 			}),
 			guiState.scrollable!({ height=80,
 				guiState.buttons!({ name="openProject_bookmarks", vertical=true, align=gui.Alignment.LEFT, style=gui.Style.LIST }),
 			}),
-
-			guiState.separator!({ thick=true }),
-			guiState.hbox!({
-				guiState.text!({ text="Recent", weight=1 }),
-				guiState.buttons!({ name="openProject_clearRecent", buttons={{image="iconDelete",tooltip="Clear history"}} }),
-			}),
-			guiState.separator!({ thick=false }),
-			guiState.buttons!({ name="openProject_recent", vertical=true, align=gui.Alignment.LEFT, style=gui.Style.LIST }),
 
 			guiState.separator!({ thick=true }),
 			guiState.inputText!({ name="openProject_directory" }),
@@ -1281,8 +1281,9 @@ export setupGuiCallbacks :: () {
 			local filenameInput = gui.getElement(guiState, (isSave ? "saveProjectAs_filename" : "openProject_filename"), gui.InputText)
 			filenameInput.value = cast(string) filename
 
-			gui.refreshRecursively(guiState, (isSave ? "saveProjectAs_recent" : "openProject_recent"))
-			gui.refreshRecursively(guiState, (isSave ? "saveProjectAs_items"  : "openProject_items"))
+			gui.refreshRecursively(guiState, (isSave ? "saveProjectAs_bookmarks" : "openProject_bookmarks"))
+			gui.refreshRecursively(guiState, (isSave ? "saveProjectAs_recent"    : "openProject_recent"))
+			gui.refreshRecursively(guiState, (isSave ? "saveProjectAs_items"     : "openProject_items"))
 			gui.setFocus(guiState, filenameInput)
 			filenameInput.field.selectAll!()
 			-- filenameInput.field.setSelection!(0, utf8.len(basename)) -- @UX
@@ -1296,6 +1297,46 @@ export setupGuiCallbacks :: () {
 		}
 		guiState.onInactive.openProject = guiState.onInactive.saveProjectAs
 
+		-- Bookmarks.
+		guiState.onRefresh.saveProjectAs_bookmarks = (buttons:gui.Buttons) {
+			buttons.buttons = {}
+			for app.bookmarkedFolders {
+				insert(buttons.buttons, cast(gui.Button){ value=it, label=it, image="iconFolder" })
+			}
+		}
+		guiState.onRefresh.openProject_bookmarks = guiState.onRefresh.saveProjectAs_bookmarks
+
+		guiState.onAction.saveProjectAs_bookmarks = (buttons:gui.Buttons, i:int) {
+			local isSave = (buttons.frame.name == "saveProjectAs")
+			dirCurrent   = app.bookmarkedFolders[i]
+			gui.refreshRecursively(guiState, (isSave ? "saveProjectAs_items" : "openProject_items"))
+		}
+		guiState.onAction.openProject_bookmarks = guiState.onAction.saveProjectAs_bookmarks
+
+		guiState.onOption.saveProjectAs_bookmarks = (buttons:gui.Buttons, indexToRemove:int) {
+			local isSave = (buttons.frame.name == "saveProjectAs")
+
+			gui.showContextMenu(guiState, {"Remove bookmark"}, [indexToRemove,isSave] (i:int) {
+				if i == {
+					case 1:
+						remove(app.bookmarkedFolders, indexToRemove)
+						gui.refreshRecursively(guiState, (isSave ? "saveProjectAs_bookmarks" : "openProject_bookmarks"))
+				}
+			})
+		}
+		guiState.onOption.openProject_bookmarks = guiState.onOption.saveProjectAs_bookmarks
+
+		guiState.onAction.saveProjectAs_addBookmark = (buttons:gui.Buttons, i:int) {
+			local isSave = (buttons.frame.name == "saveProjectAs")
+
+			if insertIfUnique(app.bookmarkedFolders, dirCurrent) {
+				sort(app.bookmarkedFolders)
+				gui.refreshRecursively(guiState, (isSave ? "saveProjectAs_bookmarks" : "openProject_bookmarks"))
+			}
+		}
+		guiState.onAction.openProject_addBookmark = guiState.onAction.saveProjectAs_addBookmark
+
+		-- Recent.
 		guiState.onRefresh.saveProjectAs_recent = (buttons:gui.Buttons) {
 			buttons.buttons = {}
 			for app.recentFolders {
@@ -1318,6 +1359,7 @@ export setupGuiCallbacks :: () {
 		}
 		guiState.onAction.openProject_clearRecent = guiState.onAction.saveProjectAs_clearRecent
 
+		-- Directory.
 		guiState.onRefresh.saveProjectAs_directory = (input:gui.InputText, i:int) {
 			input.value = dirCurrent
 		}
@@ -1330,6 +1372,7 @@ export setupGuiCallbacks :: () {
 		}
 		guiState.onSubmit.openProject_directory = guiState.onSubmit.saveProjectAs_directory
 
+		-- Directory items.
 		guiState.onRefresh.saveProjectAs_items = (buttons:gui.Buttons) {
 			local isSave = (buttons.frame.name == "saveProjectAs")
 			local dir    = dirCurrent
@@ -1408,6 +1451,7 @@ export setupGuiCallbacks :: () {
 		}
 		guiState.onAction.openProject_items = guiState.onAction.saveProjectAs_items
 
+		-- Save.
 		guiState.onDouble.saveProjectAs_items    = (buttons:gui.Buttons, i:int) { save() }
 		guiState.onSubmit.saveProjectAs_filename = (input:gui.InputText)        { save() }
 		guiState.onAction.saveProjectAs_save     = (buttons:gui.Buttons, i:int) { save() }
@@ -1450,6 +1494,7 @@ export setupGuiCallbacks :: () {
 			}
 		}
 
+		-- Open.
 		guiState.onDouble.openProject_items    = (buttons:gui.Buttons, i:int) { load() }
 		guiState.onSubmit.openProject_filename = (input:gui.InputText)        { load() }
 		guiState.onAction.openProject_open     = (buttons:gui.Buttons, i:int) { load() }

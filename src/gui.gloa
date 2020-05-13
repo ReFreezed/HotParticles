@@ -110,6 +110,8 @@ export State :: struct {
 
 	contextMenu: Frame = NULL,
 
+	scrollbarHandleDragOffset = 0,
+
 	onRefresh:  struct { !key:string, !value:any--[[ (el:Element) ]] },
 	onActive:   struct { !key:string, !value:any--[[ (el:Element) ]] },
 	onInactive: struct { !key:string, !value:any--[[ (el:Element) ]] },
@@ -474,9 +476,10 @@ export onMousePressed :: (state:State, mx,my:int, mbutton:int, presses:int) -> (
 		}
 
 		if mbutton == 1 and state.hoveredId {
-			local buttons = cast(Buttons) state.elementsById[state.hoveredId]
+			local el      = state.elementsById[state.hoveredId]
+			local buttons = cast(Buttons) el
 
-			if buttons.type == Buttons and (buttons.style == Style.CONTEXT_MENU or buttons.style == Style.LIST) {
+			if el.type == Buttons and (buttons.style == Style.CONTEXT_MENU or buttons.style == Style.LIST) {
 				triggerActionEvent(state, buttons, buttons.buttons[state.hoveredSubid].name, state.hoveredSubid, save=true)
 				if presses % 2 == 0 {
 					triggerDoublePressEvent(state, buttons, buttons.buttons[state.hoveredSubid].name, state.hoveredSubid, save=true)
@@ -491,6 +494,17 @@ export onMousePressed :: (state:State, mx,my:int, mbutton:int, presses:int) -> (
 
 				LM.setGrabbed(true)
 				LK.setKeyRepeat(false)
+
+				if el.type == Scrollable {
+					local scrollable           = cast(Scrollable) el
+					local handlePos, handleLen = getScrollbarHandle(scrollable, visual=false)
+
+					if my >= scrollable.layoutY+handlePos and my < scrollable.layoutY+handlePos+handleLen {
+						state.scrollbarHandleDragOffset = - (my - scrollable.layoutY - handlePos)
+					} else {
+						state.scrollbarHandleDragOffset = - (handleLen // 2)
+					}
+				}
 
 				onMouseMoved(state, mx, my, 0, 0)
 			}
@@ -660,8 +674,7 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int) {
 			local visibleH = scrollable.layoutHeight
 			local paddedH  = visibleH - 2*SPACING
 
-			-- @Polish: Don't snap the handle to the mouse if pressing on the handle.
-			scrollable.scrollTarget = -math.round((my-handlePosMax/2-scrollable.layoutY) / (visibleH-handlePosMax) * paddedH)
+			scrollable.scrollTarget = -math.round( ((my + state.scrollbarHandleDragOffset) - scrollable.layoutY) / handlePosMax * (scrollable.contentHeight-paddedH) )
 			limitScroll(scrollable)
 			scrollable.scroll = scrollable.scrollTarget
 
