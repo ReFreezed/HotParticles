@@ -7,6 +7,19 @@
 --=  Hot Particles - a particle editor for LÖVE
 --=  by Marcus 'ReFreezed' Thunström
 --=
+--==============================================================
+
+	InputField
+	ModifierKey
+
+	addRecent
+	compareFilenames
+	getModifierKey
+	isInside
+	limitArray
+	newMonochromeImage, newImageUsingPalette
+	normalizeDirectoryPath
+
 --============================================================]]
 
 
@@ -234,6 +247,25 @@ export compareFilenames :: (a,b:string) -> bool {
 		}
 	}
 	return toLower(a) < toLower(b)
+}
+
+
+
+export limitArray :: (array:[]any, maxLength:int) {
+	for #array+1, maxLength  array[it] = nil
+}
+
+
+
+export addRecent :: (list:[]string, item:string, maxItems:int) {
+	local found, i = indexOf(list, item)
+	if found {
+		remove(list, i)
+		insert(list, 1, item)
+	} else {
+		insert(list, 1, item)
+		limitArray(list, maxItems)
+	}
 }
 
 

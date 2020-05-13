@@ -9,6 +9,8 @@ export MAX_BUFFER_SIZE      :: 16000 -- Default buffer size for ParticleSystem i
 export MAIN_PANEL_WIDTH     :: 450
 export DIALOG_WIDTH         :: 400
 export WORKSPACE_SAVE_DELAY :: 1.00
+export MAX_RECENT_FILES     :: 20
+export MAX_RECENT_FOLDERS   :: 4
 
 
 
@@ -92,16 +94,25 @@ local freezeDtThisFrame = false
 
 local zoomTime = -9999.00
 
--- Saved settings.
+export app: App
+
+
+
 export App :: struct {
+	-- Saved workspace data:
+
 	projects: []Project,
 	currentProjectIndex = 1,
 
 	showProjectSettings = false,
 	showStats           = false,
 	showPanelNumbers    = true,
+
+	recentFiles:   []string,
+	recentFolders: []string,
+
+	bookmarkedFolders: []string,
 }
-export app: App
 
 
 
@@ -599,6 +610,13 @@ export onUpdate :: (dt:float) {
 		local time = LT.getTime()
 		for project.systems  it.particles.update!(dt)
 		particleUpdateTime = LT.getTime()-time
+
+		-- F for fast-forward!
+		if not guiState.focusId and LK.isDown"f" and getModifierKey() == ModifierKey.NONE {
+			for 2, 10 {
+				for project.systems  it.particles.update!(dt)
+			}
+		}
 
 		for project.systems {
 			local ps         = it.particles

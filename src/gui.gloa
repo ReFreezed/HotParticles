@@ -2136,7 +2136,7 @@ local getScrollbarHandle :: (scrollable:Scrollable, visual:bool) -> (handlePos:i
 local limitScroll :: (scrollable:Scrollable) {
 	local limit             = math.max(scrollable.contentHeight - scrollable.layoutHeight + 2*SPACING, 0)
 	scrollable.scrollTarget = math.clamp(scrollable.scrollTarget, -limit, 0)
-	scrollable.scroll       = math.max(scrollable.scroll, scrollable.scrollTarget)
+	scrollable.scroll       = math.clamp(scrollable.scroll,       -limit, 0)
 }
 
 export getScrollOffset :: (el:Element) -> int {

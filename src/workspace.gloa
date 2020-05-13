@@ -162,6 +162,9 @@ export saveWorkspace :: () {
 	insert(buffer, "showProjectSettings") ; writeValue(buffer, eol=true, app.showProjectSettings)
 	insert(buffer, "showPanelNumbers")    ; writeValue(buffer, eol=true, app.showPanelNumbers)
 	insert(buffer, "project")             ; writeValue(buffer, eol=true, app.currentProjectIndex)
+	insert(buffer, "recentFiles")         ; writeValue(buffer, eol=true, app.recentFiles)
+	insert(buffer, "recentFolders")       ; writeValue(buffer, eol=true, app.recentFolders)
+	insert(buffer, "bookmarkedFolders")   ; writeValue(buffer, eol=true, app.bookmarkedFolders)
 
 	for app.projects  writeProject(buffer, it, writePath=true)
 
@@ -186,9 +189,11 @@ export saveProject :: (project:Project, overwrite=false) -> (success:bool, fileE
 	if not ok  return setErrorMessage(false, "Could not access folder '%s'", dir)
 	defer disconnectFromRemoteDirectory()
 
+	addRecent(app.recentFolders, normalizeDirectoryPath(cast(string)dir), MAX_RECENT_FOLDERS)
+
 	if not overwrite {
 		local info = LF.getInfo(cast(string)filename)
-		if info ~= nil  return false, true--setErrorMessage(true, "File already exists: %s", project.path)
+		if info ~= nil  return false, true
 	}
 
 	local buffer: []string
@@ -283,6 +288,19 @@ local readFloatArray :: (line:string, ptr:int) -> (success:bool, ptr:int, arr:[]
 
 	return true, ptr, arr
 }
+local readStringArray :: (line:string, ptr:int) -> (success:bool, ptr:int, arr:[]string) {
+	local arr: []string
+
+	while ptr <= #line {
+		local ok, _ptr, n = readString(line, ptr)
+		if not ok  return false, NULL, NULL
+
+		ptr = cast(int) _ptr
+		insert(arr, n)
+	}
+
+	return true, ptr, arr
+}
 
 export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) {
 	local file, err = LF.newFile(path, LF.FileMode.READ)
@@ -345,12 +363,10 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 					local ^ok, ^ptr, flag = readBool(line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 					if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
 					app.showStats = flag
-
 				case "showProjectSettings":
 					local ^ok, ^ptr, flag = readBool(line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 					if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
 					app.showProjectSettings = flag
-
 				case "showPanelNumbers":
 					local ^ok, ^ptr, flag = readBool(line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 					if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
@@ -360,6 +376,20 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 					local ^ok, ^ptr, i = readInt(line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 					if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
 					app.currentProjectIndex = i
+
+				case "recentFiles":
+					local ^ok, ^ptr, paths = readStringArray(line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
+					app.recentFiles = paths
+				case "recentFolders":
+					local ^ok, ^ptr, paths = readStringArray(line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
+					app.recentFolders = paths
+
+				case "bookmarkedFolders":
+					local ^ok, ^ptr, paths = readStringArray(line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
+					app.bookmarkedFolders = paths
 
 				case:
 					return parsingError(path, ln, "Unknown program parameter '%s'.", param)
