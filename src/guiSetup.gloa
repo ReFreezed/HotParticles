@@ -18,10 +18,10 @@ export setupGuiFrames :: () {
 
 			guiState.buttons!({ name="saveOpenBar",
 				buttons = {
-					{label="Save",          tooltip="Ctrl+S"},
-					{label="Save as...",    tooltip="Ctrl+Shift+S"},
-					{label="Open...",       tooltip="Ctrl+O"},
-					{label="Hide settings", tooltip=""},
+					{label="Save",       tooltip="Ctrl+S"},
+					{label="Save as...", tooltip="Ctrl+Shift+S"},
+					{label="Open...",    tooltip="Ctrl+O"},
+					{}, -- Show/hide settings.
 				},
 			}),
 
@@ -68,9 +68,7 @@ export setupGuiFrames :: () {
 			guiState.separator!({ thick=true }),
 
 			guiState.vbox!({ name="system",
-				guiState.section!({ label="ParticleSystem",
-					guiState.tabs!({ name="systems", specialLastTab=true }),
-				}),
+				guiState.tabs!({ name="systems", specialLastTab=true }),
 
 				guiState.scrollable!({
 					guiState.section!({ label="Texture",
@@ -106,7 +104,7 @@ export setupGuiFrames :: () {
 					guiState.separator!({ thick=true }),
 
 					guiState.section!({ label="Area",
-						guiState.radio!({ name="areaDistribution",
+						guiState.radio!({ name="areaDistribution", labelLeft="distribution",
 							buttons = {
 								{value=LG.AreaSpreadDistribution.NONE,             label="none",    tooltip="None"},
 								{value=LG.AreaSpreadDistribution.NORMAL,           label="norm",    tooltip="Normal"},
@@ -292,15 +290,26 @@ export setupGuiFrames :: () {
 		guiState.frame!({ name="saveProjectAs", width=MAIN_PANEL_WIDTH, active=false,
 			guiState.text!({ text="Save as", large=true }),
 			guiState.separator!({ thick=true }),
-			guiState.inputText!({ name="saveProjectAs_directory", value="C:/that/derp" }),
+			guiState.inputText!({ name="saveProjectAs_directory" }),
 			guiState.scrollable!({
-				guiState.buttons!({ name="saveProjectAs_items", vertical=true, align=gui.Alignment.LEFT,
-					buttons = {{label="../"},{label="foo/"},{label="bar.hotparticles"}},
-				}),
+				guiState.buttons!({ name="saveProjectAs_items", vertical=true, align=gui.Alignment.LEFT }),
 			}),
-			guiState.inputText!({ name="saveProjectAs_filename", value="Bark bark.jpg" }),
+			guiState.inputText!({ name="saveProjectAs_filename" }),
 			guiState.buttons!({ height=BIG_BUTTON_HEIGHT,
 				buttons = {{name="saveProjectAs_save",label="Save"},{name="util_popPanel",label="Cancel"}},
+			}),
+		}),
+
+		guiState.frame!({ name="openProject", width=MAIN_PANEL_WIDTH, active=false,
+			guiState.text!({ text="Open", large=true }),
+			guiState.separator!({ thick=true }),
+			guiState.inputText!({ name="openProject_directory" }),
+			guiState.scrollable!({
+				guiState.buttons!({ name="openProject_items", vertical=true, align=gui.Alignment.LEFT }),
+			}),
+			guiState.inputText!({ name="openProject_filename" }),
+			guiState.buttons!({ height=BIG_BUTTON_HEIGHT,
+				buttons = {{name="openProject_open",label="Open"},{name="util_popPanel",label="Cancel"}},
 			}),
 		}),
 
@@ -1197,7 +1206,7 @@ export setupGuiCallbacks :: () {
 	}
 
 	--==============================================================
-	--= Save project
+	--= Save/open project
 	--==============================================================
 	do {
 		local Item :: struct { isDir=false, name="" }
@@ -1205,6 +1214,8 @@ export setupGuiCallbacks :: () {
 		static dirFallback: string = NULL
 
 		guiState.onActive.saveProjectAs = (frame:gui.Frame) {
+			local isSave = (frame.name == "saveProjectAs")
+
 			local project           = openProjects[currentProjectIndex]
 			local path              = project.path
 			local ok, dir, filename = matchPattern(path, "^(.+)/([^/]+)$")
@@ -1214,31 +1225,45 @@ export setupGuiCallbacks :: () {
 				filename = "untitled.hotparticles"
 			}
 
+			if not isSave  filename = ""
+
 			dirCurrent  = cast(string) dir
 			dirFallback = LF.getSaveDirectory()
 
-			local filenameInput = gui.getElement(guiState, "saveProjectAs_filename", gui.InputText)
+			local filenameInput = gui.getElement(guiState, (isSave ? "saveProjectAs_filename" : "openProject_filename"), gui.InputText)
 			filenameInput.value = cast(string) filename
 
-			gui.refreshRecursively(guiState, "saveProjectAs_items")
+			gui.refreshRecursively(guiState, (isSave ? "saveProjectAs_items" : "openProject_items"))
 			gui.setFocus(guiState, filenameInput)
 			filenameInput.field.selectAll!()
 			-- filenameInput.field.setSelection!(0, utf8.len(basename)) -- @UX
 		}
+		guiState.onActive.openProject = guiState.onActive.saveProjectAs
+
 		guiState.onInactive.saveProjectAs = (frame:gui.Frame) {
+			local isSave = (frame.name == "saveProjectAs")
+
 			-- @Incomplete: Unload project preview, if there is one.
 			-- @Incomplete: Project previews!
 		}
+		guiState.onInactive.openProject = guiState.onInactive.saveProjectAs
 
 		guiState.onRefresh.saveProjectAs_directory = (input:gui.InputText, i:int) {
 			input.value = dirCurrent
 		}
+		guiState.onRefresh.openProject_directory = guiState.onRefresh.saveProjectAs_directory
+
 		guiState.onSubmit.saveProjectAs_directory = (input:gui.InputText, i:int) {
+			local isSave = (input.frame.name == "saveProjectAs")
+
 			dirCurrent = input.value
-			gui.refreshRecursively(guiState, "saveProjectAs_items")
+			gui.refreshRecursively(guiState, (isSave ? "saveProjectAs_items" : "openProject_items"))
 		}
+		guiState.onSubmit.openProject_directory = guiState.onSubmit.saveProjectAs_directory
+
 		guiState.onRefresh.saveProjectAs_items = (buttons:gui.Buttons) {
-			local dir = dirCurrent
+			local isSave = (buttons.frame.name == "saveProjectAs")
+			local dir    = dirCurrent
 
 			if not connectToRemoteDirectory(dir) {
 				dir = dirFallback
@@ -1281,28 +1306,29 @@ export setupGuiCallbacks :: () {
 			for dirs       insert(buttons.buttons, cast(gui.Button){ value=cast(Item){isDir=true, name=it}, label=it, image="iconFolder" })
 			for filenames  insert(buttons.buttons, cast(gui.Button){ value=cast(Item){isDir=false,name=it}, label=it })
 
-			gui.refreshRecursively(guiState, "saveProjectAs_directory")
+			gui.refreshRecursively(guiState, (isSave ? "saveProjectAs_directory" : "openProject_directory"))
 		}
+		guiState.onRefresh.openProject_items = guiState.onRefresh.saveProjectAs_items
+
 		guiState.onAction.saveProjectAs_items = (buttons:gui.Buttons, i:int) {
-			local item = cast(Item) buttons.buttons[i].value
+			local isSave = (buttons.frame.name == "saveProjectAs")
+			local item   = cast(Item) buttons.buttons[i].value
 
 			if not item.isDir {
-				-- @UX: Double-click file to overwrite?
-				gui.getElement(guiState, "saveProjectAs_filename", gui.InputText).value = item.name
+				-- @UX: Double-click file to overwrite/load directly without needing to press the save/load button after?
+				gui.getElement(guiState, (isSave ? "saveProjectAs_filename" : "openProject_filename"), gui.InputText).value = item.name
 			} elseif item.name == ".." {
 				dirCurrent = replacePattern(dirCurrent, "/[^/]+$", "")
-				gui.refreshRecursively(guiState, "saveProjectAs_items")
+				gui.refreshRecursively(guiState, (isSave ? "saveProjectAs_items" : "openProject_items"))
 			} else {
 				dirCurrent = dirCurrent.."/"..item.name
 				gui.refreshRecursively(guiState, buttons)
 			}
 		}
-		guiState.onSubmit.saveProjectAs_filename = (input:gui.InputText) {
-			save()
-		}
-		guiState.onAction.saveProjectAs_save = (buttons:gui.Buttons, i:int) {
-			save()
-		}
+		guiState.onAction.openProject_items = guiState.onAction.saveProjectAs_items
+
+		guiState.onSubmit.saveProjectAs_filename = (input:gui.InputText)        { save() }
+		guiState.onAction.saveProjectAs_save     = (buttons:gui.Buttons, i:int) { save() }
 		local save :: () {
 			local input    = gui.getElement(guiState, "saveProjectAs_filename", gui.InputText)
 			local filename = input.value
@@ -1340,6 +1366,52 @@ export setupGuiCallbacks :: () {
 			} else {
 				-- void  Stay in the dialog.
 			}
+		}
+
+		guiState.onSubmit.openProject_filename = (input:gui.InputText)        { load() }
+		guiState.onAction.openProject_open     = (buttons:gui.Buttons, i:int) { load() }
+		local load :: () {
+			local input    = gui.getElement(guiState, "openProject_filename", gui.InputText)
+			local filename = input.value
+			filename       = replacePattern(replacePattern(filename, "^%s+", ""), "%s+$", "")
+
+			if filename == "" {
+				input.value = filename
+				gui.setFocus(guiState, input)
+				return
+			}
+
+			local path = dirCurrent.."/"..filename
+			for openProjects  if it.path == path {
+				popPanel()
+				setCurrentProject(itIndex)
+				return
+			}
+
+			if not connectToRemoteDirectory(dirCurrent) {
+				setErrorText("Could not access folder '%s'", dirCurrent)
+				return
+			}
+			defer disconnectFromRemoteDirectory()
+
+			local ok, gotError, projects = loadWorkspace(filename)
+			if not ok {
+				setErrorText("Could not load '%s'", filename)
+				return
+			}
+
+			local project = projects[1]
+			if project == NULL {
+				setErrorText("Project is empty")
+				return
+			}
+
+			project.path = path
+			insert(openProjects, project)
+
+			popPanel()
+			gui.refreshRecursively(guiState, "projects")
+			setCurrentProject(#openProjects)
 		}
 	}
 

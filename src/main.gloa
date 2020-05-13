@@ -96,8 +96,8 @@ local zoomTime = -9999.00
 export openProjects: []Project
 export currentProjectIndex = 1
 
-export showProjectSettings = true
-export showStats           = true
+export showProjectSettings = false
+export showStats           = false
 export showPanelNumbers    = true
 
 
@@ -289,22 +289,31 @@ export disconnectFromRemoteDirectory :: () {
 
 
 
-export setActionText :: (s:string, ...:int|float|string) {
-	actionText     = format(s, ...)
+export setActionText :: (s:string) {
+	actionText     = s
 	actionTextTime = LT.getTime()
 	messageText    = "" -- Good?
 }
+export setActionText :: (s:string, v,...:int|float|string) {
+	setActionText(format(s, v, ...))
+}
 
-export setMessageText :: (s:string, ...:int|float|string) {
-	messageText         = format(s, ...)
+export setMessageText :: (s:string) {
+	messageText         = s
 	messageTextTime     = LT.getTime()
 	messageTextDuration = 3.00
 }
+export setMessageText :: (s:string, v,...:int|float|string) {
+	setMessageText(format(s, v, ...))
+}
 
-export setErrorText :: (s:string, ...:int|float|string) {
-	messageText         = format("Error: "..s, ...)
+export setErrorText :: (s:string) {
+	messageText         = "Error: "..s
 	messageTextTime     = LT.getTime()
 	messageTextDuration = 8.00
+}
+export setErrorText :: (s:string, v,...:int|float|string) {
+	setErrorText(format(s, v, ...))
 }
 
 
@@ -357,7 +366,7 @@ export onLoad :: (args:[]string, argsRaw:[]string) {
 
 	fontSmall  = LG.newFont(10)
 	fontNormal = LG.newFont(12)
-	fontLarge  = LG.newFont(20)
+	fontLarge  = LG.newFont(16)
 
 	imageChecker  = LG.newImage("gfx/checker.png") ; imageChecker.setWrap!(LG.WrapMode.REPEAT, LG.WrapMode.REPEAT)
 	imageGradient = LG.newImage("gfx/gradient.png")
@@ -380,7 +389,7 @@ export onLoad :: (args:[]string, argsRaw:[]string) {
 		}
 	}
 
-	local ok, gotError, projects = loadWorkspace()
+	local ok, gotError, projects = loadWorkspace("workspace")
 	if ok {
 		openProjects = projects
 	} else {
