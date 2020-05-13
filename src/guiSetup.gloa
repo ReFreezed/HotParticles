@@ -18,9 +18,9 @@ export setupGuiFrames :: () {
 
 			guiState.buttons!({ name="saveOpenBar",
 				buttons = {
+					{label="Open...",    tooltip="Ctrl+O"},
 					{label="Save",       tooltip="Ctrl+S"},
 					{label="Save as...", tooltip="Ctrl+Shift+S"},
-					{label="Open...",    tooltip="Ctrl+O"},
 					{}, -- Show/hide settings.
 				},
 			}),
@@ -311,7 +311,7 @@ export setupGuiFrames :: () {
 			guiState.separator!({ thick=true }),
 			guiState.inputText!({ name="saveProjectAs_directory" }),
 			guiState.scrollable!({
-				guiState.buttons!({ name="saveProjectAs_items", vertical=true, align=gui.Alignment.LEFT, style=gui.Style.LIST }),
+				guiState.buttons!({ name="saveProjectAs_items", vertical=true, align=gui.Alignment.LEFT, style=gui.Style.LIST, buttonMinHeight=16 }),
 			}),
 
 			guiState.separator!({ thick=true }),
@@ -344,7 +344,7 @@ export setupGuiFrames :: () {
 			guiState.separator!({ thick=true }),
 			guiState.inputText!({ name="openProject_directory" }),
 			guiState.scrollable!({
-				guiState.buttons!({ name="openProject_items", vertical=true, align=gui.Alignment.LEFT, style=gui.Style.LIST }),
+				guiState.buttons!({ name="openProject_items", vertical=true, align=gui.Alignment.LEFT, style=gui.Style.LIST, buttonMinHeight=16 }),
 			}),
 
 			guiState.separator!({ thick=true }),
@@ -495,15 +495,38 @@ export setupGuiCallbacks :: () {
 	guiState.onAction.saveOpenBar = (buttons:gui.Buttons, i:int) {
 		local project = app.projects[app.currentProjectIndex]
 		if i == {
-			case 1: if project.fileIsSaved  saveProject(project, overwrite=true)  else  pushPanel("saveProjectAs")
-			case 2: pushPanel("saveProjectAs")
-			case 3: pushPanel("openProject")
+			case 1: pushPanel("openProject")
+			case 2: if project.fileIsSaved  saveProject(project, overwrite=true)  else  pushPanel("saveProjectAs")
+			case 3: pushPanel("saveProjectAs")
 
 			case 4:
 				app.showProjectSettings  = not app.showProjectSettings
 				buttons.buttons[4].label = app.showProjectSettings ? "Hide settings" : "Show settings"
 				gui.setActive(guiState, "projectSettings", app.showProjectSettings)
 		}
+	}
+	guiState.onOption.saveOpenBar = (buttons:gui.Buttons, i:int) {
+		if i ~= 1  return
+
+		local items = {"Recent:"}
+
+		if app.recentFiles {
+			for app.recentFiles  insert(items, it)
+			insert(items, "Clear history")
+		} else {
+			insert(items, "(no recent files)")
+		}
+
+		gui.showContextMenu(guiState, items, [items] (i:int) {
+			if i <= 1 or not app.recentFiles {
+				-- void
+			} elseif i == #items {
+				app.recentFiles = {}
+			} else {
+				local path = items[i]
+				openProject(path)
+			}
+		})
 	}
 
 	guiState.onRefresh.pixelateWorld = (checkbox:gui.Checkbox) {
@@ -1494,10 +1517,10 @@ export setupGuiCallbacks :: () {
 		}
 
 		-- Open.
-		guiState.onDouble.openProject_items    = (buttons:gui.Buttons, i:int) { if not (cast(Item) buttons.buttons[i].value).isDir  load() }
-		guiState.onSubmit.openProject_filename = (input:gui.InputText)        { load() }
-		guiState.onAction.openProject_open     = (buttons:gui.Buttons, i:int) { load() }
-		local load :: () {
+		guiState.onDouble.openProject_items    = (buttons:gui.Buttons, i:int) { if not (cast(Item) buttons.buttons[i].value).isDir  open() }
+		guiState.onSubmit.openProject_filename = (input:gui.InputText)        { open() }
+		guiState.onAction.openProject_open     = (buttons:gui.Buttons, i:int) { open() }
+		local open :: () {
 			local input    = gui.getElement(guiState, "openProject_filename", gui.InputText)
 			local filename = input.value
 			filename       = replacePattern(replacePattern(filename, "^%s+", ""), "%s+$", "")
@@ -1509,39 +1532,7 @@ export setupGuiCallbacks :: () {
 			}
 
 			local path = dirCurrent.."/"..filename
-			for app.projects  if it.path == path {
-				popPanel()
-				setCurrentProject(itIndex)
-				return
-			}
-
-			if not connectToRemoteDirectory(dirCurrent) {
-				setErrorText("Could not access folder '%s'", dirCurrent)
-				return
-			}
-			defer disconnectFromRemoteDirectory()
-
-			addRecent(app.recentFolders, normalizeDirectoryPath(dirCurrent), MAX_RECENT_FOLDERS)
-
-			local ok, gotError, _app = loadWorkspace(filename)
-			if not ok {
-				setErrorText("Could not load '%s'", filename)
-				return
-			}
-
-			local project = _app.projects[1]
-			if project == NULL {
-				setErrorText("File is missing data")
-				return
-			}
-
-			project.path          = path
-			project.displayedName = filename
-			insert(app.projects, project)
-
-			popPanel()
-			gui.refreshRecursively(guiState, "projects")
-			setCurrentProject(#app.projects)
+			if openProject(path)  popPanel()
 		}
 	}
 

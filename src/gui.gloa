@@ -281,8 +281,9 @@ export Buttons :: struct {
 	using Widget,
 
 	buttons: []Button,
-	align    = Alignment.CENTER,
-	vertical = false,
+	align           = Alignment.CENTER,
+	vertical        = false,
+	buttonMinHeight = 0,
 
 	buttonWidth:  float, -- Round when necessary!
 	buttonHeight: float, -- Round when necessary!
@@ -1029,7 +1030,7 @@ local calculateNaturalSize :: (state:State, el:Element) {
 		case Buttons:
 			local buttons    = cast(Buttons) el
 			local buttonMaxW = 0
-			local buttonMaxH = 0
+			local buttonMaxH = buttons.buttonMinHeight
 
 			for buttons.buttons {
 				local w: int = NULL
@@ -1104,10 +1105,10 @@ local calculateNaturalSize :: (state:State, el:Element) {
 	if el.width                             el.layoutWidth  = el.width
 	if el.height and el.type ~= Scrollable  el.layoutHeight = el.height
 
-	el.width  = math.max(el.width,  el.minWidth)
-	el.height = math.max(el.height, el.minHeight)
-	if el.maxWidth  >= 0  el.width  = math.min(el.width,  el.maxWidth)
-	if el.maxHeight >= 0  el.height = math.min(el.height, el.maxHeight)
+	el.layoutWidth  = math.max(el.layoutWidth,  el.minWidth)
+	el.layoutHeight = math.max(el.layoutHeight, el.minHeight)
+	if el.maxWidth  >= 0  el.layoutWidth  = math.min(el.layoutWidth,  el.maxWidth)
+	if el.maxHeight >= 0  el.layoutHeight = math.min(el.layoutHeight, el.maxHeight)
 
 	-- The following count as outside the element, even though they take space as if they were part of the element.
 	el.layoutWidth += el.inset
@@ -1355,6 +1356,11 @@ local drawElement :: (state:State, el:Element) {
 				LG.rectangle(LG.DrawMode.FILL, frame.layoutX, frame.layoutY, frame.layoutWidth, frame.layoutHeight, SPACING+BUTTON_RADIUS)
 			else
 				LG.rectangle(LG.DrawMode.FILL, frame.layoutX, frame.layoutY, frame.layoutWidth, frame.layoutHeight)
+
+			if frame.style == Style.CONTEXT_MENU {
+				LG.setColor(.1, .1, .1)
+				LG.rectangle(LG.DrawMode.LINE, frame.layoutX+.5, frame.layoutY+.5, frame.layoutWidth-1, frame.layoutHeight-1)
+			}
 
 			LG.pushAll()
 			LG.intersectScissor(frame.layoutX, frame.layoutY, frame.layoutWidth, frame.layoutHeight)
@@ -1668,7 +1674,7 @@ local drawElement :: (state:State, el:Element) {
 					LG.setColor(1, 1, 0, .5)
 					LG.rectangle(LG.DrawMode.FILL, valueX+x1, y, x2-x1, h)
 				}
-				LG.setColor(1, 1, 1, math.lerp(.3, .9, math.cos01(field.getBlinkPhase!()*math.TAU/1.00)))
+				LG.setColor(1, 1, 1, math.lerp(.1, .9, math.cos01(field.getBlinkPhase!()*math.TAU/1.00)))
 				LG.rectangle(LG.DrawMode.FILL, valueX+field.getCursorOffset!(), y, 1, h)
 			}
 
@@ -1680,7 +1686,7 @@ local drawElement :: (state:State, el:Element) {
 
 			-- Cursor.
 			if focused {
-				LG.setColor(1, 1, 1, math.lerp(.3, .9, math.cos01(field.getBlinkPhase!()*math.TAU/1.00)))
+				LG.setColor(1, 1, 1, math.lerp(.1, .9, math.cos01(field.getBlinkPhase!()*math.TAU/1.00)))
 				LG.rectangle(LG.DrawMode.FILL, valueX+field.getCursorOffset!(), y, 1, h)
 			}
 
@@ -2397,7 +2403,7 @@ export showContextMenu :: (state:State, x,y:int, items:[]string, cb:(i:int)) {
 	for items  insert(buttonList, cast(Button){ label=it })
 
 	local contextMenu = state.frame!({ data=cb, x=x, y=y, minWidth=200, layout=Layout.FLOATING, style=Style.CONTEXT_MENU,
-		guiState.buttons!({ name="__contextMenuButtons", vertical=true, align=Alignment.LEFT, style=Style.CONTEXT_MENU,
+		guiState.buttons!({ name="__contextMenuButtons", vertical=true, align=Alignment.LEFT, style=Style.CONTEXT_MENU, buttonMinHeight=16,
 			buttons = {unpack(buttonList)},
 		}),
 	})
@@ -2413,7 +2419,7 @@ export showContextMenu :: (state:State, x,y:int, items:[]string, cb:(i:int)) {
 	local w = contextMenu.layoutWidth
 	local h = contextMenu.layoutHeight
 
-	if x   > LG.getWidth()-w  state.layoutNeedsUpdate, contextMenu.x = true, LG.getWidth()-w
+	if x   > LG.getWidth()-w  state.layoutNeedsUpdate, contextMenu.x = true, math.max(LG.getWidth()-w, 0)
 	if y+h > LG.getHeight()   state.layoutNeedsUpdate, contextMenu.y = true, y - h
 
 	state.onAction.__contextMenuButtons = [state,cb] (buttons:Buttons, i:int) {

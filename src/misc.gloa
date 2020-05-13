@@ -269,3 +269,11 @@ export addRecent :: (list:[]string, item:string, maxItems:int) {
 }
 
 
+
+export splitDirectoryAndFilename :: (path:string) -> (dir:string, filename:string) {
+	local ok, dir, filename = matchPattern(path, "^(.*)/([^/]+)$")
+	if not ok  return  ".", path
+	return cast(string)dir, cast(string)filename
+}
+
+

@@ -204,6 +204,8 @@ export saveProject :: (project:Project, overwrite=false) -> (success:bool, fileE
 	local ^ok, err = LF.write(cast(string)filename, concatinate(buffer))
 	if not ok  return setErrorMessage(false, "Could not write project to file: %s", err)
 
+	addRecent(app.recentFiles, project.path, MAX_RECENT_FILES)
+
 	project.fileIsSaved   = true
 	project.displayedName = cast(string)filename
 

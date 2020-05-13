@@ -997,10 +997,50 @@ export setCurrentSystem :: (i:int, force=true) {
 
 
 export scheduleSaveWorkspace :: () {
-	-- if workspaceSaveScheduled  return
-
 	workspaceSaveScheduled = true
 	workspaceSaveDelay     = WORKSPACE_SAVE_DELAY
+}
+
+
+
+export openProject :: (path:string) -> (success:bool) {
+	local dir, filename = splitDirectoryAndFilename(path)
+	dir                 = normalizeDirectoryPath(dir)
+
+	for app.projects  if it.path == path {
+		setCurrentProject(itIndex)
+		return true
+	}
+
+	if not connectToRemoteDirectory(dir) {
+		setErrorText("Could not access folder '%s'", dir)
+		return false
+	}
+	defer disconnectFromRemoteDirectory()
+
+	addRecent(app.recentFolders, dir, MAX_RECENT_FOLDERS)
+
+	local ok, gotError, _app = loadWorkspace(filename)
+	if not ok {
+		setErrorText("Could not load '%s'", filename)
+		return false
+	}
+
+	local project = _app.projects[1]
+	if project == NULL {
+		setErrorText("File is missing data")
+		return false
+	}
+
+	addRecent(app.recentFiles, path, MAX_RECENT_FILES)
+
+	project.path          = path
+	project.displayedName = filename
+	insert(app.projects, project)
+
+	gui.refreshRecursively(guiState, "projects")
+	setCurrentProject(#app.projects)
+	return true
 }
 
 
