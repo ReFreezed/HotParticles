@@ -58,8 +58,8 @@ export setupGuiFrames :: () {
 					}),
 					guiState.hbox!({
 						guiState.vbox!({ weight=1,
-							guiState.slider!({ name="emitterMovementSx", labelLeft="scale x", min=0, max=2, readoutMulti=100, readout="%d%%" }),
-							guiState.slider!({ name="emitterMovementSy", labelLeft="scale y", min=0, max=2, readoutMulti=100, readout="%d%%" }),
+							guiState.slider!({ name="emitterMovementSx", labelLeft="scale x", min=0, max=2, readoutMulti=100, readout="%d%%", linkMultiDrag={"emitterMovementSy"} }),
+							guiState.slider!({ name="emitterMovementSy", labelLeft="scale y", min=0, max=2, readoutMulti=100, readout="%d%%", linkMultiDrag={"emitterMovementSx"} }),
 						}),
 						guiState.slider!({ name="emitterMovementSpeed", labelLeft="speed", inset=40, min=-8, max=8, readoutMulti=100, readout="%d%%", weight=2 }),
 					}),
@@ -98,8 +98,8 @@ export setupGuiFrames :: () {
 
 					guiState.section!({ label="Lifetime",
 						guiState.slider!({ name="emitterLifetime",     labelLeft="emitter",     min=0, max=20, readout="%.2f sec", readoutZero="∞" }),
-						guiState.slider!({ name="particleLifetimeMin", labelLeft="paricle min", min=0, max=20, readout="%.2f sec" }),
-						guiState.slider!({ name="particleLifetimeMax", labelLeft="paricle max", min=0, max=20, readout="%.2f sec" }),
+						guiState.slider!({ name="particleLifetimeMin", labelLeft="paricle min", min=0, max=20, readout="%.2f sec", linkMultiDrag={"particleLifetimeMax"} }),
+						guiState.slider!({ name="particleLifetimeMax", labelLeft="paricle max", min=0, max=20, readout="%.2f sec", linkMultiDrag={"particleLifetimeMin"} }),
 					}),
 
 					guiState.separator!({ thick=true }),
@@ -118,9 +118,9 @@ export setupGuiFrames :: () {
 						guiState.hbox!({ name="areaParams", active=false,
 							guiState.direction!({ name="areaAngle", labelLeft="angle" }),
 							guiState.vbox!({ weight=1,
-								guiState.slider!({ name="areaDx", labelLeft="dx", inset=30, min=0, max=1000, readout="%d" }),
-								guiState.slider!({ name="areaDy", labelLeft="dy", inset=30, min=0, max=1000, readout="%d" }),
-								guiState.checkbox!({ name="areaRelative", label="direction relative to center", inset=14, weight=1 }),
+								guiState.slider!({ name="areaDx", labelLeft="dx", inset=30, min=0, max=1000, readout="%d", linkMultiDrag={"areaDy"} }),
+								guiState.slider!({ name="areaDy", labelLeft="dy", inset=30, min=0, max=1000, readout="%d", linkMultiDrag={"areaDx"} }),
+								guiState.checkbox!({ name="areaRelative", label="direction relative to area center", inset=14, weight=1 }),
 							}),
 						}),
 					}),
@@ -137,55 +137,55 @@ export setupGuiFrames :: () {
 					guiState.separator!({ thick=true }),
 
 					guiState.section!({ label="Speed",
-						guiState.slider!({ name="speedMin", labelLeft="min", min=-2000, max=2000, readout="%d / sec" }),
-						guiState.slider!({ name="speedMax", labelLeft="max", min=-2000, max=2000, readout="%d / sec" }),
+						guiState.slider!({ name="speedMin", labelLeft="min", min=-2000, max=2000, readout="%d / sec", linkMultiDrag={"speedMax"} }),
+						guiState.slider!({ name="speedMax", labelLeft="max", min=-2000, max=2000, readout="%d / sec", linkMultiDrag={"speedMin"} }),
 					}),
 
 					guiState.separator!({ thick=false }),
 
 					guiState.section!({ label="AccLinear",
-						guiState.slider!({ name="accLinearXmin", labelLeft="xmin", min=-10000, max=10000, readout="%d / sec²" }),
-						guiState.slider!({ name="accLinearXmax", labelLeft="xmax", min=-10000, max=10000, readout="%d / sec²" }),
-						guiState.slider!({ name="accLinearYmin", labelLeft="ymin", min=-10000, max=10000, readout="%d / sec²" }),
-						guiState.slider!({ name="accLinearYmax", labelLeft="ymax", min=-10000, max=10000, readout="%d / sec²" }),
+						guiState.slider!({ name="accLinearXmin", labelLeft="xmin", min=-10000, max=10000, readout="%d / sec²", linkMultiDrag={"accLinearXmax"} }),
+						guiState.slider!({ name="accLinearXmax", labelLeft="xmax", min=-10000, max=10000, readout="%d / sec²", linkMultiDrag={"accLinearXmin"} }),
+						guiState.slider!({ name="accLinearYmin", labelLeft="ymin", min=-10000, max=10000, readout="%d / sec²", linkMultiDrag={"accLinearYmax"} }),
+						guiState.slider!({ name="accLinearYmax", labelLeft="ymax", min=-10000, max=10000, readout="%d / sec²", linkMultiDrag={"accLinearYmin"} }),
 					}),
 
 					guiState.separator!({ thick=false }),
 
 					guiState.section!({ label="AccRadial",
-						guiState.slider!({ name="radialAccelerationMin", labelLeft="min", min=-20000, max=20000, readout="%d / sec²" }),
-						guiState.slider!({ name="radialAccelerationMax", labelLeft="max", min=-20000, max=20000, readout="%d / sec²" }),
+						guiState.slider!({ name="radialAccelerationMin", labelLeft="min", min=-20000, max=20000, readout="%d / sec²", linkMultiDrag={"radialAccelerationMax"} }),
+						guiState.slider!({ name="radialAccelerationMax", labelLeft="max", min=-20000, max=20000, readout="%d / sec²", linkMultiDrag={"radialAccelerationMin"} }),
 					}),
 
 					guiState.separator!({ thick=false }),
 
 					guiState.section!({ label="AccTangent",
-						guiState.slider!({ name="tangentialAccelerationMin", labelLeft="min", min=-20000, max=20000, readout="%d / sec²" }),
-						guiState.slider!({ name="tangentialAccelerationMax", labelLeft="max", min=-20000, max=20000, readout="%d / sec²" }),
+						guiState.slider!({ name="tangentialAccelerationMin", labelLeft="min", min=-20000, max=20000, readout="%d / sec²", linkMultiDrag={"tangentialAccelerationMax"} }),
+						guiState.slider!({ name="tangentialAccelerationMax", labelLeft="max", min=-20000, max=20000, readout="%d / sec²", linkMultiDrag={"tangentialAccelerationMin"} }),
 					}),
 
 					guiState.separator!({ thick=false }),
 
 					guiState.section!({ label="Damping",
-						guiState.slider!({ name="linearDampingMin", labelLeft="min", min=-50, max=50, readout="%.2f" }),
-						guiState.slider!({ name="linearDampingMax", labelLeft="max", min=-50, max=50, readout="%.2f" }),
+						guiState.slider!({ name="linearDampingMin", labelLeft="min", min=-50, max=50, readout="%.2f", linkMultiDrag={"linearDampingMax"} }),
+						guiState.slider!({ name="linearDampingMax", labelLeft="max", min=-50, max=50, readout="%.2f", linkMultiDrag={"linearDampingMin"} }),
 					}),
 
 					guiState.separator!({ thick=true }),
 
 					guiState.section!({ label="Rotation",
 						guiState.hbox!({
-							guiState.direction!({ name="rotationMin", linkOther="rotationMax", labelLeft="min/max" }),
-							guiState.direction!({ name="rotationMax", linkOther="rotationMin", }),
-							guiState.checkbox!({ name="rotationRelative", label="relative", inset=10 }),
+							guiState.direction!({ name="rotationMin", linkOther="rotationMax", linkMultiDrag={"rotationMax"}, labelLeft="min/max" }),
+							guiState.direction!({ name="rotationMax", linkOther="rotationMin", linkMultiDrag={"rotationMin"}, }),
+							guiState.checkbox!({ name="rotationRelative", label="rotation relative to direction", inset=10 }),
 						}),
 					}),
 
 					guiState.separator!({ thick=false }),
 
 					guiState.section!({ label="Spin",
-						guiState.slider!({ name="spinMin", labelLeft="at start", min=-8*math.TAU, max=8*math.TAU, readoutMulti=1/math.TAU, readout="%.2f turns / sec" }),
-						guiState.slider!({ name="spinMax", labelLeft="at end",   min=-8*math.TAU, max=8*math.TAU, readoutMulti=1/math.TAU, readout="%.2f turns / sec" }),
+						guiState.slider!({ name="spinMin", labelLeft="at start", min=-8*math.TAU, max=8*math.TAU, readoutMulti=1/math.TAU, readout="%.2f turns / sec", linkMultiDrag={"spinMax"} }),
+						guiState.slider!({ name="spinMax", labelLeft="at end",   min=-8*math.TAU, max=8*math.TAU, readoutMulti=1/math.TAU, readout="%.2f turns / sec", linkMultiDrag={"spinMin"} }),
 						guiState.slider!({ name="spinVariation", labelLeft="variation", min=0, max=1, readoutMulti=100, readout="%d%%" }),
 					}),
 

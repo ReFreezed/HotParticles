@@ -66,7 +66,7 @@ local SPECIAL_TAB_WIDTH     :: 32
 local TAB_BOTTOM_LINE_WIDTH :: 2
 
 local HOVER_OUTLINE_OPACITY        :: .3
-local HOVER_OUTLINE_OPACITY_STRONG :: .5
+local HOVER_OUTLINE_OPACITY_STRONG :: .7
 
 export clipboardScalar = 0.0
 export clipboardAngle  = 0.0
@@ -94,7 +94,7 @@ export State :: struct {
 	activeMod      = ModifierKey.NONE,
 	activeStartMx  = 0,
 	activeStartMy  = 0,
-	activeDragging = false,
+	activeDragging = false, -- For the drag event - not for sliders etc.!
 
 	focusId = 0, -- Keyboard focus.
 
@@ -315,6 +315,7 @@ export Slider :: struct {
 	min   = 0.0,
 	max   = 1.0,
 	steps = 16,
+	linkMultiDrag: []string,
 
 	readoutMulti = 1.0,
 	readout      = "",
@@ -345,10 +346,10 @@ export ColorPreview :: struct {
 export Direction :: struct {
 	using Widget,
 
-	angle = 0.0,
-
+	angle      = 0.0,
 	linkOther  = "",
 	linkSpread = "",
+	linkMultiDrag: []string,
 }
 
 
@@ -567,6 +568,8 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int) {
 	-- Drag active widget.
 	widget = cast(Widget) state.elementsById[state.activeId]
 
+	local mod = getModifierKey()
+
 	if widget ~= NULL  if widget.type == {
 		case Slider:
 			local slider = cast(Slider) widget
@@ -574,7 +577,7 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int) {
 			local x2     = slider.layoutX + slider.layoutWidth - SLIDER_MIN_WIDTH // 2
 			local value  = (mx-x1) / (x2-x1)
 
-			if getModifierKey() == ModifierKey.C {
+			if mod == ModifierKey.C or mod == ModifierKey.CS {
 				value = math.round(value * slider.steps) / slider.steps
 			}
 
@@ -585,12 +588,23 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int) {
 				triggerActionEvent(state, slider, "", 0)
 			}
 
+			if slider.linkMultiDrag and (state.activeMod == ModifierKey.S or state.activeMod == ModifierKey.CS) {
+				for slider.linkMultiDrag {
+					local other = cast(Slider) state.elementsByName[it]
+
+					if other ~= NULL and other ~= slider and other.type == Slider and other.value ~= value and isElementVisible(other) {
+						other.value = value
+						triggerActionEvent(state, other, "", 0)
+					}
+				}
+			}
+
 		case Color:
 			local colorEl   = cast(Color) widget
 			local component = state.activeSubid
 			local value     = (mx-colorEl.layoutX) / colorEl.layoutWidth
 
-			if getModifierKey() == ModifierKey.C {
+			if mod == ModifierKey.C or mod == ModifierKey.CS {
 				local steps = component == 1 ? 24 : 16
 				value       = math.round(value*steps)/steps
 			}
@@ -606,7 +620,7 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int) {
 				for colorEl.linkMultiDrag {
 					local other = cast(Color) state.elementsByName[it]
 
-					if other ~= NULL and other.type == Color and other.color[component] ~= value and isElementVisible(other) {
+					if other ~= NULL and other ~= colorEl and other.type == Color and other.color[component] ~= value and isElementVisible(other) {
 						other.color[component] = value
 						triggerActionEvent(state, other, "", component)
 					}
@@ -618,11 +632,25 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int) {
 			local direction = cast(Direction) widget
 			local angle     = math.atan(my - (direction.layoutY + getScrollOffset(direction) + r), mx - (direction.layoutX + r))
 
-			if getModifierKey() == ModifierKey.C  angle = math.round(angle * 16/math.TAU) / 16*math.TAU
+			if mod == ModifierKey.C or mod == ModifierKey.CS {
+				local STEPS :: 16
+				angle = math.round(angle * STEPS/math.TAU) / STEPS*math.TAU
+			}
 
 			if angle ~= direction.angle {
 				direction.angle = angle
 				triggerActionEvent(state, direction, "", 0)
+			}
+
+			if direction.linkMultiDrag and (state.activeMod == ModifierKey.S or state.activeMod == ModifierKey.CS) {
+				for direction.linkMultiDrag {
+					local other = cast(Direction) state.elementsByName[it]
+
+					if other ~= NULL and other ~= direction and other.type == Direction and other.angle ~= angle and isElementVisible(other) {
+						other.angle = angle
+						triggerActionEvent(state, other, "", 0)
+					}
+				}
 			}
 
 		case Scrollable:
@@ -1657,7 +1685,7 @@ local drawElement :: (state:State, el:Element) {
 			local handleX = x1 + math.round(value01 * w)
 			local y       = slider.layoutY + slider.layoutHeight // 2
 
-			local highlight = (slider.id == state.activeId or slider.id == state.hoveredId)
+			local highlight = shouldHighlight(state, slider)
 
 			-- Line/background.
 			LG.setColor(1, 1, 1, (highlight ? .2 : .1))
@@ -1692,9 +1720,11 @@ local drawElement :: (state:State, el:Element) {
 
 				if formatString {
 					local text  = format(formatString, slider.value * slider.readoutMulti)
-					local textX = x2-SPACING-fontSmall.getWidth!(text)
+					local textW = fontSmall.getWidth!(text)
+					local textX = x2 - SPACING - textW
 
-					if textX < handleX+5  textX = x1+SPACING
+					local MIN_DIST_TO_HANDLE :: 5
+					if textX < handleX+MIN_DIST_TO_HANDLE  textX = handleX-MIN_DIST_TO_HANDLE - textW
 
 					LG.setFont(fontSmall)
 					LG.setColor(0, 0, 0, .5)
@@ -1752,7 +1782,7 @@ local drawElement :: (state:State, el:Element) {
 			local value      = colorEl.color[3]
 			local a          = colorEl.color[4]
 
-			local highlight  = (colorEl.id == state.activeId or colorEl.id == state.hoveredId) ? math.max(state.activeSubid, state.hoveredSubid) : 0
+			local highlight  = shouldHighlight(state, colorEl) ? math.max(state.activeSubid, state.hoveredSubid) : 0
 
 			local iw, ih     = imageRainbow.getDimensions!()
 			local rainbowSx  = w / iw
@@ -1839,6 +1869,8 @@ local drawElement :: (state:State, el:Element) {
 
 			local angle = direction.angle
 
+			local highlight = shouldHighlight(state, direction)
+
 			-- Background.
 			LG.setColor(0, 0, 0, .4)
 			LG.circle(LG.DrawMode.FILL, x, y, r)
@@ -1869,7 +1901,7 @@ local drawElement :: (state:State, el:Element) {
 			LG.line(x+.3*r, y-.3*r, x-.3*r, y+.3*r)
 
 			-- Outline.
-			if direction.id == state.activeId or direction.id == state.hoveredId {
+			if highlight {
 				LG.setColor(1, 1, 1, HOVER_OUTLINE_OPACITY)
 				LG.circle(LG.DrawMode.LINE, x, y, r+.5)
 			}
@@ -2396,6 +2428,23 @@ export deleteFrame :: (state:State, frame:Frame) {
 
 	unregisterTree(state, frame)
 	remove(state.frames, i)
+}
+
+
+
+local shouldHighlight :: (state:State, el:$T) -> bool {
+	if el.id == state.activeId or el.id == state.hoveredId  return true
+
+	local mod = state.activeId ? state.activeMod : getModifierKey()
+	if not (mod == ModifierKey.S or mod == ModifierKey.CS)  return false
+
+	local other = cast(T) state.elementsById[state.activeId ?: state.hoveredId]
+	if other      == NULL  return false
+	if other.type ~= T     return false
+
+	!if    T == Slider     return (indexOf(other.linkMultiDrag, el.name))
+	elseif T == Direction  return (indexOf(other.linkMultiDrag, el.name))
+	elseif T == Color      return (indexOf(other.linkMultiDrag, el.name))
 }
 
 
