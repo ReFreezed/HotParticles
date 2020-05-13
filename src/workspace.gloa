@@ -69,9 +69,10 @@ local writeProject :: (buffer:[]string, project:Project, writePath:bool) {
 
 	for system: project.systems {
 		insert(buffer, ":system\n")
-		insert(buffer, "colors")    ; writeValue(buffer, eol=true, system.colors)
-		insert(buffer, "blendMode") ; writeValue(buffer, eol=true, cast(string) system.blendMode)
-		insert(buffer, "texture")   ; writeValue(buffer, eol=true, system.textureName)
+		insert(buffer, "colors")      ; writeValue(buffer, eol=true, system.colors)
+		insert(buffer, "blendMode")   ; writeValue(buffer, eol=true, cast(string) system.blendMode)
+		insert(buffer, "texture")     ; writeValue(buffer, eol=true, system.textureName)
+		insert(buffer, "texturePath") ; writeValue(buffer, eol=true, system.texturePath)
 
 		local ps = system.particles
 		insert(buffer, "bufferSize")       ; writeValue(buffer, eol=true, ps.getBufferSize!())
@@ -482,7 +483,12 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 					local ^ok, ^ptr, textureName = readString(line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 					if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
 					system.textureName = textureName
-					ps.setTexture!(particleImages[textureName]) -- @Incomplete: Update offset (preliminary here, or after reading the file).
+					ps.setTexture!(particleImages[textureName]) -- @Incomplete: Update offset (preliminary here, or after reading the file). :TextureOffset
+
+				case "texturePath":
+					local ^ok, ^ptr, texturePath = readString(line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
+					if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
+					system.texturePath = texturePath -- @Incomplete: Call setTexture(). Also see :TextureOffset.
 
 				case "bufferSize":
 					local ^ok, ^ptr, size = readInt(line, cast(int)ptr)  if not ok  return parsingError(path, ln, "Bad value format: %s", line)

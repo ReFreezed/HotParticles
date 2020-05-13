@@ -177,9 +177,8 @@ export System :: struct {
 
 	useCustomOffset = false,
 
-	textureName = "light",
-	-- textureIsPreset = true,
-	-- texturePath     = "",
+	texturePath = "",
+	textureName = "light", -- Preset fallback to texturePath.
 
 	-- Runtime-only:
 	visible = true,

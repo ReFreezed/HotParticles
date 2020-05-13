@@ -78,12 +78,12 @@ export setupGuiFrames :: () {
 
 					guiState.separator!({ thick=false }),
 
-					guiState.section!({ label="InsertMode",
+					guiState.section!({ label="SpawnLayer",
 						guiState.radio!({ name="insertMode",
 							buttons = {
-								{value=LG.ParticleInsertMode.TOP,    label="top"},
-								{value=LG.ParticleInsertMode.BOTTOM, label="bottom"},
-								{value=LG.ParticleInsertMode.RANDOM, label="random"},
+								{value=LG.ParticleInsertMode.TOP,    label="front",  tooltip="Insert at top"},
+								{value=LG.ParticleInsertMode.BOTTOM, label="back",   tooltip="Insert at bottom"},
+								{value=LG.ParticleInsertMode.RANDOM, label="random", tooltip="Insert randomly"},
 							}
 						}),
 					}),

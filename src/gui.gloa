@@ -1543,8 +1543,9 @@ local drawElement :: (state:State, el:Element) {
 
 			-- Particle previews.
 			-- @Cleanup: All this is a bit misplaced in the GUI. Maybe provide an onDraw event for elements so systems and projects can stay outside this file.
+			local PREVIEW_SCALE :: 2.5
 			local project = app.projects[app.currentProjectIndex]
-			local scale   = 2 * BUTTON_IMAGE_MAX_SIZE / math.min(LG.getWidth() - MAIN_PANEL_WIDTH, LG.getHeight()) * project.zoom
+			local scale   = PREVIEW_SCALE * BUTTON_IMAGE_MAX_SIZE / math.min(LG.getWidth() - MAIN_PANEL_WIDTH, LG.getHeight()) * project.zoom
 			local r, g, b = hsvToRgb(project.bgColorH, project.bgColorS, project.bgColorV)
 
 			LG.setColor(1, 1, 1)
