@@ -1285,6 +1285,35 @@ export setupGuiCallbacks :: () {
 		static dirCurrent:  string = NULL
 		static dirFallback: string = NULL
 
+		static lastProjectBeforeTemp: Project = NULL
+
+		local loadPreview :: (path:string) {
+			local lastIndex = app.currentProjectIndex
+
+			local ok, project = openProject(path, asPreview=true)
+			if not ok  return
+
+			if lastProjectBeforeTemp == NULL {
+				lastProjectBeforeTemp = app.projects[lastIndex]
+			}
+		}
+
+		local unloadPreview :: () {
+			local currentProject = app.projects[app.currentProjectIndex]
+
+			for < app.projects  if it.preview {
+				remove(app.projects, itIndex)
+			}
+
+			local ok, i = indexOf(app.projects, (currentProject.preview ? lastProjectBeforeTemp : currentProject))
+			assert(ok)
+			gui.refreshRecursively(guiState, "projects")
+			setCurrentProject(i, force=true)
+
+			lastProjectBeforeTemp = NULL
+			scheduleSaveWorkspace()
+		}
+
 		guiState.onActive.saveProjectAs = (frame:gui.Frame) {
 			local isSave            = (frame.name == "saveProjectAs")
 			local project           = app.projects[app.currentProjectIndex]
@@ -1314,9 +1343,7 @@ export setupGuiCallbacks :: () {
 		guiState.onActive.openProject = guiState.onActive.saveProjectAs
 
 		guiState.onInactive.saveProjectAs = (frame:gui.Frame) {
-			local isSave = (frame.name == "saveProjectAs")
-			-- @Incomplete: Unload project preview, if there is one.
-			-- @Incomplete: Project previews!
+			unloadPreview()
 		}
 		guiState.onInactive.openProject = guiState.onInactive.saveProjectAs
 
@@ -1446,10 +1473,11 @@ export setupGuiCallbacks :: () {
 				})
 			}
 			for filenames {
+				local basename, ext = splitBasenameAndExtension(it, keepDot=true)
 				insert(buttons.buttons, cast(gui.Button){
-					value = cast(Item) {isDir=false, name=it},
-					label = getSubstring(it, 1, #it - #".hotparticles"),
-					suffix = ".hotparticles",
+					value  = cast(Item) {isDir=false, name=it},
+					label  = basename,
+					suffix = ext,
 				})
 			}
 
@@ -1463,6 +1491,7 @@ export setupGuiCallbacks :: () {
 
 			if not item.isDir {
 				gui.getElement(guiState, (isSave ? "saveProjectAs_filename" : "openProject_filename"), gui.InputText).value = item.name
+				loadPreview(dirCurrent.."/"..item.name)
 			} elseif item.name == ".." {
 				dirCurrent = replacePattern(dirCurrent, "/[^/]+$", "")
 				gui.refreshRecursively(guiState, (isSave ? "saveProjectAs_items" : "openProject_items"))
@@ -1532,7 +1561,11 @@ export setupGuiCallbacks :: () {
 			}
 
 			local path = dirCurrent.."/"..filename
-			if openProject(path)  popPanel()
+			local ok, project = openProject(path)
+			if ok {
+				project.preview = false -- In case the project was already opened as a preview (which it probably always is).
+				popPanel()
+			}
 		}
 	}
 

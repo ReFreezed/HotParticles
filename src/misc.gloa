@@ -273,7 +273,17 @@ export addRecent :: (list:[]string, item:string, maxItems:int) {
 export splitDirectoryAndFilename :: (path:string) -> (dir:string, filename:string) {
 	local ok, dir, filename = matchPattern(path, "^(.*)/([^/]+)$")
 	if not ok  return  ".", path
+
 	return cast(string)dir, cast(string)filename
+}
+
+export splitBasenameAndExtension :: (filename:string, keepDot=false) -> (basename:string, ext:string) {
+	local pattern = keepDot ? "^(.+)(%.[^.]+)$" : "^(.+)%.([^.]+)$"
+
+	local ok, basename, ext = matchPattern(filename, pattern)
+	if not ok  return  filename, ""
+
+	return cast(string)basename, cast(string)ext
 }
 
 

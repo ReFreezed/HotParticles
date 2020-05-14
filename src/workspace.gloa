@@ -150,11 +150,20 @@ local writeProject :: (buffer:[]string, project:Project, writePath:bool) {
 export saveWorkspace :: () {
 	if not workspaceSaveScheduled  return
 
+	-- print("Saving workspace.")
+
 	workspaceSaveScheduled = false
 	workspaceSaveDelay     = 0
 	workspaceSaveTime      = LT.getTime()
 
-	-- print("Saving workspace.")
+	local projectIndexToSave = 0
+
+	for app.projects  if not it.preview {
+		projectIndexToSave += 1
+		if itIndex == app.currentProjectIndex  break
+	}
+	-- Note: projectIndexToSave may be slightly wrong when loaded if the program
+	-- exits before closing previews, but that's not the end of the world!
 
 	local buffer: []string
 	insert(buffer, format("%d\n", LAST_FILE_VERSION))
@@ -162,12 +171,14 @@ export saveWorkspace :: () {
 	insert(buffer, "stats")               ; writeValue(buffer, eol=true, app.showStats)
 	insert(buffer, "showProjectSettings") ; writeValue(buffer, eol=true, app.showProjectSettings)
 	insert(buffer, "showPanelNumbers")    ; writeValue(buffer, eol=true, app.showPanelNumbers)
-	insert(buffer, "project")             ; writeValue(buffer, eol=true, app.currentProjectIndex)
+	insert(buffer, "project")             ; writeValue(buffer, eol=true, projectIndexToSave)
 	insert(buffer, "recentFiles")         ; writeValue(buffer, eol=true, app.recentFiles)
 	insert(buffer, "recentFolders")       ; writeValue(buffer, eol=true, app.recentFolders)
 	insert(buffer, "bookmarkedFolders")   ; writeValue(buffer, eol=true, app.bookmarkedFolders)
 
-	for app.projects  writeProject(buffer, it, writePath=true)
+	for app.projects  if not it.preview {
+		writeProject(buffer, it, writePath=true)
+	}
 
 	local ok, err = LF.write("workspace", concatinate(buffer))
 	if not ok  setErrorText("Could not save workspace: %s", err)

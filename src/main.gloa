@@ -887,11 +887,16 @@ export onDraw :: () {
 		LG.origin()
 		LG.setFont(fontLarge)
 
-		if anyFiniteEmitter and anyInfiniteEmitter {
-			drawGuiText("Warning: Mixing infinite and finite emitters", 0, math.HUGE, 20)
+		local dist = fontLarge.getHeight!() + 5
+
+		if project.preview {
+			drawGuiText("PREVIEW", 0, math.HUGE, 10)
 		}
-		drawGuiText(messageText, messageTextTime, messageTextDuration, 20+1*(5+fontLarge.getHeight!()))
-		drawGuiText(actionText,  actionTextTime,  actionTextDuration,  20+2*(5+fontLarge.getHeight!()))
+		if anyFiniteEmitter and anyInfiniteEmitter {
+			drawGuiText("Warning: Mixing infinite and finite emitters", 0, math.HUGE, 10+1*dist)
+		}
+		drawGuiText(messageText, messageTextTime, messageTextDuration, 10+2*dist)
+		drawGuiText(actionText,  actionTextTime,  actionTextDuration,  10+3*dist)
 
 		-- Dev/debug stuff.
 		!if DEV {
@@ -1002,18 +1007,18 @@ export scheduleSaveWorkspace :: () {
 
 
 
-export openProject :: (path:string) -> (success:bool) {
+export openProject :: (path:string, asPreview=false) -> (success:bool, project:Project) {
 	local dir, filename = splitDirectoryAndFilename(path)
 	dir                 = normalizeDirectoryPath(dir)
 
 	for app.projects  if it.path == path {
 		setCurrentProject(itIndex)
-		return true
+		return true, it
 	}
 
 	if not connectToRemoteDirectory(dir) {
-		setErrorText("Could not access folder '%s'", dir)
-		return false
+		if not asPreview  setErrorText("Could not access folder '%s'", dir)
+		return false, NULL
 	}
 	defer disconnectFromRemoteDirectory()
 
@@ -1021,25 +1026,28 @@ export openProject :: (path:string) -> (success:bool) {
 
 	local ok, gotError, _app = loadWorkspace(filename)
 	if not ok {
-		setErrorText("Could not load '%s'", filename)
-		return false
+		if not asPreview  setErrorText("Could not load '%s'", filename)
+		return false, NULL
 	}
 
 	local project = _app.projects[1]
 	if project == NULL {
-		setErrorText("File is missing data")
-		return false
+		if not asPreview  setErrorText("File is missing data")
+		return false, NULL
 	}
 
 	addRecent(app.recentFiles, path, MAX_RECENT_FILES)
 
 	project.path          = path
 	project.displayedName = filename
+	project.fileIsSaved   = true
+	project.preview       = asPreview
 	insert(app.projects, project)
 
 	gui.refreshRecursively(guiState, "projects")
 	setCurrentProject(#app.projects)
-	return true
+
+	return true, project
 }
 
 
