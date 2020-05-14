@@ -96,15 +96,15 @@ export setupGuiFrames :: () {
 					guiState.separator!({ thick=false }),
 
 					guiState.section!({ label="SpawnRate",
-						guiState.slider!({ name="emissionRate", min=0, max=1000, readout="%.1f / sec" }),
+						guiState.slider!({ name="emissionRate", min=0, max=1024, readout="%.1f / sec" }),
 					}),
 
 					guiState.separator!({ thick=false }),
 
 					guiState.section!({ label="Lifetime",
-						guiState.slider!({ name="emitterLifetime",     labelLeft="emitter",     min=0, max=20, readout="%.2f sec", readoutZero="∞" }),
-						guiState.slider!({ name="particleLifetimeMin", labelLeft="paricle min", min=0, max=20, readout="%.2f sec", linkMultiDrag={"particleLifetimeMax"} }),
-						guiState.slider!({ name="particleLifetimeMax", labelLeft="paricle max", min=0, max=20, readout="%.2f sec", linkMultiDrag={"particleLifetimeMin"} }),
+						guiState.slider!({ name="emitterLifetime",     labelLeft="emitter",     min=0, max=16, readout="%.2f sec", readoutZero="∞" }),
+						guiState.slider!({ name="particleLifetimeMin", labelLeft="paricle min", min=0, max=16, readout="%.2f sec", linkMultiDrag={"particleLifetimeMax"} }),
+						guiState.slider!({ name="particleLifetimeMax", labelLeft="paricle max", min=0, max=16, readout="%.2f sec", linkMultiDrag={"particleLifetimeMin"} }),
 					}),
 
 					guiState.separator!({ thick=true }),
@@ -423,6 +423,7 @@ export setupGuiCallbacks :: () {
 	--= Main/project
 	--==============================================================
 
+	-- Tabs.
 	guiState.onRefresh.projects = (tabs:gui.Tabs) {
 		tabs.buttons = {}
 
@@ -446,14 +447,25 @@ export setupGuiCallbacks :: () {
 
 		setCurrentProject(#app.projects)
 	}
-	-- guiState.onOption.projects = (tabs:gui.Tabs, i:int) {
-	-- 	gui.showContextMenu(guiState, {"Close","Duplicate"}, (i:int) {
-	-- 		-- @Incomplete
-	-- 	})
-	-- }
-	guiState.onClose.projects = (tabs:gui.Tabs, i:int) {
-		if i == #tabs.buttons  return
+	guiState.onOption.projects = (tabs:gui.Tabs, projectIndex:int) {
+		gui.showContextMenu(guiState, {"Close","Duplicate"}, [projectIndex] (i:int) {
+			if i == {
+				case 1:
+					closeProject(projectIndex)
 
+				case 2:
+					local project = app.projects[projectIndex].clone!()
+					insert(app.projects, projectIndex+1, project)
+
+					gui.refreshRecursively(guiState, "projects")
+					setCurrentProject(projectIndex+1, force=true)
+			}
+		})
+	}
+	guiState.onClose.projects = (tabs:gui.Tabs, i:int) {
+		if i < #tabs.buttons  closeProject(i)
+	}
+	local closeProject :: (i:int) {
 		local isCurrent = (i == app.currentProjectIndex)
 
 		-- @UX: Confirm closing project if there are changes.
@@ -493,6 +505,7 @@ export setupGuiCallbacks :: () {
 		guiState.hoveredSubid = targetIndex
 	}
 
+	-- Menu.
 	guiState.onRefresh.saveOpenBar = (buttons:gui.Buttons) {
 		buttons.buttons[4].label = app.showProjectSettings ? "Hide settings" : "Show settings"
 		gui.setActive(guiState, "projectSettings", app.showProjectSettings)
@@ -534,6 +547,7 @@ export setupGuiCallbacks :: () {
 		})
 	}
 
+	-- Project settings.
 	guiState.onRefresh.pixelateWorld = (checkbox:gui.Checkbox) {
 		local project    = app.projects[app.currentProjectIndex]
 		checkbox.checked = project.pixelateWorld
@@ -622,6 +636,7 @@ export setupGuiCallbacks :: () {
 		project.movementSpeed = slider.value
 	}
 
+	-- Systems.
 	guiState.onRefresh.systems = (tabs:gui.Tabs) {
 		local project = app.projects[app.currentProjectIndex]
 		tabs.buttons  = {}

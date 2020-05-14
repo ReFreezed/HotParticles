@@ -137,7 +137,7 @@ export Project :: struct {
 	movementScaleY = 1.0,
 	movementSpeed  = 1.0,
 
-	path = "",
+	path = "", -- Only save in workspace.
 
 	-- Runtime-only:
 	systemIndex = 1,
@@ -162,10 +162,37 @@ export Project :: struct {
 	movementPoint4X  = 0.0,
 	movementPoint4Y  = 0.0,
 
-	!call :: () -> Project {
+	_init :: (project:Project) {
 		static n = 0 ; n += 1
-		return {displayedName=format("(untitled %d)", n)}
-	}
+		project.displayedName = format("(untitled %d)", n)
+	},
+
+	!call :: () -> Project {
+		local project: Project
+		_init(project)
+		return project
+	},
+
+	clone :: (source:Project) -> Project {
+		local project: Project = {
+			bgColorH         = source.bgColorH,
+			bgColorS         = source.bgColorS,
+			bgColorV         = source.bgColorV,
+			bgChecker        = source.bgChecker,
+			pixelateWorld    = source.pixelateWorld,
+			pixelateTextures = source.pixelateTextures,
+			zoomLevel        = source.zoomLevel,
+			movementPreset   = source.movementPreset,
+			movementScaleX   = source.movementScaleX,
+			movementScaleY   = source.movementScaleY,
+			movementSpeed    = source.movementSpeed,
+		}
+		_init(project)
+
+		for source.systems  project.systems[itIndex] = it.clone!()
+
+		return project
+	},
 }
 
 export System :: struct {
@@ -190,6 +217,19 @@ export System :: struct {
 		ps.start!()
 		system.particles = ps
 
+		return system
+	},
+
+	clone :: (source:System) -> System {
+		local system: System = {
+			particles   = source.particles.clone!(),
+			colors      = {unpack(source.colors)},
+			blendMode   = source.blendMode,
+			texturePath = source.texturePath,
+			textureName = source.textureName,
+			offsetX     = source.offsetX,
+			offsetY     = source.offsetY,
+		}
 		return system
 	},
 }
