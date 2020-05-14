@@ -15,7 +15,7 @@ export MAX_RECENT_FOLDERS   :: 4
 
 
 local isDev :: () -> bool {
-	!import"utils"
+	!import "utils"
 	return (indexOf(getProgramArguments(), "--dev"))
 }
 export DEV :: !run isDev()
@@ -172,8 +172,8 @@ export System :: struct {
 	-- Saved:
 	particles: LG.ParticleSystem = NULL,
 
-	colors: []float, -- {h1,s1,v1,a1,...}
-	blendMode = LG.BlendMode.ALPHA,
+	colors: []float = {0,0,1,1}, -- {h1,s1,v1,a1,...}
+	blendMode = LG.BlendMode.ADD,
 
 	useCustomOffset = false,
 
@@ -220,18 +220,19 @@ export updateParticleImageFilters :: () {
 
 
 
-export addNewSystem :: (project:Project) {
+export addNewSystem :: (project:Project, showcase=false) {
 	local system = System()
-	system.colors    = {0,0,1,0, 0,0,1,1, 0,0,1,.5, 0,0,1,0}
-	system.blendMode = LG.BlendMode.ADD
+	local ps     = system.particles
 	insert(project.systems, system)
 
-	local ps = system.particles
-	ps.setEmissionRate!(20)
-	ps.setDirection!(-math.TAU/4)
-	ps.setSpread!(.05*math.TAU)
-	ps.setParticleLifetime!(1.8, 2.2)
-	ps.setSpeed!(90, 100)
+	if showcase {
+		system.colors = {0,0,1,0, 0,0,1,1, 0,0,1,.5, 0,0,1,0}
+		ps.setEmissionRate!(20)
+		ps.setDirection!(-math.TAU/4)
+		ps.setSpread!(.05*math.TAU)
+		ps.setParticleLifetime!(1.8, 2.2)
+		ps.setSpeed!(90, 100)
+	}
 	updateParticleColors(ps, system.colors)
 
 	if project.systems[2] ~= NULL {
@@ -244,7 +245,7 @@ export addNewProject :: () -> Project {
 	local project = Project()
 	insert(app.projects, project)
 
-	addNewSystem(project)
+	addNewSystem(project, showcase=true)
 
 	return project
 }
