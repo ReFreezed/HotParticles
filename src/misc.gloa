@@ -16,9 +16,10 @@
 	compareFilenames
 	getModifierKey
 	isInside
+	isPathAbsolute
 	limitArray
 	newMonochromeImage, newImageUsingPalette
-	normalizeDirectoryPath
+	normalizeDirectoryPath, normalizeFilePath
 
 --============================================================]]
 
@@ -114,13 +115,28 @@ export isInside :: (x,y:int, areaX,areaY,areaW,areaH:int) -> bool {
 
 
 
-export normalizeDirectoryPath :: (path:string) -> (path:string) {
-	path = replace(path, "\\", "/")
+export isPathAbsolute :: (path:string) -> bool {
+	return findPattern(path, "^%a:") or findPattern(path, "^/") or findPattern(path, "^~")
+}
 
-	-- Note: Network paths or weird paths ("C:foo.png") are not supported.
-	local      ok, drive, root, dir =     matchPattern(path, "^(%a:)(/)(.*)")
-	if not ok  ok, drive, root, dir =     matchPattern(path, "^(~)(/)(.*)")
-	if not ok  drive, ok, root, dir = "", matchPattern(path, "^(/?)(.*)")
+
+
+local normalizePath :: (path:string) -> string {
+	path = replacePattern(path, "[\\/]+", "/")
+	return path
+}
+
+export normalizeDirectoryPath :: (path:string) -> (path:string, drive,root,dir:string) {
+	-- Note: Network paths are not supported.
+	-- Paths like "C:foo.txt" are assumed to be mistyped and become "C:/foo.txt".
+	path = normalizePath(path)
+
+	local      ok, drive, rootAndDir = matchPattern(path, "^(%a:)(.*)")
+	if not ok  ok, drive, rootAndDir = matchPattern(path, "^(~)(.*)")
+	if not ok      drive, rootAndDir = "", path
+
+	local _, root, dir = matchPattern(cast(string)rootAndDir, "^(/?)(.*)")
+	if drive ~= "" and root == ""  root = "/"
 
 	local segments: []string
 	for segment in eachPatternMatch(cast(string)dir, "[^/]+") {
@@ -141,9 +157,84 @@ export normalizeDirectoryPath :: (path:string) -> (path:string) {
 		}
 	}
 
+	if root ~= "" {
+		while segments[1] == ".."  remove(segments, 1)
+	}
+
 	if segments[1] == NULL  segments[1] = "." -- Prevent an empty string or a trailing slash so it's easy to append stuff to the resulting path.
-	return cast(string)drive .. cast(string)root .. concatinate(segments, "/")
+	dir = concatinate(segments, "/")
+
+	path = cast(string)drive .. cast(string)root .. cast(string)dir
+	return path, cast(string)drive, cast(string)root, cast(string)dir
 }
+
+export normalizeFilePath :: (path:string) -> (path:string) {
+	path = normalizePath(path)
+
+	local dirSection, filename = splitDirectoryAndFilename(path, keepSlash=true)
+	local _, drive, root, dir  = normalizeDirectoryPath(dirSection)
+
+	return drive .. root .. (dir == "." ? filename : dir.."/"..filename)
+}
+
+--[[ Path normalization tests:
+!run {
+	local DIRS :: {
+		"C:/foo/bar",             "C:/foo/bar",
+		"C:../foo/bar",           "C:/foo/bar",
+		"/majestic/doggo/.",      "/majestic/doggo",
+		"~/Only trees",           "~/Only trees",
+		"My Game/src/",           "My Game/src",
+		"./cutest/cat/..",        "cutest",
+		"ceiling/cat/../..",      ".",
+		"../almighty/cricket/..", "../almighty",
+		"",                       ".",
+		".",                      ".",
+		"..",                     "..",
+		"foo/../..",              "..",
+		"C:/",                    "C:/.",
+		"C/",                     "C",
+		"C:foo",                  "C:/foo",
+		"/",                      "/.",
+	}
+	local FILES :: {
+		"C:/foo/bar/a.txt",             "C:/foo/bar/a.txt",
+		"C:../foo/bar/a.txt",           "C:/foo/bar/a.txt",
+		"/majestic/doggo/./a.txt",      "/majestic/doggo/a.txt",
+		"~/Only trees/a.txt",           "~/Only trees/a.txt",
+		"./cutest/cat/../a.txt",        "cutest/a.txt",
+		"ceiling/cat/../../a.txt",      "a.txt",
+		"../almighty/cricket/../a.txt", "../almighty/a.txt",
+		"",                             "",
+		"a.txt",                        "a.txt",
+		"./a.txt",                      "a.txt",
+		"../a.txt",                     "../a.txt",
+		"foo/../../a.txt",              "../a.txt",
+		"C:/a.txt",                     "C:/a.txt",
+		"C/a.txt",                      "C/a.txt",
+		"C:foo/a.txt",                  "C:/foo/a.txt",
+		"/a.txt",                       "/a.txt",
+	}
+
+	for 1, #DIRS, 2 {
+		printf('DIR  IN   "%s"', DIRS[it])
+		printf('DIR  OUT  "%s"', (normalizeDirectoryPath(DIRS[it])))
+		printf('DIR  WANT "%s"', DIRS[it+1])
+		assert(normalizeDirectoryPath(DIRS[it]) == DIRS[it+1])
+		print(20 * "-")
+	}
+	for 1, #FILES, 2 {
+		printf('FILE IN   "%s"', FILES[it])
+		printf('FILE OUT  "%s"', normalizeFilePath(FILES[it]))
+		printf('FILE WANT "%s"', FILES[it+1])
+		assert(normalizeFilePath(FILES[it]) == FILES[it+1])
+		print(20 * "-")
+	}
+
+	print("All tests passed!")
+	!import"os".exit(2)
+}
+--]]
 
 
 
@@ -270,9 +361,11 @@ export addRecent :: (list:[]string, item:string, maxItems:int) {
 
 
 
-export splitDirectoryAndFilename :: (path:string) -> (dir:string, filename:string) {
-	local ok, dir, filename = matchPattern(path, "^(.*)/([^/]+)$")
-	if not ok  return  ".", path
+export splitDirectoryAndFilename :: (path:string, keepSlash=false) -> (dir:string, filename:string) {
+	local pattern = keepSlash ? "^(.*/)([^/]+)$" : "^(.*)/([^/]+)$"
+
+	local ok, dir, filename = matchPattern(path, pattern)
+	if not ok  return  "", path
 
 	return cast(string)dir, cast(string)filename
 }
@@ -284,6 +377,12 @@ export splitBasenameAndExtension :: (filename:string, keepDot=false) -> (basenam
 	if not ok  return  filename, ""
 
 	return cast(string)basename, cast(string)ext
+}
+
+
+
+export trim :: (s:string) -> string {
+	return (replacePattern(replacePattern(s, "^%s+", ""), "%s+$", ""))
 }
 
 

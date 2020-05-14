@@ -175,10 +175,10 @@ export System :: struct {
 	colors: []float = {0,0,1,1}, -- {h1,s1,v1,a1,...}
 	blendMode = LG.BlendMode.ADD,
 
-	useCustomOffset = false,
-
 	texturePath = "",
 	textureName = "light", -- Preset fallback to texturePath.
+	offsetX = .5,
+	offsetY = .5,
 
 	-- Runtime-only:
 	visible = true,
@@ -196,7 +196,8 @@ export System :: struct {
 
 
 
-export updateParticleColors :: (ps:LG.ParticleSystem, colors:[]float) {
+export updateParticleColors :: (system:System) {
+	local colors = system.colors
 	local colorsRgba: []float
 
 	for i = 1, #colors, 4 {
@@ -207,15 +208,70 @@ export updateParticleColors :: (ps:LG.ParticleSystem, colors:[]float) {
 		insert(colorsRgba, colors[i+3])
 	}
 
-	ps.setColors!(colorsRgba)
+	system.particles.setColors!(colorsRgba)
 }
 
+export updateParticleTexture :: (project:Project, system:System) {
+	local loadParticleTexture :: (project:Project, path:string) -> LG.Image {
+		local pcall :: (func:any, path:string) -> bool, LG.Image|string !foreign lua "pcall"
+
+		if isPathAbsolute(path) {
+			-- void
+		} elseif project.fileIsSaved {
+			local dir = splitDirectoryAndFilename(project.path, keepSlash=true)
+			path = dir..path
+		} else {
+			setErrorText("Relative paths require the project to be saved: %s", path)
+			return NULL
+		}
+
+		local dir, filename = splitDirectoryAndFilename(path, keepSlash=true) -- Do we need to normalize dir after this?
+
+		if not connectToRemoteDirectory(dir) {
+			setErrorText("Could not access folder '%s'", dir)
+			return NULL
+		}
+		defer disconnectFromRemoteDirectory()
+
+		local ok, image = pcall(variant_of(LG.newImage(filename)), filename)
+		if not ok {
+			setErrorText(cast(string)image)
+			return NULL
+		}
+
+		return cast(LG.Image)image
+	}
+
+	local image: LG.Image = NULL
+	if system.texturePath  image = loadParticleTexture(project, system.texturePath) -- @Speed: Don't reload the texture if there's no change.
+	if image == NULL       image = particleImages[system.textureName]
+
+	system.particles.setTexture!(image)
+	updateParticleTextureOffset(system)
+
+	local filter = project.pixelateTextures ? LG.FilterMode.NEAREST : LG.FilterMode.LINEAR
+	image.setFilter!(filter, filter)
+}
+
+export updateParticleTextureOffset :: (system:System) {
+	local image  = cast(LG.Image) system.particles.getTexture!()
+	local iw, ih = image.getDimensions!()
+	system.particles.setOffset!(iw*system.offsetX, ih*system.offsetY)
+}
+
+
+
 export updateParticleImageFilters :: () {
-	local filter = app.projects[app.currentProjectIndex].pixelateTextures ? LG.FilterMode.NEAREST : LG.FilterMode.LINEAR
+	local project = app.projects[app.currentProjectIndex]
+	local filter  = project.pixelateTextures ? LG.FilterMode.NEAREST : LG.FilterMode.LINEAR
 
 	for particleImageNames {
-		LG.Image.setFilter(particleImages[it], filter, filter)
+		particleImages[it].setFilter!(filter, filter)
 	}
+
+	local system = project.systems[project.systemIndex]
+	local image  = cast(LG.Image) system.particles.getTexture!()
+	image.setFilter!(filter, filter) -- In case this is a custom texture.
 }
 
 
@@ -233,7 +289,7 @@ export addNewSystem :: (project:Project, showcase=false) {
 		ps.setParticleLifetime!(1.8, 2.2)
 		ps.setSpeed!(90, 100)
 	}
-	updateParticleColors(ps, system.colors)
+	updateParticleColors(system)
 
 	if project.systems[2] ~= NULL {
 		local x, y = project.systems[1].particles.getPosition!()
@@ -740,6 +796,20 @@ export onDraw :: () {
 	local ww, wh  = LG.getDimensions()
 	local project = app.projects[app.currentProjectIndex]
 
+	static wasHoveringTextureOffset = false
+	static textureOffsetHoverTime   = -9999.00
+
+	local isHoveringTextureOffset
+		=  math.max(guiState.activeId, guiState.hoveredId) == gui.getElement(guiState, "textureOffsetX").id
+		or math.max(guiState.activeId, guiState.hoveredId) == gui.getElement(guiState, "textureOffsetY").id
+
+	if isHoveringTextureOffset ~= wasHoveringTextureOffset {
+		wasHoveringTextureOffset = isHoveringTextureOffset
+		textureOffsetHoverTime   = LT.getTime()
+	}
+
+	local showTextureOffset = (isHoveringTextureOffset and LT.getTime() - textureOffsetHoverTime > 4/60)
+
 	LG.reset()
 
 	-- World.
@@ -757,35 +827,37 @@ export onDraw :: () {
 			gui.drawChecker(0, 0, ww, wh, 2)
 		}
 
-		LG.translate((ww-MAIN_PANEL_WIDTH)/2, wh/2)
-		if not project.pixelateWorld  LG.scale(project.zoom)
+		if not showTextureOffset {
+			LG.translate((ww-MAIN_PANEL_WIDTH)/2, wh/2)
+			if not project.pixelateWorld  LG.scale(project.zoom)
 
-		local time = LT.getTime()
+			local time = LT.getTime()
 
-		LG.setColor(1, 1, 1)
-		for project.systems {
-			if it.visible {
-				LG.setBlendMode(it.blendMode)
-				LG.draw(it.particles)
+			LG.setColor(1, 1, 1)
+			for project.systems {
+				if it.visible {
+					LG.setBlendMode(it.blendMode)
+					LG.draw(it.particles)
+				}
 			}
+
+			particleDrawTime = LT.getTime()-time -- Not sure how accurate this actually is. This value is still very low even while the actual FPS is tanking a lot.
+			-- !if DEV  LG.getStats(statsWorld)
+
+			--[[ DEBUG
+			LG.setColor(1, 1, 1, .15)
+			LG.line(project.movementPoint1X, project.movementPoint1Y, project.movementPoint2X, project.movementPoint2Y)
+			LG.line(project.movementPoint2X, project.movementPoint2Y, project.movementPoint3X, project.movementPoint3Y)
+			LG.line(project.movementPoint3X, project.movementPoint3Y, project.movementPoint4X, project.movementPoint4Y)
+			LG.setColor(1, 1, 1, .3)
+			LG.print("1", project.movementPoint1X, project.movementPoint1Y)
+			LG.print("2", project.movementPoint2X, project.movementPoint2Y)
+			LG.print("3", project.movementPoint3X, project.movementPoint3Y)
+			LG.print("4", project.movementPoint4X, project.movementPoint4Y)
+			--]]
+
+			LG.reset()
 		}
-
-		particleDrawTime = LT.getTime()-time -- Not sure how accurate this actually is. This value is still very low even while the actual FPS is tanking a lot.
-		-- !if DEV  LG.getStats(statsWorld)
-
-		--[[ DEBUG
-		LG.setColor(1, 1, 1, .15)
-		LG.line(project.movementPoint1X, project.movementPoint1Y, project.movementPoint2X, project.movementPoint2Y)
-		LG.line(project.movementPoint2X, project.movementPoint2Y, project.movementPoint3X, project.movementPoint3Y)
-		LG.line(project.movementPoint3X, project.movementPoint3Y, project.movementPoint4X, project.movementPoint4Y)
-		LG.setColor(1, 1, 1, .3)
-		LG.print("1", project.movementPoint1X, project.movementPoint1Y)
-		LG.print("2", project.movementPoint2X, project.movementPoint2Y)
-		LG.print("3", project.movementPoint3X, project.movementPoint3Y)
-		LG.print("4", project.movementPoint4X, project.movementPoint4Y)
-		--]]
-
-		LG.reset()
 	}
 
 	-- GUI.
@@ -794,6 +866,34 @@ export onDraw :: () {
 		LG.clear()
 
 		LG.setFont(fontNormal)
+
+		-- Texture offset.
+		if showTextureOffset {
+			local PADDING :: 20
+
+			local system = project.systems[project.systemIndex]
+			local image  = cast(LG.Image) system.particles.getTexture!()
+			local iw, ih = image.getDimensions!()
+
+			local scale = math.min((ww-2*PADDING-MAIN_PANEL_WIDTH)/iw, wh-2*PADDING/ih)
+
+			local x = (ww - iw*scale + MAIN_PANEL_WIDTH) // 2
+			local y = (wh - ih*scale                   ) // 2
+
+			LG.setColor(1, 1, 1)
+			LG.draw(image, x, y, 0, scale)
+
+			local HALF_WIDTH  :: 3
+			local HALF_LENGTH :: 20
+			local offsetX = math.round(x + iw*scale*system.offsetX)
+			local offsetY = math.round(y + ih*scale*system.offsetY)
+			LG.setColor(0, 0, 0, .9)
+			LG.rectangle(LG.DrawMode.FILL, offsetX-HALF_WIDTH-1, offsetY-HALF_LENGTH-1, 2*HALF_WIDTH+2, 2*HALF_LENGTH+2)
+			LG.rectangle(LG.DrawMode.FILL, offsetX-HALF_LENGTH-1, offsetY-HALF_WIDTH-1, 2*HALF_LENGTH+2, 2*HALF_WIDTH+2)
+			LG.setColor(1, 1, 1)
+			LG.rectangle(LG.DrawMode.FILL, offsetX-HALF_WIDTH, offsetY-HALF_LENGTH, 2*HALF_WIDTH, 2*HALF_LENGTH)
+			LG.rectangle(LG.DrawMode.FILL, offsetX-HALF_LENGTH, offsetY-HALF_WIDTH, 2*HALF_LENGTH, 2*HALF_WIDTH)
+		}
 
 		-- Stats.
 		if app.showStats {
@@ -924,7 +1024,7 @@ export onDraw :: () {
 	}
 
 	-- Put stuff on the screen!
-	LG.clear()
+	LG.clear(0, 0, 0, 1)
 	LG.setBlendMode(LG.BlendMode.ALPHA, LG.BlendAlphaMode.PREMULTIPLIED)
 
 	if project.pixelateWorld {

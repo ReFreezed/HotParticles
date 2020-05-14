@@ -73,7 +73,12 @@ export setupGuiFrames :: () {
 
 				guiState.scrollable!({
 					guiState.section!({ label="Texture",
-						guiState.radio!({ name="texture" }),
+						guiState.radio!({ name="textureName", labelLeft="preset" }),
+						guiState.inputText!({ name="texturePath", labelLeft="texture path" }),
+						guiState.hbox!({
+							guiState.slider!({ name="textureOffsetX", value=.5, min=0, max=1, weight=1, readoutMulti=100, readout="%d%%", labelLeft="texture offset x/y" }),
+							guiState.slider!({ name="textureOffsetY", value=.5, min=0, max=1, weight=1, readoutMulti=100, readout="%d%%" }),
+						}),
 					}),
 
 					guiState.separator!({ thick=false }),
@@ -550,8 +555,9 @@ export setupGuiCallbacks :: () {
 	}
 	guiState.onAction.pixelateTextures = (checkbox:gui.Checkbox, i:int) {
 		local project            = app.projects[app.currentProjectIndex]
-		project.pixelateTextures    = checkbox.checked
+		project.pixelateTextures = checkbox.checked
 		scheduleRecreateCanvases = true
+		updateParticleImageFilters()
 
 		if project.pixelateTextures and project.zoomLevel < -1 {
 			project.zoomLevel  = -1
@@ -689,7 +695,8 @@ export setupGuiCallbacks :: () {
 		guiState.hoveredSubid = targetIndex
 	}
 
-	guiState.onRefresh.texture = (radio:gui.Radio) {
+	-- Texture.
+	guiState.onRefresh.textureName = (radio:gui.Radio) {
 		local project = app.projects[app.currentProjectIndex]
 		local system  = project.systems[project.systemIndex]
 		radio.buttons = {}
@@ -702,12 +709,51 @@ export setupGuiCallbacks :: () {
 		assert(found)
 		radio.index = i
 	}
-	guiState.onAction.texture = (radio:gui.Radio, i:int) {
+	guiState.onAction.textureName = (radio:gui.Radio, i:int) {
 		local project      = app.projects[app.currentProjectIndex]
 		local system       = project.systems[project.systemIndex]
 		system.textureName = cast(string) radio.buttons[i].value
-		system.particles.setTexture!(particleImages[system.textureName]) -- @Incomplete: Update offset if system.useCustomOffset is set.
+		updateParticleTexture(project, system)
 	}
+
+	guiState.onRefresh.texturePath = (input:gui.InputText) {
+		local project = app.projects[app.currentProjectIndex]
+		local system  = project.systems[project.systemIndex]
+		input.value   = system.texturePath
+	}
+	guiState.onAction.texturePath = (input:gui.InputText) {
+		local project      = app.projects[app.currentProjectIndex]
+		local system       = project.systems[project.systemIndex]
+		local path         = normalizeFilePath(trim(input.value))
+		system.texturePath = path
+		input.value        = path
+		updateParticleTexture(project, system)
+	}
+
+	guiState.onRefresh.textureOffsetX = (slider:gui.Slider) {
+		local project = app.projects[app.currentProjectIndex]
+		local system  = project.systems[project.systemIndex]
+		slider.value  = system.offsetX
+	}
+	guiState.onAction.textureOffsetX = (slider:gui.Slider) {
+		local project  = app.projects[app.currentProjectIndex]
+		local system   = project.systems[project.systemIndex]
+		system.offsetX = slider.value
+		updateParticleTextureOffset(system)
+	}
+
+	guiState.onRefresh.textureOffsetY = (slider:gui.Slider) {
+		local project = app.projects[app.currentProjectIndex]
+		local system  = project.systems[project.systemIndex]
+		slider.value  = system.offsetY
+	}
+	guiState.onAction.textureOffsetY = (slider:gui.Slider) {
+		local project  = app.projects[app.currentProjectIndex]
+		local system   = project.systems[project.systemIndex]
+		system.offsetY = slider.value
+		updateParticleTextureOffset(system)
+	}
+	--
 
 	guiState.onRefresh.insertMode = (radio:gui.Radio) {
 		local project  = app.projects[app.currentProjectIndex]
@@ -1171,7 +1217,7 @@ export setupGuiCallbacks :: () {
 		insert(colors, i1+2, v)
 		insert(colors, i1+3, a)
 
-		updateParticleColors(system.particles, colors)
+		updateParticleColors(system)
 
 		for j = i, #colors//4 {
 			local name = format("colorContainer%d", j)
@@ -1202,7 +1248,7 @@ export setupGuiCallbacks :: () {
 			remove(colors, i1  )
 		}
 
-		updateParticleColors(system.particles, colors)
+		updateParticleColors(system)
 
 		for j = i, #colors//4 {
 			gui.refreshRecursively(guiState, format("colorContainer%d", j))
@@ -1228,7 +1274,7 @@ export setupGuiCallbacks :: () {
 			colors[j*4  ], colors[(j+dir)*4  ] = colors[(j+dir)*4  ], colors[j*4  ]
 		}
 
-		updateParticleColors(system.particles, colors)
+		updateParticleColors(system)
 
 		guiState.activeId  = colorDragContainer[targetIndex][1].id -- @Volatile
 		guiState.hoveredId = guiState.activeId
@@ -1252,7 +1298,7 @@ export setupGuiCallbacks :: () {
 			local colors   = system.colors
 			local i1       = (4 * cast(int) colorEl.data) - 3
 			colors[i1+i-1] = colorEl.color[i]
-			updateParticleColors(system.particles, colors)
+			updateParticleColors(system)
 		}
 	}
 
@@ -1509,7 +1555,7 @@ export setupGuiCallbacks :: () {
 		local save :: () {
 			local input    = gui.getElement(guiState, "saveProjectAs_filename", gui.InputText)
 			local filename = input.value
-			filename       = replacePattern(replacePattern(filename, "^%s+", ""), "%s+$", "")
+			filename       = normalizeFilePath(trim(filename))
 
 			if filename == "" {
 				input.value = filename
@@ -1552,7 +1598,7 @@ export setupGuiCallbacks :: () {
 		local open :: () {
 			local input    = gui.getElement(guiState, "openProject_filename", gui.InputText)
 			local filename = input.value
-			filename       = replacePattern(replacePattern(filename, "^%s+", ""), "%s+$", "")
+			filename       = normalizeFilePath(trim(filename))
 
 			if filename == "" {
 				input.value = filename
