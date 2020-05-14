@@ -343,20 +343,17 @@ export compareFilenames :: (a,b:string) -> bool {
 
 
 export limitArray :: (array:[]any, maxLength:int) {
-	for #array+1, maxLength  array[it] = nil
+	for maxLength+1, #array  array[it] = nil
 }
 
 
 
 export addRecent :: (list:[]string, item:string, maxItems:int) {
 	local found, i = indexOf(list, item)
-	if found {
-		remove(list, i)
-		insert(list, 1, item)
-	} else {
-		insert(list, 1, item)
-		limitArray(list, maxItems)
-	}
+	if found  remove(list, i)
+
+	insert(list, 1, item)
+	limitArray(list, maxItems)
 }
 
 

@@ -629,11 +629,6 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 
 	for project: projects {
 		if not project.systems  return parsingError(path, 0, "Missing systems for at least one project.")
-
-		for system: project.systems {
-			updateParticleTexture(project, system)
-			updateParticleColors(system)
-		}
 	}
 
 	return true, false, app

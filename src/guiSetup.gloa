@@ -469,7 +469,9 @@ export setupGuiCallbacks :: () {
 		local isCurrent = (i == app.currentProjectIndex)
 
 		-- @UX: Confirm closing project if there are changes.
-		remove(app.projects, i)
+		local _, project = remove(app.projects, i)
+
+		if project.path  addRecent(app.recentFiles, project.path, MAX_RECENT_FILES)
 
 		if app.projects[1] == NULL
 			addNewProject()

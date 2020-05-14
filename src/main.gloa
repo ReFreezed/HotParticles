@@ -9,7 +9,7 @@ export MAX_BUFFER_SIZE      :: 16000 -- Default buffer size for ParticleSystem i
 export MAIN_PANEL_WIDTH     :: 450
 export DIALOG_WIDTH         :: 400
 export WORKSPACE_SAVE_DELAY :: 1.00
-export MAX_RECENT_FILES     :: 20
+export MAX_RECENT_FILES     :: 15
 export MAX_RECENT_FOLDERS   :: 4
 
 
@@ -235,6 +235,13 @@ export System :: struct {
 }
 
 
+
+export updateParticles :: (project:Project) {
+	for project.systems {
+		updateParticleTexture(project, it)
+		updateParticleColors(it)
+	}
+}
 
 export updateParticleColors :: (system:System) {
 	local colors = system.colors
@@ -508,6 +515,8 @@ export onLoad :: (args:[]string, argsRaw:[]string) {
 		if gotError  setErrorText("Could not load previous workspace")
 		addNewProject()
 	}
+
+	for app.projects  updateParticles(it)
 
 	love.window.setVSync(app.showStats ? 0 : 1)
 
@@ -1184,6 +1193,8 @@ export openProject :: (path:string, asPreview=false) -> (success:bool, project:P
 	project.fileIsSaved   = true
 	project.preview       = asPreview
 	insert(app.projects, project)
+
+	updateParticles(project)
 
 	gui.refreshRecursively(guiState, "projects")
 	setCurrentProject(#app.projects)
