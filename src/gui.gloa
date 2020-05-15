@@ -39,8 +39,10 @@
 
 --============================================================]]
 
-local SPACING       :: 3
-local SPACING_LARGE :: 10
+
+
+export SPACING       :: 3
+export SPACING_LARGE :: 10
 
 local BUTTON_RADIUS    :: 3
 local BUTTON_PADDING_Y :: 2
@@ -68,6 +70,10 @@ local TAB_BOTTOM_LINE_WIDTH :: 2
 
 local HOVER_OUTLINE_OPACITY        :: .3
 local HOVER_OUTLINE_OPACITY_STRONG :: .7
+
+local DRAG_RADIUS :: 8 -- Distance moved before dragging starts for real.
+
+
 
 export clipboardScalar = 0.0
 export clipboardAngle  = 0.0
@@ -692,7 +698,7 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int) {
 				if state.activeDragging {
 					triggerDragEvent(state, buttons, buttons.buttons[state.hoveredSubid].name, state.hoveredSubid, mx, my)
 
-				} elseif math.distance(mx,my, state.activeStartMx,state.activeStartMy) > 10 {
+				} elseif math.distance(mx,my, state.activeStartMx,state.activeStartMy) > DRAG_RADIUS {
 					state.activeDragging = true
 				}
 			}

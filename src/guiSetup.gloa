@@ -1306,12 +1306,12 @@ export setupGuiCallbacks :: () {
 	guiState.onDrag.colorMove = (buttons:gui.Buttons, i:int, mx,my:int) {
 		i = cast(int) buttons.data
 
-		local colorDragContainer = gui.getElement(guiState, "colors", gui.Vbox)
+		local dragContainer = gui.getElement(guiState, "colors", gui.Vbox)
 
 		local project     = app.projects[app.currentProjectIndex]
 		local system      = project.systems[project.systemIndex]
 		local colors      = system.colors
-		local targetIndex = math.clamp(math.floor(1 + (my - (colorDragContainer.layoutY + gui.getScrollOffset(colorDragContainer))) / colorDragContainer[1].layoutHeight), 1, #colors//4)
+		local targetIndex = math.clamp(math.floor(1 + (my - (dragContainer.layoutY + gui.getScrollOffset(dragContainer))) / (dragContainer[1].layoutHeight + gui.SPACING)), 1, #colors//4)
 		if targetIndex == i  return
 
 		local dir = math.getSign(targetIndex-i)
@@ -1325,10 +1325,10 @@ export setupGuiCallbacks :: () {
 
 		updateParticleColors(system)
 
-		guiState.activeId  = colorDragContainer[targetIndex][1].id -- @Volatile
+		guiState.activeId  = dragContainer[targetIndex][1].id -- @Volatile
 		guiState.hoveredId = guiState.activeId
 
-		gui.refreshRecursively(guiState, colorDragContainer)
+		gui.refreshRecursively(guiState, dragContainer)
 	}
 	for i = 1, 8 {
 		guiState.onRefresh[format("color%d", i)] = (colorEl:gui.Color) {
@@ -1811,7 +1811,7 @@ export setupGuiCallbacks :: () {
 					guiState.buttons!({ buttons={
 						{name="animation_delete", image="iconDelete", tooltip="Remove frame"},
 						{name="animation_add",    image="iconAdd",    tooltip="Add/duplicate frame"},
-						-- {name="animation_move",   image="iconMoveV",  tooltip="Move frame (drag)", draggable=true},
+						{name="animation_move",   image="iconMoveV",  tooltip="Move frame (drag)", draggable=true},
 					} }),
 					guiState.inputText!({ name="animation_xywh", weight=1, value=inputValue, tooltip="Format: [x y width height]" }),
 					guiState.text!({ name=format("animation_message%d", itIndex), width=50 }),
@@ -1874,12 +1874,29 @@ export setupGuiCallbacks :: () {
 			updateParticleAnimation(system)
 			gui.getElement(guiState, format("animation_message%d", i), gui.Text).text = ""
 		}
-		-- guiState.onDrag.animation_move = (buttons:gui.Buttons, buttonIndex:int, mx,my:int) {
-		-- 	local animFrame, i = getAnimationFrame(buttons)
-		-- 	local project      = app.projects[app.currentProjectIndex]
-		-- 	local system       = project.systems[project.systemIndex]
-		-- 	-- @Incomplete
-		-- }
+		guiState.onDrag.animation_move = (buttons:gui.Buttons, buttonIndex:int, mx,my:int) {
+			local project      = app.projects[app.currentProjectIndex]
+			local system       = project.systems[project.systemIndex]
+			local animFrame, i = getAnimationFrame(buttons)
+
+			local dragContainer = gui.getElement(guiState, "animation_frames", gui.Vbox)
+
+			local frames      = system.frames
+			local targetIndex = math.clamp(math.floor(1 + (my - (dragContainer.layoutY + gui.getScrollOffset(dragContainer))) / (dragContainer[1].layoutHeight + gui.SPACING)), 1, #frames)
+			if targetIndex == i  return
+
+			local dir = math.getSign(targetIndex-i)
+
+			for j = i, targetIndex-dir, dir {
+				frames[j], frames[j+dir] = frames[j+dir], frames[j]
+			}
+
+			updateParticleAnimation(system)
+			gui.refreshRecursively(guiState, dragContainer)
+
+			guiState.activeId  = dragContainer[targetIndex][1].id -- Must happen after refreshRecursively()! @Volatile
+			guiState.hoveredId = guiState.activeId
+		}
 	}
 
 	--==============================================================
