@@ -12,16 +12,17 @@
 	State
 
 	Buttons, Radio, Tabs
+	Canvas
 	Checkbox
+	Direction
 	Frame
 	Hbox, Vbox
 	InputText
 	Scrollable
 	Section
-	Slider, Color, ColorPreview
-	Direction
-	Text
 	Separator
+	Slider, Color, ColorPreview
+	Text
 
 	delete
 	draw
@@ -128,8 +129,10 @@ export State :: struct {
 	onOption:   struct { !key:string, !value:any--[[ (widget:Widget, i:int) ]] },
 	onClose:    struct { !key:string, !value:any--[[ (widget:Widget, i:int) ]] },
 	onDrag:     struct { !key:string, !value:any--[[ (widget:Widget, i:int, mx,my:int) ]] },
+	onDraw:     struct { !key:string, !value:any--[[ (canvas:Canvas, cw,ch:int) ]] },
 
 	buttons      :: (state:State, el:Buttons)      -> type_of(el) { return cast(type_of(el)) register(state, el, type_of(el)) },
+	canvas       :: (state:State, el:Canvas)       -> type_of(el) { return cast(type_of(el)) register(state, el, type_of(el)) },
 	checkbox     :: (state:State, el:Checkbox)     -> type_of(el) { return cast(type_of(el)) register(state, el, type_of(el)) },
 	color        :: (state:State, el:Color)        -> type_of(el) { return cast(type_of(el)) register(state, el, type_of(el)) },
 	colorPreview :: (state:State, el:ColorPreview) -> type_of(el) { return cast(type_of(el)) register(state, el, type_of(el)) },
@@ -370,6 +373,12 @@ export InputText :: struct {
 	value = "",
 
 	field: InputField = NULL,
+}
+
+
+
+export Canvas :: struct {
+	using Widget,
 }
 
 
@@ -1106,6 +1115,11 @@ local calculateNaturalSize :: (state:State, el:Element) {
 			direction.layoutWidth  = 2*DIRECTION_RADIUS
 			direction.layoutHeight = 2*DIRECTION_RADIUS
 
+		case Canvas:
+			local canvasEl        = cast(Canvas) el
+			canvasEl.layoutWidth  = 10
+			canvasEl.layoutHeight = 10
+
 		case: errorf("%d", el.type)
 	}
 
@@ -1563,7 +1577,7 @@ local drawElement :: (state:State, el:Element) {
 			}
 
 			-- Particle previews.
-			-- @Cleanup: All this is a bit misplaced in the GUI. Maybe provide an onDraw event for elements so systems and projects can stay outside this file.
+			-- @Cleanup: All this is a bit misplaced in the GUI. Maybe provide an onDraw event for elements so systems and projects can stay outside this file. (Update: We now have gui.Canvas!)
 			local PREVIEW_SCALE :: 2.5
 			local project = app.projects[app.currentProjectIndex]
 			local scale   = PREVIEW_SCALE * BUTTON_IMAGE_MAX_SIZE / math.min(LG.getWidth() - MAIN_PANEL_WIDTH, LG.getHeight()) * project.zoom
@@ -1967,6 +1981,21 @@ local drawElement :: (state:State, el:Element) {
 				LG.setFont(fontNormal)
 			}
 
+		case Canvas:
+			local canvasEl = cast(Canvas) el
+
+			local x = canvasEl.layoutX
+			local y = canvasEl.layoutY
+			local w = canvasEl.layoutWidth
+			local h = canvasEl.layoutHeight
+
+			LG.pushAll()
+			LG.translate(x, y)
+			LG.setColor(1, 1, 1)
+			intersectScissor(x, y+getScrollOffset(canvasEl), w, h)
+			triggerDrawEvent(state, canvasEl, w, h)
+			LG.pop()
+
 		case: errorf("%d", el.type)
 	}
 
@@ -2246,6 +2275,13 @@ local triggerInactiveEvent :: (state:State, el:Element) {
 	if cb == NULL  return
 
 	cb(el)
+}
+
+local triggerDrawEvent :: (state:State, canvasEl:Canvas, cw,ch:int) {
+	local cb = cast((canvasEl:Canvas, cw,ch:int)) state.onDraw[canvasEl.name]
+	if cb == NULL  return
+
+	cb(canvasEl, cw, ch)
 }
 
 local triggerSubmitEvent :: (state:State, widget:Widget) {

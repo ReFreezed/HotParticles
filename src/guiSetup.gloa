@@ -364,6 +364,7 @@ export setupGuiFrames :: () {
 
 		guiState.frame!({ name="animation", width=MAIN_PANEL_WIDTH, active=false,
 			guiState.text!({ text="Animation", large=true }),
+			guiState.canvas!({ name="animation_preview", width=100, height=100 }),
 			guiState.separator!({ thick=true }),
 			guiState.buttons!({ buttons={{name="animation_empty",label="Remove all frames"}} }),
 			guiState.separator!({ thick=true }),
@@ -1687,6 +1688,47 @@ export setupGuiCallbacks :: () {
 			}
 
 			gui.refreshRecursively(guiState, "animation_frames")
+		}
+
+		guiState.onDraw.animation_preview = (canvasEl:gui.Canvas, cw,ch:int) {
+			local PADDING :: 5
+			local project = app.projects[app.currentProjectIndex]
+			local system  = project.systems[project.systemIndex]
+			local ps      = system.particles
+			local image   = cast(LG.Image) ps.getTexture!()
+			local iw, ih  = image.getDimensions!()
+
+			local r, g, b = hsvToRgb(project.bgColorH, project.bgColorS, project.bgColorV)
+			LG.clear(r, g, b)
+
+			if system.frames {
+				local quads          = ps.getQuads!()
+				local quad, progress = getQuadForAnimationPreview(ps, quads)
+				local _, _, qw, qh   = quads[1].getViewport!()
+
+				local w = math.round(qw)
+				local h = math.round(qh)
+
+				local scale = math.min((cw-2*PADDING)/w, (ch-2*PADDING)/h)
+
+				local x = (cw - w*scale) // 2
+				local y = (ch - h*scale) // 2
+
+				LG.draw(image, quad, x, y, 0, scale)
+
+				local progressW = math.round((cw-2)*progress)
+				LG.setColor(1, 1, 1, .2)
+				LG.rectangle(LG.DrawMode.FILL, 1, 1, progressW, 1)
+				LG.rectangle(LG.DrawMode.FILL, 1+progressW-1, 1, 1, 1)
+
+			} else {
+				local scale = math.min((cw-2*PADDING)/iw, (ch-2*PADDING)/ih)
+
+				local x = (cw - iw*scale) // 2
+				local y = (ch - ih*scale) // 2
+
+				LG.draw(image, x, y, 0, scale)
+			}
 		}
 
 		guiState.onAction.animation_empty = (buttons:gui.Buttons, buttonIndex:int) {

@@ -985,16 +985,11 @@ export onDraw :: () {
 
 				if system.frames {
 					local quads        = ps.getQuads!()
+					local quad         = getQuadForAnimationPreview(ps, quads)
 					local _, _, qw, qh = quads[1].getViewport!()
 
 					w = math.round(qw)
 					h = math.round(qh)
-
-					local min, max = ps.getParticleLifetime!()
-					local lifetime = math.max((min + max) / 2, .0001)
-					local progress = (LT.getTime() / lifetime) % 1
-					local i        = math.clamp(math.floor(1 + progress * #quads), 1, #quads)
-					local quad     = quads[i]
 
 					scale = math.min((ww-2*PADDING-MAIN_PANEL_WIDTH)/w, (wh-2*PADDING)/h)
 
@@ -1034,10 +1029,17 @@ export onDraw :: () {
 					local y2 = math.round(y0 + scale * (it.y + it.h))
 					LG.rectangle(LG.DrawMode.LINE, x1+.5, y1+.5, x2-x1-1, y2-y1-1)
 				}
+
+				local occupiedCoords: Table(int, bool)
+
 				for system.frames {
 					local text = format("%d", itIndex)
 					local x    = math.round(x0 + scale * it.x) + 2
 					local y    = math.round(y0 + scale * it.y)
+
+					while occupiedCoords[y*iw+x]  y += fontNormal.getHeight!()
+					occupiedCoords[y*iw+x] = true
+
 					LG.setColor(0, 0, 0)
 					LG.print(text, x+1, y+1)
 					LG.setColor(0, 1, 0)
@@ -1332,6 +1334,16 @@ export getGuiValue :: (system:System, name:string) -> (success:bool, value:strin
 export setGuiValue :: (system:System, name:string, value:string) {
 	system.gui[name] = value
 	scheduleSaveWorkspace()
+}
+
+
+
+export getQuadForAnimationPreview :: (ps:LG.ParticleSystem, quads:[]LG.Quad) -> (quad:LG.Quad--[[may be NULL]], progress:float) {
+	local min, max = ps.getParticleLifetime!()
+	local lifetime = math.max((min + max) / 2, .0001)
+	local progress = (LT.getTime() / lifetime) % 1
+	local i        = math.clamp(math.floor(1 + progress * #quads), 1, #quads)
+	return quads[i], progress
 }
 
 
