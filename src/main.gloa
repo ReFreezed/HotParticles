@@ -88,13 +88,13 @@ local presentTime        = 0.00
 
 local defaultSearchPaths: []string = NULL
 
+export app: App
 export guiState: gui.State
 
-local freezeDtThisFrame = false
+local freezeDtThisFrame      = false
+local forcePixelatedTextures = false
 
 local zoomTime = -9999.00
-
-export app: App
 
 
 
@@ -337,7 +337,7 @@ export updateParticleTextureOffset :: (system:System) {
 
 export updateParticleImageFilters :: () {
 	local project = app.projects[app.currentProjectIndex]
-	local filter  = project.pixelateTextures ? LG.FilterMode.NEAREST : LG.FilterMode.LINEAR
+	local filter  = (project.pixelateTextures or forcePixelatedTextures) ? LG.FilterMode.NEAREST : LG.FilterMode.LINEAR
 
 	for particleImageNames {
 		particleImages[it].setFilter!(filter, filter)
@@ -661,6 +661,9 @@ export onMousePressed :: (mx,my:int, mbutton:int, isTouch:bool, presses:int) {
 
 	if gui.onMousePressed(guiState, mx, my, mbutton, presses)  return
 
+	local showTextureOffset, showAnimationFrames, showWorld = getVisibilityFlags()
+	if not showWorld  return
+
 	if mbutton == 1 {
 		isPositioningParticles = true
 		LM.setGrabbed(true)
@@ -885,6 +888,14 @@ local getVisibilityFlags :: () -> bool, bool, bool {
 	local showAnimationFrames = gui.getElement(guiState, "animation").active
 	local showWorld           = not (showTextureOffset or showAnimationFrames)
 
+	static didShowWorld = true
+
+	if showWorld ~= didShowWorld {
+		didShowWorld           = showWorld
+		forcePixelatedTextures = not showWorld -- A bit misplaced... @Cleanup
+		updateParticleImageFilters()
+	}
+
 	return showTextureOffset, showAnimationFrames, showWorld
 }
 
@@ -1024,9 +1035,30 @@ export onDraw :: () {
 					LG.rectangle(LG.DrawMode.LINE, x1+.5, y1+.5, x2-x1-1, y2-y1-1)
 				}
 				for system.frames {
-					local x = math.round(x0 + scale * it.x) + 2
-					local y = math.round(y0 + scale * it.y)
-					LG.print(format("%d", itIndex), x, y)
+					local text = format("%d", itIndex)
+					local x    = math.round(x0 + scale * it.x) + 2
+					local y    = math.round(y0 + scale * it.y)
+					LG.setColor(0, 0, 0)
+					LG.print(text, x+1, y+1)
+					LG.setColor(0, 1, 0)
+					LG.print(text, x, y)
+				}
+
+				local mx, my = LM.getPosition()
+
+				if love.window.hasMouseFocus() and not (guiState.activeId or gui.isOverGui(guiState, mx, my)) {
+					local text = format(
+						"[%d, %d]",
+						math.clamp(math.floor((mx-x0)/scale), 0, iw),
+						math.clamp(math.floor((my-y0)/scale), 0, ih)
+					)
+					local x = math.min(mx, ww-fontNormal.getWidth!(text)-2)
+					local y = my+20
+					if y+fontNormal.getHeight!() > wh-2  y = my-10-fontNormal.getHeight!()
+					LG.setColor(0, 0, 0)
+					LG.print(text, x+1, y+1)
+					LG.setColor(1, 1, 1)
+					LG.print(text, x, y)
 				}
 			}
 		}

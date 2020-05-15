@@ -369,13 +369,13 @@ export setupGuiFrames :: () {
 			guiState.separator!({ thick=true }),
 			guiState.section!({ label="Sequence",
 				guiState.hbox!({
-					guiState.inputText!({ name="animation_sequence_frameSize",    labelLeft="frame size", value="10 10", inset=25, weight=1.5, tooltip="Format: [width height] or [size]." }),
-					guiState.inputText!({ name="animation_sequence_framePadding", labelLeft="padding",    value="0",     inset=45, weight=1,   tooltip="Padding around each frame. Format: [paddingX paddingY] or [padding]." }),
-					guiState.inputText!({ name="animation_sequence_frameSpacing", labelLeft="spacing",    value="0",     inset=45, weight=1,   tooltip="Space between frames. Format: [spacingX spacingY] or [spacing]." }),
+					guiState.inputText!({ name="animation_sequence_frameSize",    labelLeft="frame size", value="10 10", inset=25, weight=1.5, tooltip="Format: [width height] or [size]" }),
+					guiState.inputText!({ name="animation_sequence_framePadding", labelLeft="padding",    value="0",     inset=45, weight=1,   tooltip="Padding around each frame. Format: [paddingX paddingY] or [padding]" }),
+					guiState.inputText!({ name="animation_sequence_frameSpacing", labelLeft="spacing",    value="0",     inset=45, weight=1,   tooltip="Space between frames. Format: [spacingX spacingY] or [spacing]" }),
 				}),
 				guiState.hbox!({
-					guiState.inputText!({ name="animation_sequence_areaPosition", labelLeft="area x/y",  value="0 0", inset=25, weight=1, tooltip="Format: [x y]. Non-positive means from bottom/right corner." }),
-					guiState.inputText!({ name="animation_sequence_areaSize",     labelLeft="area size", value="0 0", inset=55, weight=1, tooltip="Format: [width height] or [size]. Non-positive means from bottom/right corner." }),
+					guiState.inputText!({ name="animation_sequence_areaPosition", labelLeft="area x/y",  value="0 0", inset=25, weight=1, tooltip="Top/left corner of first frame. Negative means offset from bottom/right corner of texture. Format: [x y]" }),
+					guiState.inputText!({ name="animation_sequence_areaSize",     labelLeft="area size", value="0 0", inset=55, weight=1, tooltip="Size of area containing frames. Non-positive means offset from bottom/right corner of texture. Format: [width height] or [size]" }),
 					guiState.buttons!({ buttons={{name="animation_sequence_generate",label="Generate"}} }),
 				}),
 			}),
@@ -1676,7 +1676,7 @@ export setupGuiCallbacks :: () {
 			"animation_sequence_areaSize",
 		}
 
-		guiState.onActive.animation = (vbox:gui.Vbox) {
+		guiState.onActive.animation = (frame:gui.Frame) {
 			local project = app.projects[app.currentProjectIndex]
 			local system  = project.systems[project.systemIndex]
 
@@ -1814,7 +1814,7 @@ export setupGuiCallbacks :: () {
 						-- {name="animation_move",   image="iconMoveV",  tooltip="Move frame (drag)", draggable=true},
 					} }),
 					guiState.inputText!({ name="animation_xywh", weight=1, value=inputValue, tooltip="Format: [x y width height]" }),
-					guiState.text!({ name="animation_message", width=50 }),
+					guiState.text!({ name=format("animation_message%d", itIndex), width=50 }),
 				}))
 			}
 		}
@@ -1828,21 +1828,56 @@ export setupGuiCallbacks :: () {
 
 			return system.frames[i], i
 		}
-
 		guiState.onAction.animation_delete = (buttons:gui.Buttons, buttonIndex:int) {
+			local project      = app.projects[app.currentProjectIndex]
+			local system       = project.systems[project.systemIndex]
 			local animFrame, i = getAnimationFrame(buttons)
-			-- @Incomplete
+
+			remove(system.frames, i)
+
+			updateParticleAnimation(system)
+			gui.refreshRecursively(guiState, "animation_frames")
 		}
 		guiState.onAction.animation_add = (buttons:gui.Buttons, buttonIndex:int) {
+			local project      = app.projects[app.currentProjectIndex]
+			local system       = project.systems[project.systemIndex]
 			local animFrame, i = getAnimationFrame(buttons)
-			-- @Incomplete
+
+			local animFrameNew: AnimationFrame = {
+				x = animFrame.x,
+				y = animFrame.y,
+				w = animFrame.w,
+				h = animFrame.h,
+			}
+			insert(system.frames, i+1, animFrameNew)
+
+			updateParticleAnimation(system)
+			gui.refreshRecursively(guiState, "animation_frames")
 		}
-		guiState.onAction.animation_xywh = (buttons:gui.Buttons, buttonIndex:int) {
-			local animFrame, i = getAnimationFrame(buttons)
-			-- @Incomplete
+		guiState.onAction.animation_xywh = (input:gui.InputText, _:int) {
+			local project      = app.projects[app.currentProjectIndex]
+			local system       = project.systems[project.systemIndex]
+			local animFrame, i = getAnimationFrame(input)
+
+			local ok, x, y, w, h = parseFourInts(input.value)
+			if not ok {
+				setErrorText("Invalid frame values format")
+				gui.getElement(guiState, format("animation_message%d", i), gui.Text).text = "Error!"
+				return
+			}
+
+			animFrame.x = x
+			animFrame.y = y
+			animFrame.w = w
+			animFrame.h = h
+
+			updateParticleAnimation(system)
+			gui.getElement(guiState, format("animation_message%d", i), gui.Text).text = ""
 		}
 		-- guiState.onDrag.animation_move = (buttons:gui.Buttons, buttonIndex:int, mx,my:int) {
 		-- 	local animFrame, i = getAnimationFrame(buttons)
+		-- 	local project      = app.projects[app.currentProjectIndex]
+		-- 	local system       = project.systems[project.systemIndex]
 		-- 	-- @Incomplete
 		-- }
 	}
