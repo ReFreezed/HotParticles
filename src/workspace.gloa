@@ -140,6 +140,22 @@ local writeProject :: (buffer:[]string, project:Project, writePath:bool) {
 			writeValue(buffer, ymax)
 			insert(buffer, "\n")
 		}
+		if system.frames {
+			insert(buffer, "frames")
+			for system.frames {
+				writeValue(buffer, it.x)
+				writeValue(buffer, it.y)
+				writeValue(buffer, it.w)
+				writeValue(buffer, it.h)
+			}
+			insert(buffer, "\n")
+		}
+		for cast(table) system.gui {
+			insert(buffer, "gui")
+			writeValue(buffer, cast(string) itIndex)
+			writeValue(buffer, cast(string) it)
+			insert(buffer, "\n")
+		}
 	}
 }
 
@@ -285,6 +301,19 @@ local readString :: (line:string, ptr:int) -> (success:bool, ptr:int, s:string) 
 	return true, ptr, v
 }
 
+local readIntArray :: (line:string, ptr:int) -> (success:bool, ptr:int, arr:[]int) {
+	local arr: []int
+
+	while ptr <= #line {
+		local ok, _ptr, n = readInt(line, ptr)
+		if not ok  return false, NULL, NULL
+
+		ptr = cast(int) _ptr
+		insert(arr, n)
+	}
+
+	return true, ptr, arr
+}
 local readFloatArray :: (line:string, ptr:int) -> (success:bool, ptr:int, arr:[]float) {
 	local arr: []float
 
@@ -617,6 +646,30 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 						local ^ok, ^ptr, ymax = readFloat(line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
 						ps.setLinearAcceleration!(xmin,ymin, xmax,ymax)
+
+					case "frames":
+						local ^ok, ^ptr, values = readIntArray(line, cast(int)ptr)
+						if not ok                 return parsingError(path, ln, "Bad animation frame array format: %s", line)
+						if #values % 4 ~= 0       return parsingError(path, ln, "Bad animation frame array format: %s", line)
+						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
+
+						for 1, #values, 4 {
+							local animFrame: AnimationFrame = {
+								x = values[it  ],
+								y = values[it+1],
+								w = values[it+2],
+								h = values[it+3],
+							}
+							insert(system.frames, animFrame)
+						}
+
+					case "gui":
+						local ^ok, ^ptr, name  = readString(line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
+						local ^ok, ^ptr, value = readString(line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
+						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
+
+						local params = cast(table) system.gui
+						params[name] = value
 
 					case:
 						return parsingError(path, ln, "Unknown project parameter '%s'.", param)

@@ -23,9 +23,10 @@
 	Text
 	Separator
 
+	delete
 	draw
 	drawChecker, drawCheckerBox
-	getElement, getElementAt, getWidgetAt
+	getElement, getElementAt, getWidgetAt, findParent
 	getTopmostActiveModal
 	isElementVisible
 	isInsideElement, isOverGui
@@ -54,7 +55,7 @@ local SLIDER_MIN_WIDTH    :: 12
 local SLIDER_MIN_LENGTH   :: 70
 local COLOR_PREVIEW_WIDTH :: 24
 
-local INPUT_MIN_WIDTH :: 50
+local INPUT_MIN_WIDTH :: 40
 
 local CHECKBOX_SIZE :: 14 -- @Temp until we have an image.
 
@@ -170,7 +171,7 @@ export Element :: struct {
 	label     = "",
 	labelLeft = "",
 	tooltip   = "",
-	weight    = 0,
+	weight    = .0,
 	inset     = 0,
 	width     = 0, -- Zero means automatic.
 	height    = 0, -- Zero means automatic. For scrollables, non-positive means distance from the bottom of the screen.
@@ -1111,26 +1112,27 @@ local calculateNaturalSize :: (state:State, el:Element) {
 	if el.maxHeight >= 0  el.layoutHeight = math.min(el.layoutHeight, el.maxHeight)
 
 	-- The following count as outside the element, even though they take space as if they were part of the element.
-	el.layoutWidth += el.inset
+	-- el.layoutWidth += el.inset
 	if el.type == Tabs  el.layoutHeight += TAB_BOTTOM_LINE_WIDTH
 }
 
 local positionAndFit :: (state:State, el:Element, x,y,w,h:int) {
 	local positionAndFitChildrenV :: (state:State, el:Element, x,y,w,h:int) {
 		for el  if it.active {
-			positionAndFit(state, it, x, y, w, it.layoutHeight)
+			positionAndFit(state, it, x+it.inset, y, w-it.inset, it.layoutHeight)
 			y += it.layoutHeight + SPACING
 		}
 	}
 	local positionAndFitChildrenH :: (state:State, el:Element, x,y,w,h:int) {
 		for el  if it.active {
+			x += it.inset
 			positionAndFit(state, it, x, y, it.layoutWidth, h)
 			x += it.layoutWidth + SPACING
 		}
 	}
 
-	x += el.inset
-	w -= el.inset
+	-- x += el.inset
+	-- w -= el.inset
 	if el.type == Tabs  h -= TAB_BOTTOM_LINE_WIDTH
 
 	el.layoutX      = x
@@ -1179,22 +1181,25 @@ local positionAndFit :: (state:State, el:Element, x,y,w,h:int) {
 		case Hbox:
 			local hbox         = cast(Hbox) el
 			local dynamicSpace = w
-			local weight       = 0
+			local weight       = .0
 			local activeCount  = 0
 
 			for hbox  if it.active {
-				activeCount += 1
-				if it.weight
+				activeCount  += 1
+				dynamicSpace -= it.inset
+
+				if it.weight {
 					weight += it.weight
-				else
+				} else {
 					dynamicSpace -= it.layoutWidth
+				}
 			}
 
 			if weight {
 				dynamicSpace -= (activeCount-1) * SPACING
 
 				for hbox  if it.active and it.weight {
-					it.layoutWidth  = math.round(dynamicSpace * it.weight / weight)
+					it.layoutWidth  = math.max(math.round(dynamicSpace * it.weight / weight), 1)
 					dynamicSpace   -= it.layoutWidth
 					weight         -= it.weight
 				}
@@ -1205,7 +1210,7 @@ local positionAndFit :: (state:State, el:Element, x,y,w,h:int) {
 		case Vbox:
 			local vbox         = cast(Vbox) el
 			local dynamicSpace = h
-			local weight       = 0
+			local weight       = .0
 			local activeCount  = 0
 
 			for vbox  if it.active {
@@ -1339,10 +1344,15 @@ local drawElement :: (state:State, el:Element) {
 		case Frame:
 			local frame = cast(Frame) el
 
+			local x = frame.layoutX
+			local y = frame.layoutY
+			local w = frame.layoutWidth
+			local h = frame.layoutHeight
+
 			if frame.layout == Layout.FLOATING and frame.modal {
 				local BORDER :: 10
 				LG.setColor(.1, .1, .1, .9)
-				LG.rectangle(LG.DrawMode.FILL, frame.layoutX-BORDER, frame.layoutY-BORDER, frame.layoutWidth+2*BORDER, frame.layoutHeight+2*BORDER, SPACING+BUTTON_RADIUS+BORDER)
+				LG.rectangle(LG.DrawMode.FILL, x-BORDER, y-BORDER, w+2*BORDER, h+2*BORDER, SPACING+BUTTON_RADIUS+BORDER)
 			}
 
 			if frame.style == Style.CONTEXT_MENU
@@ -1351,51 +1361,56 @@ local drawElement :: (state:State, el:Element) {
 				LG.setColor(.2, .2, .2)
 
 			if frame.style == Style.CONTEXT_MENU
-				LG.rectangle(LG.DrawMode.FILL, frame.layoutX, frame.layoutY, frame.layoutWidth, frame.layoutHeight)
+				LG.rectangle(LG.DrawMode.FILL, x, y, w, h)
 			elseif frame.layout == Layout.FLOATING
-				LG.rectangle(LG.DrawMode.FILL, frame.layoutX, frame.layoutY, frame.layoutWidth, frame.layoutHeight, SPACING+BUTTON_RADIUS)
+				LG.rectangle(LG.DrawMode.FILL, x, y, w, h, SPACING+BUTTON_RADIUS)
 			else
-				LG.rectangle(LG.DrawMode.FILL, frame.layoutX, frame.layoutY, frame.layoutWidth, frame.layoutHeight)
+				LG.rectangle(LG.DrawMode.FILL, x, y, w, h)
 
 			if frame.style == Style.CONTEXT_MENU {
 				LG.setColor(.1, .1, .1)
-				LG.rectangle(LG.DrawMode.LINE, frame.layoutX+.5, frame.layoutY+.5, frame.layoutWidth-1, frame.layoutHeight-1)
+				LG.rectangle(LG.DrawMode.LINE, x+.5, y+.5, w-1, h-1)
 			}
 
 			LG.pushAll()
-			LG.intersectScissor(frame.layoutX, frame.layoutY, frame.layoutWidth, frame.layoutHeight)
+			intersectScissor(x, y, w, h)
 			drawChildren(state, frame)
 			LG.pop()
 
 		case Scrollable:
 			local scrollable = cast(Scrollable) el
 
+			local x = scrollable.layoutX
+			local y = scrollable.layoutY
+			local w = scrollable.layoutWidth
+			local h = scrollable.layoutHeight
+
 			LG.pushAll()
 			LG.translate(0, scrollable.scroll)
-			LG.intersectScissor(scrollable.layoutX-SPACING, scrollable.layoutY, scrollable.layoutWidth+SPACING, scrollable.layoutHeight)
+			intersectScissor(x-SPACING, y, w+SPACING, h)
 			drawChildren(state, scrollable)
 			LG.pop()
 
 			-- Shadow.
 			do {
-				local h      = scrollable.scroll ? 30 : 10
-				local iw, ih = imageGradient.getDimensions!()
-				local sx     = h / ih
-				local sy     = (scrollable.layoutWidth + SPACING - SCROLLBAR_WIDTH) / iw
+				local shadowH = scrollable.scroll ? 30 : 10
+				local iw, ih  = imageGradient.getDimensions!()
+				local sx      = shadowH / ih
+				local sy      = (w + SPACING - SCROLLBAR_WIDTH) / iw
 
 				LG.setColor(0, 0, 0, (scrollable.scroll ? 1 : .3))
-				LG.draw(imageGradient, scrollable.layoutX-SPACING, scrollable.layoutY+h, -math.TAU/4, sx, sy)
+				LG.draw(imageGradient, x-SPACING, y+shadowH, -math.TAU/4, sx, sy)
 			}
 
 			-- Scrollbar.
 			do {
 				local handlePos, handleLen, handlePosMax = getScrollbarHandle(scrollable, visual=true)
 
-				local x = scrollable.layoutX + scrollable.layoutWidth - SCROLLBAR_WIDTH
-				local y = scrollable.layoutY + handlePos
+				local barX = x + w - SCROLLBAR_WIDTH
+				local barY = y + handlePos
 
 				LG.setColor(0, 0, 0, .3)
-				LG.rectangle(LG.DrawMode.FILL, x, scrollable.layoutY, SCROLLBAR_WIDTH, scrollable.layoutHeight)
+				LG.rectangle(LG.DrawMode.FILL, barX, y, SCROLLBAR_WIDTH, h)
 
 				if scrollable.id == state.activeId
 					LG.setColor(1, 1, 1, .30)
@@ -1404,7 +1419,7 @@ local drawElement :: (state:State, el:Element) {
 				else
 					LG.setColor(1, 1, 1, .15)
 
-				LG.rectangle(LG.DrawMode.FILL, x+1, y+1, SCROLLBAR_WIDTH-2, handleLen-2, SCROLLBAR_WIDTH//2-1)
+				LG.rectangle(LG.DrawMode.FILL, barX+1, barY+1, SCROLLBAR_WIDTH-2, handleLen-2, SCROLLBAR_WIDTH//2-1)
 			}
 
 		case Section:
@@ -1559,7 +1574,7 @@ local drawElement :: (state:State, el:Element) {
 				}
 
 				LG.pushAll()
-				LG.intersectScissor(
+				intersectScissor(
 					bx1[itIndex] + (bw[itIndex] - BUTTON_IMAGE_MAX_SIZE) // 2,
 					by1[itIndex] + (bh[itIndex] - BUTTON_IMAGE_MAX_SIZE) // 2 + getScrollOffset(buttons),
 					BUTTON_IMAGE_MAX_SIZE,
@@ -1608,7 +1623,7 @@ local drawElement :: (state:State, el:Element) {
 						grey, a = 1, 1
 
 					LG.pushAll()
-					LG.intersectScissor(scissorX1, 0, scissorX2-scissorX1, LG.getHeight())
+					intersectScissor(scissorX1, 0, scissorX2-scissorX1, LG.getHeight())
 					if it.label {
 						LG.setColor(grey, grey, grey, a)
 						LG.print(it.label, textX, textY)
@@ -1666,7 +1681,7 @@ local drawElement :: (state:State, el:Element) {
 			LG.rectangle(LG.DrawMode.FILL, x, y, w, h, BUTTON_RADIUS)
 
 			LG.pushAll()
-			LG.intersectScissor(x, 0, w, LG.getHeight())
+			intersectScissor(x, 0, w, LG.getHeight())
 
 			-- Selection.
 			if focused {
@@ -2088,6 +2103,14 @@ export getWidgetAt :: (state:State, x,y:int) -> (found:bool, widget:Widget) {
 	}
 }
 
+export findParent :: (state:State, el:Element, name:string) -> (found:bool, parent:Element) {
+	while true {
+		el = el.parent
+		if el      == NULL  return false, NULL
+		if el.name == name  return true,  el
+	}
+}
+
 
 
 export setActive :: (state:State, name:string, active:bool) -> (success:bool) {
@@ -2435,7 +2458,7 @@ export hideContextMenu :: (state:State) -> (success:bool) {
 	local contextMenu = state.contextMenu
 	if contextMenu == NULL  return false
 
-	deleteFrame(state, contextMenu)
+	delete(state, contextMenu)
 	state.contextMenu = NULL
 
 	local cb = cast((i:int)) contextMenu.data
@@ -2446,12 +2469,24 @@ export hideContextMenu :: (state:State) -> (success:bool) {
 
 
 
-export deleteFrame :: (state:State, frame:Frame) {
-	local found, i = indexOf(state.frames, frame)
-	if not found  return
+export delete :: (state:State, el:Element) {
+	updateLayoutIfNeeded(state) -- Needed for parents. @Speed
 
-	unregisterTree(state, frame)
-	remove(state.frames, i)
+	if el.type == Frame {
+		local frame    = cast(Frame) el
+		local found, i = indexOf(state.frames, frame)
+		if not found  return
+
+		unregisterTree(state, frame)
+		remove(state.frames, i)
+
+	} else {
+		local found, i = indexOf(el.parent, el)
+		if not found  return
+
+		unregisterTree(state, el)
+		remove(el.parent, i)
+	}
 }
 
 
@@ -2469,6 +2504,12 @@ local shouldHighlight :: (state:State, el:$T) -> bool {
 	!if    T == Slider     return (indexOf(other.linkMultiDrag, el.name))
 	elseif T == Direction  return (indexOf(other.linkMultiDrag, el.name))
 	elseif T == Color      return (indexOf(other.linkMultiDrag, el.name))
+}
+
+
+
+local intersectScissor :: (x,y,w,h:int) {
+	LG.intersectScissor(x, y, math.max(w, 0), math.max(h, 0))
 }
 
 

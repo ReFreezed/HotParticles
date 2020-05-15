@@ -207,6 +207,10 @@ export System :: struct {
 	offsetX = .5,
 	offsetY = .5,
 
+	frames: []AnimationFrame,
+
+	gui: struct { !key:string, !value:string },
+
 	-- Runtime-only:
 	visible = true,
 
@@ -234,12 +238,14 @@ export System :: struct {
 	},
 }
 
+export AnimationFrame :: struct { x=0.0, y=0.0, w=0.0, h=0.0 }
+
 
 
 export updateParticles :: (project:Project) {
 	for project.systems {
-		updateParticleTexture(project, it)
 		updateParticleColors(it)
+		updateParticleTexture(project, it)
 	}
 }
 
@@ -294,16 +300,37 @@ export updateParticleTexture :: (project:Project, system:System) {
 	if image == NULL       image = particleImages[system.textureName]
 
 	system.particles.setTexture!(image)
-	updateParticleTextureOffset(system)
+	updateParticleAnimation(system)
 
 	local filter = project.pixelateTextures ? LG.FilterMode.NEAREST : LG.FilterMode.LINEAR
 	image.setFilter!(filter, filter)
 }
 
-export updateParticleTextureOffset :: (system:System) {
+export updateParticleAnimation :: (system:System) {
 	local image  = cast(LG.Image) system.particles.getTexture!()
 	local iw, ih = image.getDimensions!()
-	system.particles.setOffset!(iw*system.offsetX, ih*system.offsetY)
+
+	if system.frames {
+		local quads: []LG.Quad
+		for system.frames {
+			insert(quads, LG.newQuad(it.x, it.y, it.w, it.h, iw, ih))
+		}
+		system.particles.setQuads!(quads)
+	} else {
+		system.particles.setQuads!()
+	}
+	updateParticleTextureOffset(system)
+}
+
+export updateParticleTextureOffset :: (system:System) {
+	if system.frames {
+		local animFrame1 = system.frames[1]
+		system.particles.setOffset!(animFrame1.w*system.offsetX, animFrame1.h*system.offsetY)
+	} else {
+		local image  = cast(LG.Image) system.particles.getTexture!()
+		local iw, ih = image.getDimensions!()
+		system.particles.setOffset!(iw*system.offsetX, ih*system.offsetY)
+	}
 }
 
 
@@ -615,7 +642,7 @@ export onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool)
 
 		case "p":
 			if mod == {
-				case ModifierKey.NONE: gui.setActive(guiState, "main", not gui.getElement(guiState, "main", gui.Frame).active)
+				case ModifierKey.NONE: gui.setActive(guiState, "main", not gui.getElement(guiState, "main").active)
 			}
 	}
 }
@@ -676,6 +703,9 @@ export onMouseWheel :: (dx,dy:int) {
 	if LM.isGrabbed()                      return
 	if gui.onMouseWheel(guiState, dx, dy)  return
 	if not dy                              return
+
+	local showTextureOffset, showAnimationFrames, showWorld = getVisibilityFlags()
+	if not showWorld  return
 
 	local mx, my = LM.getPosition()
 	if gui.isOverGui(guiState, mx, my)  return
@@ -838,13 +868,7 @@ export onUpdate :: (dt:float) {
 
 
 
-export onDraw :: () {
-	static statsAll:   LG.Stats
-	static statsWorld: LG.Stats
-
-	local ww, wh  = LG.getDimensions()
-	local project = app.projects[app.currentProjectIndex]
-
+local getVisibilityFlags :: () -> bool, bool, bool {
 	static wasHoveringTextureOffset = false
 	static textureOffsetHoverTime   = -9999.00
 
@@ -857,7 +881,21 @@ export onDraw :: () {
 		textureOffsetHoverTime   = LT.getTime()
 	}
 
-	local showTextureOffset = (isHoveringTextureOffset and LT.getTime() - textureOffsetHoverTime > 4/60)
+	local showTextureOffset   = (isHoveringTextureOffset and LT.getTime() - textureOffsetHoverTime > 4/60)
+	local showAnimationFrames = gui.getElement(guiState, "animation").active
+	local showWorld           = not (showTextureOffset or showAnimationFrames)
+
+	return showTextureOffset, showAnimationFrames, showWorld
+}
+
+export onDraw :: () {
+	static statsAll:   LG.Stats
+	static statsWorld: LG.Stats
+
+	local ww, wh  = LG.getDimensions()
+	local project = app.projects[app.currentProjectIndex]
+
+	local showTextureOffset, showAnimationFrames, showWorld = getVisibilityFlags()
 
 	LG.reset()
 
@@ -876,7 +914,7 @@ export onDraw :: () {
 			gui.drawChecker(0, 0, ww, wh, 2)
 		}
 
-		if not showTextureOffset {
+		if showWorld {
 			LG.translate((ww-MAIN_PANEL_WIDTH)/2, wh/2)
 			if not project.pixelateWorld  LG.scale(project.zoom)
 
@@ -916,32 +954,81 @@ export onDraw :: () {
 
 		LG.setFont(fontNormal)
 
-		-- Texture offset.
-		if showTextureOffset {
+		-- Texture offset/animation frames.
+		if showTextureOffset or showAnimationFrames {
 			local PADDING :: 20
 
 			local system = project.systems[project.systemIndex]
-			local image  = cast(LG.Image) system.particles.getTexture!()
+			local ps     = system.particles
+			local image  = cast(LG.Image) ps.getTexture!()
 			local iw, ih = image.getDimensions!()
 
-			local scale = math.min((ww-2*PADDING-MAIN_PANEL_WIDTH)/iw, wh-2*PADDING/ih)
+			local scale = math.min((ww-2*PADDING-MAIN_PANEL_WIDTH)/iw, (wh-2*PADDING)/ih)
 
-			local x = (ww - iw*scale + MAIN_PANEL_WIDTH) // 2
-			local y = (wh - ih*scale                   ) // 2
+			local x0 = (ww - iw*scale + MAIN_PANEL_WIDTH) // 2
+			local y0 = (wh - ih*scale                   ) // 2
 
-			LG.setColor(1, 1, 1)
-			LG.draw(image, x, y, 0, scale)
+			if showTextureOffset {
+				local w = iw
+				local h = ih
 
-			local HALF_WIDTH  :: 3
-			local HALF_LENGTH :: 20
-			local offsetX = math.round(x + iw*scale*system.offsetX)
-			local offsetY = math.round(y + ih*scale*system.offsetY)
-			LG.setColor(0, 0, 0, .9)
-			LG.rectangle(LG.DrawMode.FILL, offsetX-HALF_WIDTH-1, offsetY-HALF_LENGTH-1, 2*HALF_WIDTH+2, 2*HALF_LENGTH+2)
-			LG.rectangle(LG.DrawMode.FILL, offsetX-HALF_LENGTH-1, offsetY-HALF_WIDTH-1, 2*HALF_LENGTH+2, 2*HALF_WIDTH+2)
-			LG.setColor(1, 1, 1)
-			LG.rectangle(LG.DrawMode.FILL, offsetX-HALF_WIDTH, offsetY-HALF_LENGTH, 2*HALF_WIDTH, 2*HALF_LENGTH)
-			LG.rectangle(LG.DrawMode.FILL, offsetX-HALF_LENGTH, offsetY-HALF_WIDTH, 2*HALF_LENGTH, 2*HALF_WIDTH)
+				if system.frames {
+					local quads        = ps.getQuads!()
+					local _, _, qw, qh = quads[1].getViewport!()
+
+					w = math.round(qw)
+					h = math.round(qh)
+
+					local min, max = ps.getParticleLifetime!()
+					local lifetime = math.max((min + max) / 2, .0001)
+					local progress = (LT.getTime() / lifetime) % 1
+					local i        = math.clamp(math.floor(1 + progress * #quads), 1, #quads)
+					local quad     = quads[i]
+
+					scale = math.min((ww-2*PADDING-MAIN_PANEL_WIDTH)/w, (wh-2*PADDING)/h)
+
+					x0 = (ww - w*scale + MAIN_PANEL_WIDTH) // 2
+					y0 = (wh - h*scale                   ) // 2
+
+					LG.setColor(1, 1, 1)
+					LG.draw(image, quad, x0, y0, 0, scale)
+
+				} else {
+					LG.setColor(1, 1, 1)
+					LG.draw(image, x0, y0, 0, scale)
+				}
+
+				local HALF_WIDTH  :: 3
+				local HALF_LENGTH :: 20
+				local x = math.round(x0 + w*scale*system.offsetX)
+				local y = math.round(y0 + h*scale*system.offsetY)
+				LG.setColor(0, 0, 0, .9)
+				LG.rectangle(LG.DrawMode.FILL, x-HALF_WIDTH-1, y-HALF_LENGTH-1, 2*HALF_WIDTH+2, 2*HALF_LENGTH+2)
+				LG.rectangle(LG.DrawMode.FILL, x-HALF_LENGTH-1, y-HALF_WIDTH-1, 2*HALF_LENGTH+2, 2*HALF_WIDTH+2)
+				LG.setColor(1, 1, 1)
+				LG.rectangle(LG.DrawMode.FILL, x-HALF_WIDTH, y-HALF_LENGTH, 2*HALF_WIDTH, 2*HALF_LENGTH)
+				LG.rectangle(LG.DrawMode.FILL, x-HALF_LENGTH, y-HALF_WIDTH, 2*HALF_LENGTH, 2*HALF_WIDTH)
+			}
+
+			if showAnimationFrames {
+				LG.setColor(1, 1, 1)
+				LG.draw(image, x0, y0, 0, scale)
+
+				LG.setColor(0, 1, 0)
+
+				for system.frames {
+					local x1 = math.round(x0 + scale * (it.x       ))
+					local y1 = math.round(y0 + scale * (it.y       ))
+					local x2 = math.round(x0 + scale * (it.x + it.w))
+					local y2 = math.round(y0 + scale * (it.y + it.h))
+					LG.rectangle(LG.DrawMode.LINE, x1+.5, y1+.5, x2-x1-1, y2-y1-1)
+				}
+				for system.frames {
+					local x = math.round(x0 + scale * it.x) + 2
+					local y = math.round(y0 + scale * it.y)
+					LG.print(format("%d", itIndex), x, y)
+				}
+			}
 		}
 
 		-- Stats.
@@ -1200,6 +1287,19 @@ export openProject :: (path:string, asPreview=false) -> (success:bool, project:P
 	setCurrentProject(#app.projects)
 
 	return true, project
+}
+
+
+
+export getGuiValue :: (system:System, name:string) -> (success:bool, value:string) {
+	local value = system.gui[name]
+	if value == NULL  return false, ""
+	return true, value
+}
+
+export setGuiValue :: (system:System, name:string, value:string) {
+	system.gui[name] = value
+	scheduleSaveWorkspace()
 }
 
 

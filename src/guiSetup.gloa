@@ -11,6 +11,8 @@
 
 local BIG_BUTTON_HEIGHT :: 40
 
+
+
 export setupGuiFrames :: () {
 	guiState.frames = {
 		guiState.frame!({ name="main", width=MAIN_PANEL_WIDTH,
@@ -78,6 +80,7 @@ export setupGuiFrames :: () {
 						guiState.hbox!({
 							guiState.slider!({ name="textureOffsetX", value=.5, min=0, max=1, weight=1, readoutMulti=100, readout="%d%%", labelLeft="texture offset x/y" }),
 							guiState.slider!({ name="textureOffsetY", value=.5, min=0, max=1, weight=1, readoutMulti=100, readout="%d%%" }),
+							guiState.buttons!({ name="util_pushPanel", data="animation", buttons={{label="Animation"}} }),
 						}),
 					}),
 
@@ -359,6 +362,31 @@ export setupGuiFrames :: () {
 			}),
 		}),
 
+		guiState.frame!({ name="animation", width=MAIN_PANEL_WIDTH, active=false,
+			guiState.text!({ text="Animation", large=true }),
+			guiState.separator!({ thick=true }),
+			guiState.buttons!({ buttons={{name="animation_empty",label="Remove all frames"}} }),
+			guiState.separator!({ thick=true }),
+			guiState.section!({ label="Sequence",
+				guiState.hbox!({
+					guiState.inputText!({ name="animation_sequence_frameSize",    labelLeft="frame size", value="10 10", inset=25, weight=1.5, tooltip="Format: [width height] or [size]." }),
+					guiState.inputText!({ name="animation_sequence_framePadding", labelLeft="padding",    value="0",     inset=45, weight=1,   tooltip="Padding around each frame. Format: [paddingX paddingY] or [padding]." }),
+					guiState.inputText!({ name="animation_sequence_frameSpacing", labelLeft="spacing",    value="0",     inset=45, weight=1,   tooltip="Space between frames. Format: [spacingX spacingY] or [spacing]." }),
+				}),
+				guiState.hbox!({
+					guiState.inputText!({ name="animation_sequence_areaPosition", labelLeft="area x/y",  value="0 0", inset=25, weight=1, tooltip="Format: [x y]. Non-positive means from bottom/right corner." }),
+					guiState.inputText!({ name="animation_sequence_areaSize",     labelLeft="area size", value="0 0", inset=55, weight=1, tooltip="Format: [width height] or [size]. Non-positive means from bottom/right corner." }),
+					guiState.buttons!({ buttons={{name="animation_sequence_generate",label="Generate"}} }),
+				}),
+			}),
+			guiState.scrollable!({
+				guiState.vbox!({ name="animation_frames", inset=25 }),
+			}),
+			guiState.buttons!({ height=BIG_BUTTON_HEIGHT,
+				buttons = {{name="util_popPanel",label="Close"}},
+			}),
+		}),
+
 		guiState.frame!({ name="exit", width=DIALOG_WIDTH, layout=gui.Layout.FLOATING, modal=true, active=false,
 			guiState.buttons!({ height=BIG_BUTTON_HEIGHT,
 				buttons = {{name="exit_exit",label="Exit"},{name="util_popPanel",label="Cancel"}},
@@ -366,6 +394,8 @@ export setupGuiFrames :: () {
 		}),
 	}
 }
+
+
 
 export panelStack: []string
 
@@ -414,9 +444,11 @@ export popPanel :: (nameForAssert="") -> (success:bool) {
 	local frame = gui.getElement(guiState, name, gui.Frame)
 	gui.setActive(guiState, frame, false)
 
-	if frame.temp  gui.deleteFrame(guiState, frame)
+	if frame.temp  gui.delete(guiState, frame)
 	return true
 }
+
+
 
 export setupGuiCallbacks :: () {
 	--==============================================================
@@ -1633,6 +1665,189 @@ export setupGuiCallbacks :: () {
 	}
 
 	--==============================================================
+	--= Animation
+	--==============================================================
+	do {
+		local PARAMS :: {
+			"animation_sequence_frameSize",
+			"animation_sequence_framePadding",
+			"animation_sequence_frameSpacing",
+			"animation_sequence_areaPosition",
+			"animation_sequence_areaSize",
+		}
+
+		guiState.onActive.animation = (vbox:gui.Vbox) {
+			local project = app.projects[app.currentProjectIndex]
+			local system  = project.systems[project.systemIndex]
+
+			for PARAMS {
+				local input     = gui.getElement(guiState, it, gui.InputText)
+				local ok, value = getGuiValue(system, it)
+				if ok  input.value = value
+			}
+
+			gui.refreshRecursively(guiState, "animation_frames")
+		}
+
+		guiState.onAction.animation_empty = (buttons:gui.Buttons, buttonIndex:int) {
+			local project = app.projects[app.currentProjectIndex]
+			local system  = project.systems[project.systemIndex]
+			system.frames = {}
+			gui.refreshRecursively(guiState, "animation_frames")
+			updateParticleAnimation(system)
+		}
+
+		local parseTwoInts :: (s:string) -> bool, int, int {
+			s = trim(s)
+
+			local ok, xStr, yStr = matchPattern(s, "^(%-?%d+) +(%-?%d+)$")
+			if not ok  return false, 0, 0
+
+			local _, x = stringToInt(cast(string) xStr)
+			local _, y = stringToInt(cast(string) yStr)
+
+			return true, x, y
+		}
+
+		local parseFourInts :: (s:string) -> bool, int, int, int, int {
+			s = trim(s)
+
+			local ok, xStr, yStr, zStr, wStr = matchPattern(s, "^(%-?%d+) +(%-?%d+) +(%-?%d+) +(%-?%d+)$")
+			if not ok  return false, 0, 0, 0, 0
+
+			local _, x = stringToInt(cast(string) xStr)
+			local _, y = stringToInt(cast(string) yStr)
+			local _, z = stringToInt(cast(string) zStr)
+			local _, w = stringToInt(cast(string) wStr)
+
+			return true, x, y, z, w
+		}
+
+		local parseOneOrTwoInts :: (s:string) -> bool, int, int {
+			s = trim(s)
+
+			local        ok, xStr, yStr = matchPattern(s, "^(%-?%d+) +(%-?%d+)$")
+			if not ok  { ok, xStr       = matchPattern(s, "^%-?%d+$") ; yStr = xStr }
+			if not ok  return false, 0, 0
+
+			local _, x = stringToInt(cast(string) xStr)
+			local _, y = stringToInt(cast(string) yStr)
+
+			return true, x, y
+		}
+
+		guiState.onAction.animation_sequence_generate = (buttons:gui.Buttons, buttonIndex:int) {
+			local project = app.projects[app.currentProjectIndex]
+			local system  = project.systems[project.systemIndex]
+			local image   = cast(LG.Image) system.particles.getTexture!()
+			local iw, ih  = image.getDimensions!()
+
+			local frameSizeStr = trim(gui.getElement(guiState, "animation_sequence_frameSize",    gui.InputText).value)
+			local paddingStr   = trim(gui.getElement(guiState, "animation_sequence_framePadding", gui.InputText).value)
+			local spacingStr   = trim(gui.getElement(guiState, "animation_sequence_frameSpacing", gui.InputText).value)
+			local areaPosStr   = trim(gui.getElement(guiState, "animation_sequence_areaPosition", gui.InputText).value)
+			local areaSizeStr  = trim(gui.getElement(guiState, "animation_sequence_areaSize",     gui.InputText).value)
+
+			local ok, frameW, frameH = parseOneOrTwoInts(frameSizeStr)
+			if not ok                          { setErrorText("Invalid frame size format") ; return }
+			if not (frameW > 0 and frameH > 0) { setErrorText("Frame size must be positive") ; return }
+
+			local ^ok, padX, padY = parseOneOrTwoInts(paddingStr)
+			if not ok { setErrorText("Invalid padding format") ; return }
+
+			local ^ok, spacingX, spacingY = parseOneOrTwoInts(spacingStr)
+			if not ok { setErrorText("Invalid spacing format") ; return }
+
+			local ^ok, areaX, areaY = parseTwoInts(areaPosStr)
+			if not ok { setErrorText("Invalid area position format") ; return }
+			if areaX < 0  areaX += iw
+			if areaY < 0  areaY += ih
+
+			local ^ok, areaW, areaH = parseOneOrTwoInts(areaSizeStr)
+			if not ok { setErrorText("Invalid area size format") ; return }
+			if areaW <= 0  areaW += iw-areaX
+			if areaH <= 0  areaH += ih-areaY
+
+			local paddedW = frameW + 2*padX
+			local paddedH = frameH + 2*padY
+			local cols    = (areaW + spacingX) // (paddedW + spacingX)
+			local rows    = (areaH + spacingY) // (paddedH + spacingY)
+
+			local frameCount = cols * rows
+			if frameCount < 1 { setErrorText("Animation frame count is zero") ; return }
+
+			setMessageText("")
+			system.frames = {}
+
+			for row = 1, rows {
+				for col = 1, cols {
+					local x = areaX + (col-1) * (paddedW + spacingX) + padX
+					local y = areaY + (row-1) * (paddedH + spacingY) + padY
+
+					local animFrame: AnimationFrame = {x=x, y=y, w=frameW, h=frameH}
+					insert(system.frames, animFrame)
+				}
+			}
+
+			for PARAMS {
+				local input = gui.getElement(guiState, it, gui.InputText)
+				setGuiValue(system, it, input.value)
+			}
+
+			updateParticleAnimation(system)
+			gui.refreshRecursively(guiState, "animation_frames")
+		}
+
+		guiState.onRefresh.animation_frames = (vbox:gui.Vbox) {
+			local project = app.projects[app.currentProjectIndex]
+			local system  = project.systems[project.systemIndex]
+
+			for < vbox  gui.delete(guiState, it)
+
+			for system.frames {
+				local inputValue = format("%s %s %s %s", it.x, it.y, it.w, it.h)
+
+				insert(vbox, guiState.hbox!({ name="animation_frame", data=itIndex, labelLeft=format("#%d", itIndex),
+					guiState.buttons!({ buttons={
+						{name="animation_delete", image="iconDelete", tooltip="Remove frame"},
+						{name="animation_add",    image="iconAdd",    tooltip="Add/duplicate frame"},
+						-- {name="animation_move",   image="iconMoveV",  tooltip="Move frame (drag)", draggable=true},
+					} }),
+					guiState.inputText!({ name="animation_xywh", weight=1, value=inputValue, tooltip="Format: [x y width height]" }),
+					guiState.text!({ name="animation_message", width=50 }),
+				}))
+			}
+		}
+
+		local getAnimationFrame :: (el:gui.Element) -> AnimationFrame, int {
+			local project = app.projects[app.currentProjectIndex]
+			local system  = project.systems[project.systemIndex]
+
+			local _, parent = gui.findParent(guiState, el, "animation_frame")
+			local i         = cast(int) parent.data
+
+			return system.frames[i], i
+		}
+
+		guiState.onAction.animation_delete = (buttons:gui.Buttons, buttonIndex:int) {
+			local animFrame, i = getAnimationFrame(buttons)
+			-- @Incomplete
+		}
+		guiState.onAction.animation_add = (buttons:gui.Buttons, buttonIndex:int) {
+			local animFrame, i = getAnimationFrame(buttons)
+			-- @Incomplete
+		}
+		guiState.onAction.animation_xywh = (buttons:gui.Buttons, buttonIndex:int) {
+			local animFrame, i = getAnimationFrame(buttons)
+			-- @Incomplete
+		}
+		-- guiState.onDrag.animation_move = (buttons:gui.Buttons, buttonIndex:int, mx,my:int) {
+		-- 	local animFrame, i = getAnimationFrame(buttons)
+		-- 	-- @Incomplete
+		-- }
+	}
+
+	--==============================================================
 	--= Exit
 	--==============================================================
 
@@ -1644,7 +1859,12 @@ export setupGuiCallbacks :: () {
 	--= Utils
 	--==============================================================
 
+	guiState.onAction.util_pushPanel = (el:gui.Element, i:int) {
+		pushPanel(cast(string) el.data)
+	}
 	guiState.onAction.util_popPanel = (el:gui.Element, i:int) {
 		popPanel()
 	}
 }
+
+
