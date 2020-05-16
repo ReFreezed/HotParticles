@@ -74,6 +74,8 @@ local HOVER_OUTLINE_OPACITY_STRONG :: .7
 
 local DRAG_RADIUS :: 8 -- Distance moved before dragging starts for real.
 
+local CONTEXT_MENU_MIN_WIDTH :: 150
+
 
 
 export clipboardScalar = 0.0
@@ -2468,7 +2470,7 @@ export showContextMenu :: (state:State, x,y:int, items:[]string, cb:(i:int)) {
 	local buttonList: []Button
 	for items  insert(buttonList, cast(Button){ label=it })
 
-	local contextMenu = state.frame!({ data=cb, x=x, y=y, minWidth=200, layout=Layout.FLOATING, style=Style.CONTEXT_MENU,
+	local contextMenu = state.frame!({ data=cb, x=x, y=y, minWidth=CONTEXT_MENU_MIN_WIDTH, layout=Layout.FLOATING, style=Style.CONTEXT_MENU,
 		guiState.buttons!({ name="__contextMenuButtons", vertical=true, align=Alignment.LEFT, style=Style.CONTEXT_MENU, buttonMinHeight=16,
 			buttons = {unpack(buttonList)},
 		}),

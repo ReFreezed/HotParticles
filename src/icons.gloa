@@ -94,4 +94,18 @@ export generateIcons :: () {
 		"CFFFFFFFFFFC",
 		"            ",
 	})
+	guiImages.iconReload = newMonochromeImage({
+		"   4DFFD4  F",
+		"  DFFFFFFD F",
+		" DFD4  4DFDF",
+		"4FD      DFF",
+		"FF4    FFFFF",
+		"FF          ",
+		"FF          ",
+		"FF4      4F7",
+		"4FD      DF4",
+		" DFD4  4DFD ",
+		"  DFFFFFFD  ",
+		"   4DFFD4   ",
+	})
 }

@@ -5,7 +5,7 @@
 --=
 --============================================================]]
 
-export MAX_BUFFER_SIZE      :: 16000 -- Default buffer size for ParticleSystem is 1000. @Incomplete: make this configurable.
+export MAX_BUFFER_SIZE      :: 16000 -- Default buffer size for ParticleSystem is 1000.  @Incomplete: Make this configurable.
 export MAIN_PANEL_WIDTH     :: 450
 export DIALOG_WIDTH         :: 400
 export WORKSPACE_SAVE_DELAY :: 1.00
@@ -186,11 +186,14 @@ export Project :: struct {
 			movementScaleX   = source.movementScaleX,
 			movementScaleY   = source.movementScaleY,
 			movementSpeed    = source.movementSpeed,
+			zoom             = source.zoom,
+			zoomTarget       = source.zoomTarget,
 		}
 		_init(project)
 
 		for source.systems  project.systems[itIndex] = it.clone!()
 
+		updateParticles(project)
 		return project
 	},
 }
@@ -234,6 +237,15 @@ export System :: struct {
 			offsetX     = source.offsetX,
 			offsetY     = source.offsetY,
 		}
+
+		for source.frames {
+			system.frames[itIndex] = {x=it.x, y=it.y, w=it.w, h=it.h}
+		}
+
+		for cast(table) source.gui {
+			system.gui[cast(string) itIndex] = cast(string) it
+		}
+
 		return system
 	},
 }
