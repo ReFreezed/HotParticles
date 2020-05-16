@@ -1775,56 +1775,27 @@ local drawElement :: (state:State, el:Element) {
 
 			-- Readout.
 			if app.showPanelNumbers {
-				local formatString = slider.readout
-				if slider.value == 0 and slider.readoutZero  formatString = slider.readoutZero
-
-				if formatString {
-					local text  = format(formatString, slider.value * slider.readoutMulti)
-					local textW = fontSmall.getWidth!(text)
-					local textX = x2 - SPACING - textW
-
-					local MIN_DIST_TO_HANDLE :: 5
-					if textX < handleX+MIN_DIST_TO_HANDLE  textX = handleX-MIN_DIST_TO_HANDLE - textW
-
-					LG.setFont(fontSmall)
-					LG.setColor(0, 0, 0, .5)
-					LG.print(text, textX+1, y-fontSmall.getHeight!()//2+1)
-					LG.setColor(1, 1, 1, .8)
-					LG.print(text, textX, y-fontSmall.getHeight!()//2)
-					LG.setFont(fontNormal)
-				}
+				local COLOR_TEXT:   love.Color: {1,1,1,.8}
+				local COLOR_SHADOW: love.Color: {0,0,0,.5}
+				drawSliderReadout(x2, y-SLIDER_MIN_WIDTH//2, SLIDER_MIN_WIDTH, handleX, slider.value, slider.readoutMulti, slider.readout, slider.readoutZero, COLOR_TEXT, COLOR_SHADOW)
 			}
 
 		case Color:
-			local drawSliderValue :: (sliderX,sliderY:float, sliderW,sliderH:float, value:float, readout:float, readoutFormat:string, highlight:bool) {
-				-- @Incomplete: Make this more like the new sliders.
+			local drawSliderValue :: (sliderX,sliderY:int, sliderW,sliderH:int, value:float, readout:float, readoutFormat:string, highlight:bool) {
+				local x = math.round(sliderX + value*(sliderW-4))
 				local a = (highlight ? .9 : .7)
 
-				if app.showPanelNumbers and readoutFormat {
-					local text = format(readoutFormat, readout)
-					local x    = math.round(sliderX+(sliderW-fontSmall.getWidth!(text))/2)
-					local y    = math.round(sliderY+(sliderH-fontSmall.getHeight!())/2)
-
-					LG.setFont(fontSmall)
-
-					LG.setColor(0, 0, 0)
-					LG.print(text, x+1, y+1)
-
-					LG.setColor(1, 1, 1)
-					LG.print(text, x, y)
-
-					LG.setFont(fontNormal)
+				if app.showPanelNumbers {
+					local COLOR_TEXT:   love.Color: {1,1,1,1}
+					local COLOR_SHADOW: love.Color: {0,0,0,1}
+					drawSliderReadout(sliderX+sliderW, sliderY, sliderH, x, readout, 1, readoutFormat, "", COLOR_TEXT, COLOR_SHADOW)
 				}
 
-				do {
-					local x = math.round(sliderX + value*(sliderW-4))
+				LG.setColor(0, 0, 0, a)
+				LG.rectangle(LG.DrawMode.FILL, x, sliderY, 4, sliderH)
 
-					LG.setColor(0, 0, 0, a)
-					LG.rectangle(LG.DrawMode.FILL, x, sliderY, 4, sliderH)
-
-					LG.setColor(1, 1, 1, a)
-					LG.rectangle(LG.DrawMode.FILL, x+1, sliderY, 2, sliderH)
-				}
+				LG.setColor(1, 1, 1, a)
+				LG.rectangle(LG.DrawMode.FILL, x+1, sliderY, 2, sliderH)
 			}
 
 			local colorEl    = cast(Color) el
@@ -2554,6 +2525,29 @@ local shouldHighlight :: (state:State, el:$T) -> bool {
 
 local intersectScissor :: (x,y,w,h:int) {
 	LG.intersectScissor(x, y, math.max(w, 0), math.max(h, 0))
+}
+
+
+
+local drawSliderReadout :: (rightX:int, topY:int, height:int, handleX:int, value:float, valueMultiplierForFormat:float, formatString:string, formatStringIfZero:string, colorText,colorShadow:love.Color) {
+	if value == 0 and formatStringIfZero  formatString = formatStringIfZero
+
+	if not formatString  return
+
+	local text  = format(formatString, value * valueMultiplierForFormat)
+	local textW = fontSmall.getWidth!(text)
+	local textX = rightX - SPACING - textW
+	local textY = topY + (height - fontNormal.getHeight!()) // 2
+
+	local MIN_DIST_TO_HANDLE :: 5
+	if textX < handleX+MIN_DIST_TO_HANDLE  textX = handleX-MIN_DIST_TO_HANDLE - textW
+
+	LG.setFont(fontSmall)
+	LG.setColor(colorShadow)
+	LG.print(text, textX+1, textY+1)
+	LG.setColor(colorText)
+	LG.print(text, textX, textY)
+	LG.setFont(fontNormal)
 }
 
 
