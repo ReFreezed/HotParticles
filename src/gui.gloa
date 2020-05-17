@@ -717,10 +717,22 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int) {
 			local r :: DIRECTION_RADIUS
 			local direction = cast(Direction) widget
 			local angle     = math.atan(my - (direction.layoutY + getScrollOffset(direction) + r), mx - (direction.layoutX + r))
+			local multiDrag = direction.linkMultiDrag and (state.activeMod == ModifierKey.S or state.activeMod == ModifierKey.CS)
 
 			if mod == ModifierKey.C or mod == ModifierKey.CS {
 				local STEPS :: 16
 				angle = math.round(angle * STEPS/math.TAU) / STEPS*math.TAU
+			}
+
+			if direction.linkOther and not multiDrag {
+				local other = cast(Direction) state.elementsByName[direction.linkOther]
+
+				if other ~= NULL and other ~= direction and other.type == Direction {
+					-- Allow the angle to go beyond -180°..+180° and use the other widget as limiter instead.
+					-- This makes it easy to cover the whole 360° between the two values.
+					angle = direction.angle + math.deltaAngle(direction.angle, angle)
+					angle = math.clamp(angle, other.angle-math.TAU, other.angle+math.TAU)
+				}
 			}
 
 			if angle ~= direction.angle {
@@ -728,7 +740,7 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int) {
 				triggerActionEvent(state, direction, "", 0)
 			}
 
-			if direction.linkMultiDrag and (state.activeMod == ModifierKey.S or state.activeMod == ModifierKey.CS) {
+			if multiDrag {
 				for direction.linkMultiDrag {
 					local other = cast(Direction) state.elementsByName[it]
 
