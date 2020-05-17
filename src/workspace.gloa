@@ -67,6 +67,13 @@ local writeProject :: (buffer:[]string, project:Project, writePath:bool) {
 	writeValue(buffer, project.movementSpeed)
 	insert(buffer, "\n")
 
+	for cast(table) project.guiLimits {
+		insert(buffer, "guiLimit")
+		writeValue(buffer, cast(string) itIndex)
+		writeValue(buffer, cast(type_of(project.guiLimits[""])) it)
+		insert(buffer, "\n")
+	}
+
 	for system: project.systems {
 		insert(buffer, ":system\n")
 		insert(buffer, "colors")      ; writeValue(buffer, eol=true, system.colors)
@@ -153,7 +160,7 @@ local writeProject :: (buffer:[]string, project:Project, writePath:bool) {
 		for cast(table) system.gui {
 			insert(buffer, "gui")
 			writeValue(buffer, cast(string) itIndex)
-			writeValue(buffer, cast(string) it)
+			writeValue(buffer, cast(type_of(system.gui[""])) it)
 			insert(buffer, "\n")
 		}
 	}
@@ -490,6 +497,12 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 						project.movementScaleY = sy
 						project.movementSpeed  = speed
 
+					case "guiLimit":
+						local ^ok, ^ptr, name  = readString(line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
+						local ^ok, ^ptr, limit = readFloat (line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
+						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
+						project.guiLimits[name] = limit
+
 					case:
 						return parsingError(path, ln, "Unknown project parameter '%s'.", param)
 				}
@@ -667,9 +680,7 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 						local ^ok, ^ptr, name  = readString(line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 						local ^ok, ^ptr, value = readString(line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
-
-						local params = cast(table) system.gui
-						params[name] = value
+						system.gui[name] = value
 
 					case:
 						return parsingError(path, ln, "Unknown project parameter '%s'.", param)

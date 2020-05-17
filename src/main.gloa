@@ -139,6 +139,8 @@ export Project :: struct {
 
 	path = "", -- Only save in workspace.
 
+	guiLimits: struct { !key:string, !value:float },
+
 	-- Runtime-only:
 	systemIndex = 1,
 
@@ -374,6 +376,9 @@ export addNewSystem :: (project:Project, showcase=false) {
 		ps.setSpread!(.05*math.TAU)
 		ps.setParticleLifetime!(1.8, 2.2)
 		ps.setSpeed!(90, 100)
+	} else {
+		ps.setEmissionRate!(1)
+		ps.setParticleLifetime!(1)
 	}
 	updateParticleColors(system)
 
