@@ -693,6 +693,15 @@ export setupGuiCallbacks :: () {
 
 		tabs.index = project.systemIndex
 	}
+	guiState.onBeforeAction.systems = (tabs:gui.Tabs, i:int) -> (ignore:bool) {
+		if i == #tabs.buttons              return false
+		if not LK.isDown("lctrl","rctrl")  return false
+
+		local project              = app.projects[app.currentProjectIndex]
+		project.systems[i].visible = not project.systems[i].visible
+
+		return true
+	}
 	guiState.onAction.systems = (tabs:gui.Tabs, i:int) {
 		local project = app.projects[app.currentProjectIndex]
 
@@ -705,30 +714,47 @@ export setupGuiCallbacks :: () {
 		gui.refreshRecursively(guiState, "systems")
 		setCurrentSystem(#project.systems)
 	}
-	guiState.onOption.systems = (tabs:gui.Tabs, i:int) {
-		if i == #tabs.buttons  return
+	guiState.onOption.systems = (tabs:gui.Tabs, systemIndex:int) {
+		gui.showContextMenu(guiState, {"Delete","Duplicate"}, [systemIndex] (i:int) {
+			if i == {
+				case 1:
+					confirmDeleteSystem(systemIndex)
 
-		local project              = app.projects[app.currentProjectIndex]
-		project.systems[i].visible = not project.systems[i].visible
+				case 2:
+					local project = app.projects[app.currentProjectIndex]
+					local system  = project.systems[systemIndex].clone!()
+					insert(project.systems, systemIndex+1, system)
+
+					gui.refreshRecursively(guiState, "systems")
+					setCurrentSystem(systemIndex+1, force=true)
+			}
+		})
 	}
 	guiState.onClose.systems = (tabs:gui.Tabs, i:int) {
-		if i == #tabs.buttons  return
+		if i < #tabs.buttons  confirmDeleteSystem(i)
+	}
+	local confirmDeleteSystem :: (systemIndexToDelete:int) {
+		-- @UX: Don't confirm if the system has no modifications.
+		local BUTTONS: []gui.Button = {{label="Delete"},{label="Cancel"}}
 
-		local project   = app.projects[app.currentProjectIndex]
-		local isCurrent = i == project.systemIndex
+		pushTempDialog("Confirm delete", "Delete the particle system?", BUTTONS, [systemIndexToDelete] (i:int) {
+			if i ~= 1  return
 
-		-- @UX: Confirm removal of system.
-		remove(project.systems, i)
+			local project   = app.projects[app.currentProjectIndex]
+			local isCurrent = systemIndexToDelete == project.systemIndex
 
-		if project.systems[1] == NULL
-			addNewSystem(project)
-		elseif i < project.systemIndex
-			project.systemIndex -= 1
-		else
-			project.systemIndex = math.min(project.systemIndex, #project.systems)
+			remove(project.systems, systemIndexToDelete)
 
-		gui.refreshRecursively(guiState, "systems")
-		if isCurrent  setCurrentSystem(project.systemIndex, force=true)
+			if project.systems[1] == NULL
+				addNewSystem(project)
+			elseif systemIndexToDelete < project.systemIndex
+				project.systemIndex -= 1
+			else
+				project.systemIndex = math.min(project.systemIndex, #project.systems)
+
+			gui.refreshRecursively(guiState, "systems")
+			if isCurrent  setCurrentSystem(project.systemIndex, force=true)
+		})
 	}
 	guiState.onDrag.systems = (tabs:gui.Tabs, i:int, mx,my:int) {
 		local project     = app.projects[app.currentProjectIndex]

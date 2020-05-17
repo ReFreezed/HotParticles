@@ -122,16 +122,17 @@ export State :: struct {
 
 	scrollbarHandleDragOffset = 0,
 
-	onRefresh:  struct { !key:string, !value:any--[[ (el:Element) ]] },
-	onActive:   struct { !key:string, !value:any--[[ (el:Element) ]] },
-	onInactive: struct { !key:string, !value:any--[[ (el:Element) ]] },
-	onSubmit:   struct { !key:string, !value:any--[[ (widget:Widget) ]] },
-	onAction:   struct { !key:string, !value:any--[[ (widget:Widget, i:int) ]] },
-	onDouble:   struct { !key:string, !value:any--[[ (widget:Widget, i:int) ]] },
-	onOption:   struct { !key:string, !value:any--[[ (widget:Widget, i:int) ]] },
-	onClose:    struct { !key:string, !value:any--[[ (widget:Widget, i:int) ]] },
-	onDrag:     struct { !key:string, !value:any--[[ (widget:Widget, i:int, mx,my:int) ]] },
-	onDraw:     struct { !key:string, !value:any--[[ (canvas:Canvas, cw,ch:int) ]] },
+	onRefresh:      struct { !key:string, !value:any--[[ (el:Element) ]] },
+	onActive:       struct { !key:string, !value:any--[[ (el:Element) ]] },
+	onInactive:     struct { !key:string, !value:any--[[ (el:Element) ]] },
+	onSubmit:       struct { !key:string, !value:any--[[ (widget:Widget) ]] },
+	onBeforeAction: struct { !key:string, !value:any--[[ (widget:Widget, i:int) -> (ignore:bool) ]] }, -- Only used for Radio and Tabs.
+	onAction:       struct { !key:string, !value:any--[[ (widget:Widget, i:int) ]] },
+	onDouble:       struct { !key:string, !value:any--[[ (widget:Widget, i:int) ]] },
+	onOption:       struct { !key:string, !value:any--[[ (widget:Widget, i:int) ]] },
+	onClose:        struct { !key:string, !value:any--[[ (widget:Widget, i:int) ]] },
+	onDrag:         struct { !key:string, !value:any--[[ (widget:Widget, i:int, mx,my:int) ]] },
+	onDraw:         struct { !key:string, !value:any--[[ (canvas:Canvas, cw,ch:int) ]] },
 
 	buttons      :: (state:State, el:Buttons)      -> type_of(el) { return cast(type_of(el)) register(state, el, type_of(el)) },
 	canvas       :: (state:State, el:Canvas)       -> type_of(el) { return cast(type_of(el)) register(state, el, type_of(el)) },
@@ -843,7 +844,9 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int) {
 				if state.hoveredId and not state.activeDragging {
 					local radio = cast(Radio) widget
 
-					if radio.index ~= state.hoveredSubid {
+					if triggerBeforeActionEvent(state, radio, radio.buttons[state.activeSubid].name, state.activeSubid) {
+						-- void
+					} elseif radio.index ~= state.hoveredSubid {
 						radio.index = state.hoveredSubid
 						triggerActionEvent(state, radio, radio.buttons[state.activeSubid].name, state.activeSubid, save=true)
 					}
@@ -853,7 +856,9 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int) {
 				if state.hoveredId and not state.activeDragging {
 					local tabs = cast(Tabs) widget
 
-					if tabs.specialLastTab and state.hoveredSubid == #tabs.buttons {
+					if triggerBeforeActionEvent(state, tabs, tabs.buttons[state.activeSubid].name, state.activeSubid) {
+						-- void
+					} elseif tabs.specialLastTab and state.hoveredSubid == #tabs.buttons {
 						triggerActionEvent(state, tabs, tabs.buttons[state.activeSubid].name, state.activeSubid, save=true)
 					} elseif tabs.index ~= state.hoveredSubid {
 						tabs.index = state.hoveredSubid
@@ -2359,6 +2364,12 @@ local triggerSubmitEvent :: (state:State, widget:Widget) {
 	cb(widget)
 }
 
+local triggerBeforeActionEvent :: (state:State, widget:Widget, name:string, subid:int) -> (ignore:bool) {
+	local cb = cast((widget:Widget, i:int) -> (ignore:bool)) state.onBeforeAction[name ?: widget.name]
+	if cb == NULL  return false
+
+	return cb(widget, subid)
+}
 local triggerActionEvent :: (state:State, widget:Widget, name:string, subid:int, save=false) {
 	local cb = cast((widget:Widget, i:int)) state.onAction[name ?: widget.name]
 	if cb == NULL  return
