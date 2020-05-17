@@ -108,4 +108,32 @@ export generateIcons :: () {
 		"  DFFFFFFD  ",
 		"   4DFFD4   ",
 	})
+	guiImages.iconUp = newMonochromeImage({
+		"            ",
+		"            ",
+		"     FF     ",
+		"    FFFF    ",
+		"   FFFFFF   ",
+		"  FFF  FFF  ",
+		" FFF    FFF ",
+		"FFF      FFF",
+		" F        F ",
+		"            ",
+		"            ",
+		"            ",
+	})
+	guiImages.iconDown = newMonochromeImage({
+		"            ",
+		"            ",
+		"            ",
+		" F        F ",
+		"FFF      FFF",
+		" FFF    FFF ",
+		"  FFF  FFF  ",
+		"   FFFFFF   ",
+		"    FFFF    ",
+		"     FF     ",
+		"            ",
+		"            ",
+	})
 }

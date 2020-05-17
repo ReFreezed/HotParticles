@@ -23,7 +23,8 @@ export setupGuiFrames :: () {
 					{label="Open...",    tooltip="Ctrl+O"},
 					{label="Save",       tooltip="Ctrl+S"},
 					{label="Save as...", tooltip="Ctrl+Shift+S"},
-					{}, -- Show/hide settings.
+					{label="Export...",  tooltip="Ctrl+E"},
+					{label="Settings"},
 				},
 			}),
 
@@ -299,6 +300,39 @@ export setupGuiFrames :: () {
 			}),
 		}),
 
+		guiState.frame!({ name="openProject", width=MAIN_PANEL_WIDTH, active=false,
+			guiState.text!({ text="Open", large=true }),
+
+			guiState.separator!({ thick=true }),
+			guiState.hbox!({
+				guiState.text!({ text="Recent", weight=1 }),
+				guiState.buttons!({ name="openProject_clearRecent", buttons={{label="Clear",tooltip="Clear history"}} }),
+			}),
+			guiState.separator!({ thick=false }),
+			guiState.buttons!({ name="openProject_recent", vertical=true, align=gui.Alignment.LEFT, style=gui.Style.LIST }),
+
+			guiState.separator!({ thick=true }),
+			guiState.hbox!({
+				guiState.text!({ text="Bookmarks", weight=1 }),
+				guiState.buttons!({ name="openProject_addBookmark", buttons={{image="iconAdd",tooltip="Add current folder to bookmarks"}} }),
+			}),
+			guiState.scrollable!({ height=80,
+				guiState.buttons!({ name="openProject_bookmarks", vertical=true, align=gui.Alignment.LEFT, style=gui.Style.LIST }),
+			}),
+
+			guiState.separator!({ thick=true }),
+			guiState.inputText!({ name="openProject_directory" }),
+			guiState.scrollable!({
+				guiState.buttons!({ name="openProject_items", vertical=true, align=gui.Alignment.LEFT, style=gui.Style.LIST, buttonMinHeight=16 }),
+			}),
+
+			guiState.separator!({ thick=true }),
+			guiState.inputText!({ name="openProject_filename" }),
+			guiState.buttons!({ height=BIG_BUTTON_HEIGHT,
+				buttons = {{name="openProject_open",label="Open"},{name="util_popPanel",label="Cancel"}},
+			}),
+		}),
+
 		guiState.frame!({ name="saveProjectAs", width=MAIN_PANEL_WIDTH, active=false,
 			guiState.text!({ text="Save as", large=true }),
 
@@ -332,36 +366,13 @@ export setupGuiFrames :: () {
 			}),
 		}),
 
-		guiState.frame!({ name="openProject", width=MAIN_PANEL_WIDTH, active=false,
-			guiState.text!({ text="Open", large=true }),
-
-			guiState.separator!({ thick=true }),
-			guiState.hbox!({
-				guiState.text!({ text="Recent", weight=1 }),
-				guiState.buttons!({ name="openProject_clearRecent", buttons={{label="Clear",tooltip="Clear history"}} }),
-			}),
-			guiState.separator!({ thick=false }),
-			guiState.buttons!({ name="openProject_recent", vertical=true, align=gui.Alignment.LEFT, style=gui.Style.LIST }),
-
-			guiState.separator!({ thick=true }),
-			guiState.hbox!({
-				guiState.text!({ text="Bookmarks", weight=1 }),
-				guiState.buttons!({ name="openProject_addBookmark", buttons={{image="iconAdd",tooltip="Add current folder to bookmarks"}} }),
-			}),
-			guiState.scrollable!({ height=80,
-				guiState.buttons!({ name="openProject_bookmarks", vertical=true, align=gui.Alignment.LEFT, style=gui.Style.LIST }),
-			}),
-
-			guiState.separator!({ thick=true }),
-			guiState.inputText!({ name="openProject_directory" }),
+		guiState.frame!({ name="exportProject", width=MAIN_PANEL_WIDTH, active=false,
+			guiState.text!({ text="Export", large=true }),
 			guiState.scrollable!({
-				guiState.buttons!({ name="openProject_items", vertical=true, align=gui.Alignment.LEFT, style=gui.Style.LIST, buttonMinHeight=16 }),
+				-- guiState.text!({ text="@Incomplete" }),
 			}),
-
-			guiState.separator!({ thick=true }),
-			guiState.inputText!({ name="openProject_filename" }),
 			guiState.buttons!({ height=BIG_BUTTON_HEIGHT,
-				buttons = {{name="openProject_open",label="Open"},{name="util_popPanel",label="Cancel"}},
+				buttons = {{name="exportProject_exportClipboard",label="Export Lua to clipboard"},{name="util_popPanel",label="Close"}},
 			}),
 		}),
 
@@ -561,7 +572,7 @@ export setupGuiCallbacks :: () {
 
 	-- Menu.
 	guiState.onRefresh.saveOpenBar = (buttons:gui.Buttons) {
-		buttons.buttons[4].label = app.showProjectSettings ? "Hide settings" : "Show settings"
+		buttons.buttons[5].image = app.showProjectSettings ? "iconUp" : "iconDown"
 		gui.setActive(guiState, "projectSettings", app.showProjectSettings)
 	}
 	guiState.onAction.saveOpenBar = (buttons:gui.Buttons, i:int) {
@@ -570,10 +581,11 @@ export setupGuiCallbacks :: () {
 			case 1: pushPanel("openProject")
 			case 2: if project.fileIsSaved  saveProject(project, overwrite=true)  else  pushPanel("saveProjectAs")
 			case 3: pushPanel("saveProjectAs")
+			case 4: pushPanel("exportProject")
 
-			case 4:
+			case 5:
 				app.showProjectSettings  = not app.showProjectSettings
-				buttons.buttons[4].label = app.showProjectSettings ? "Hide settings" : "Show settings"
+				buttons.buttons[5].image = app.showProjectSettings ? "iconUp" : "iconDown"
 				gui.setActive(guiState, "projectSettings", app.showProjectSettings)
 		}
 	}
@@ -1714,6 +1726,89 @@ export setupGuiCallbacks :: () {
 				popPanel()
 			}
 		}
+	}
+
+	--==============================================================
+	--= Export project
+	--==============================================================
+
+	guiState.onAction.exportProject_exportClipboard = (buttons:gui.Buttons, buttonIndex:int) {
+		local project = app.projects[app.currentProjectIndex]
+		local buffer: []string
+
+		for system: project.systems {
+			if itIndex > 1  insert(buffer, "\n")
+
+			local ps = system.particles
+
+			do {
+				local _, particleLifetime = ps.getParticleLifetime!() -- s
+				local emitterLifetime     = ps.getEmitterLifetime!()  -- s
+				local rate                = ps.getEmissionRate!()     -- n/s
+				local relevantTime        = emitterLifetime < 0 ? particleLifetime : math.min(particleLifetime, emitterLifetime)
+				local bufferSize          = rate * relevantTime + 10  -- n/s * s  =  n
+
+				if system.texturePath
+					insert(buffer, format("local ps = love.graphics.newParticleSystem(love.graphics.newImage(%q), %d)\n", system.texturePath, bufferSize))
+				else
+					insert(buffer, format("local ps = love.graphics.newParticleSystem(?%s?, %d)\n", system.textureName, bufferSize))
+			}
+
+			insert(buffer, format("ps:setDirection(%s)\n",                      ps.getDirection!()))
+			insert(buffer, format("ps:setEmissionRate(%s)\n",                   ps.getEmissionRate!()))
+			insert(buffer, format("ps:setEmitterLifetime(%s)\n",                ps.getEmitterLifetime!()))
+			insert(buffer, format("ps:setInsertMode(%q)\n",                     cast(string) ps.getInsertMode!()))
+			insert(buffer, format("ps:setLinearAcceleration(%s, %s, %s, %s)\n", ps.getLinearAcceleration!()))
+			insert(buffer, format("ps:setLinearDamping(%s, %s)\n",              ps.getLinearDamping!()))
+			insert(buffer, format("ps:setOffset(%s, %s)\n",                     ps.getOffset!()))
+			insert(buffer, format("ps:setParticleLifetime(%s, %s)\n",           ps.getParticleLifetime!()))
+			insert(buffer, format("ps:setRadialAcceleration(%s, %s)\n",         ps.getRadialAcceleration!()))
+			insert(buffer, format("ps:setRelativeRotation(%s)\n",               toString(ps.hasRelativeRotation!())))
+			insert(buffer, format("ps:setRotation(%s, %s)\n",                   ps.getRotation!()))
+			insert(buffer, format("ps:setSizes(%s)\n",                          concatinate({ps.getSizesAsVararg!()}, ", ")))
+			insert(buffer, format("ps:setSizeVariation(%s)\n",                  ps.getSizeVariation!()))
+			insert(buffer, format("ps:setSpeed(%s, %s)\n",                      ps.getSpeed!()))
+			insert(buffer, format("ps:setSpin(%s, %s)\n",                       ps.getSpin!()))
+			insert(buffer, format("ps:setSpinVariation(%s)\n",                  ps.getSpinVariation!()))
+			insert(buffer, format("ps:setSpread(%s)\n",                         ps.getSpread!()))
+			insert(buffer, format("ps:setTangentialAcceleration(%s, %s)\n",     ps.getTangentialAcceleration!()))
+
+			do {
+				local distribution, dx, dy, angle, relative = ps.getEmissionArea!()
+				insert(buffer, format("ps:setEmissionArea(%q, %s, %s, %s, %s)\n", cast(string)distribution, dx, dy, angle, toString(relative)))
+			}
+
+			if system.frames {
+				insert(buffer, "ps:setColors(")
+
+				for {ps.getColorsAsVararg!()} { -- Note: We don't need to use system.colors.
+					if itIndex > 1  insert(buffer, ", ")
+					insert(buffer, format("%s,%s,%s,%s", unpack(it)))
+				}
+
+				insert(buffer, ")\n")
+			}
+
+			if system.frames {
+				insert(buffer, "ps:setQuads(")
+
+				for ps.getQuads!() {
+					if itIndex > 1  insert(buffer, ", ")
+
+					local qx, qy, qw, qh = it.getViewport!()
+					local iw, ih         = it.getTextureDimensions!()
+
+					insert(buffer, format("love.graphics.newQuad(%d,%d,%d,%d,%d,%d)", qx, qy, qw, qh, iw, ih))
+				}
+
+				insert(buffer, ")\n")
+			}
+
+			insert(buffer, format("-- love.graphics.setBlendMode(%q)\n", cast(string) system.blendMode))
+		}
+
+		love.system.setClipboardText(concatinate(buffer))
+		setMessageText("Lua copied to clipboard")
 	}
 
 	--==============================================================
