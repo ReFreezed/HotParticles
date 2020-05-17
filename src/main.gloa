@@ -461,6 +461,8 @@ export setActionText :: (s:string, v,...:int|float|string) {
 }
 
 export setMessageText :: (s:string) {
+	if messageText ~= s  print(s)
+
 	messageText         = s
 	messageTextTime     = LT.getTime()
 	messageTextDuration = 3.00
@@ -470,7 +472,10 @@ export setMessageText :: (s:string, v,...:int|float|string) {
 }
 
 export setErrorText :: (s:string) {
-	messageText         = "Error: "..s
+	s = "Error: "..s
+	if messageText ~= s  print(s)
+
+	messageText         = s
 	messageTextTime     = LT.getTime()
 	messageTextDuration = 8.00
 }

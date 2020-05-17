@@ -20,6 +20,7 @@
 	limitArray
 	newMonochromeImage, newImageUsingPalette
 	normalizeDirectoryPath, normalizeFilePath
+	prepareSandbox
 
 --============================================================]]
 
@@ -380,6 +381,108 @@ export splitBasenameAndExtension :: (filename:string, keepDot=false) -> (basenam
 
 export trim :: (s:string) -> string {
 	return (replacePattern(replacePattern(s, "^%s+", ""), "%s+$", ""))
+}
+
+
+
+export prepareSandbox :: (globals:table) -> (env:table) {
+	local setMetatable :: (t:table, metatable:table) -> table !foreign lua "setmetatable"
+
+	local indexTable: table = {
+		_VERSION = cast(any) !foreign lua "_VERSION",
+		assert   = cast(any) !foreign lua "assert",
+		error    = cast(any) !foreign lua "error",
+		ipairs   = cast(any) !foreign lua "ipairs",
+		next     = cast(any) !foreign lua "next",
+		pairs    = cast(any) !foreign lua "pairs",
+		print    = cast(any) !foreign lua "print",
+		select   = cast(any) !foreign lua "select",
+		tonumber = cast(any) !foreign lua "tonumber",
+		tostring = cast(any) !foreign lua "tostring",
+		type     = cast(any) !foreign lua "type",
+		unpack   = cast(any) !foreign lua "unpack",
+
+		math = {
+			abs        = cast(any) !foreign lua "math.abs",
+			acos       = cast(any) !foreign lua "math.acos",
+			asin       = cast(any) !foreign lua "math.asin",
+			atan       = cast(any) !foreign lua "math.atan",
+			atan2      = cast(any) !foreign lua "math.atan2",
+			ceil       = cast(any) !foreign lua "math.ceil",
+			cos        = cast(any) !foreign lua "math.cos",
+			cosh       = cast(any) !foreign lua "math.cosh",
+			deg        = cast(any) !foreign lua "math.deg",
+			exp        = cast(any) !foreign lua "math.exp",
+			floor      = cast(any) !foreign lua "math.floor",
+			fmod       = cast(any) !foreign lua "math.fmod",
+			frexp      = cast(any) !foreign lua "math.frexp",
+			huge       = cast(any) !foreign lua "math.huge",
+			ldexp      = cast(any) !foreign lua "math.ldexp",
+			log        = cast(any) !foreign lua "math.log",
+			log10      = cast(any) !foreign lua "math.log10",
+			max        = cast(any) !foreign lua "math.max",
+			min        = cast(any) !foreign lua "math.min",
+			modf       = cast(any) !foreign lua "math.modf",
+			pi         = cast(any) !foreign lua "math.pi",
+			pow        = cast(any) !foreign lua "math.pow",
+			rad        = cast(any) !foreign lua "math.rad",
+			random     = cast(any) !foreign lua "math.random",
+			randomseed = cast(any) !foreign lua "math.randomseed",
+			sin        = cast(any) !foreign lua "math.sin",
+			sinh       = cast(any) !foreign lua "math.sinh",
+			sqrt       = cast(any) !foreign lua "math.sqrt",
+			tan        = cast(any) !foreign lua "math.tan",
+			tanh       = cast(any) !foreign lua "math.tanh",
+		},
+
+		os = {
+			clock    = cast(any) !foreign lua "os.clock",
+			date     = cast(any) !foreign lua "os.date",
+			difftime = cast(any) !foreign lua "os.difftime",
+			getenv   = cast(any) !foreign lua "os.getenv",
+			time     = cast(any) !foreign lua "os.time",
+		},
+
+		\string = {
+			-- Note: Everything in the string metatable should be safe for usercode to access.
+			byte    = cast(any) !foreign lua "string.byte",
+			char    = cast(any) !foreign lua "string.char",
+			dump    = cast(any) !foreign lua "string.dump", -- Should be no problem.
+			find    = cast(any) !foreign lua "string.find",
+			format  = cast(any) !foreign lua "string.format",
+			gmatch  = cast(any) !foreign lua "string.gmatch",
+			gsub    = cast(any) !foreign lua "string.gsub",
+			len     = cast(any) !foreign lua "string.len",
+			lower   = cast(any) !foreign lua "string.lower",
+			match   = cast(any) !foreign lua "string.match",
+			rep     = cast(any) !foreign lua "string.rep",
+			reverse = cast(any) !foreign lua "string.reverse",
+			sub     = cast(any) !foreign lua "string.sub",
+			upper   = cast(any) !foreign lua "string.upper",
+		},
+
+		\table = {
+			concat = cast(any) !foreign lua "table.concat",
+			insert = cast(any) !foreign lua "table.insert",
+			maxn   = cast(any) !foreign lua "table.maxn",
+			remove = cast(any) !foreign lua "table.remove",
+			sort   = cast(any) !foreign lua "table.sort",
+		},
+	}
+
+	local env: table
+	indexTable._G = env
+
+	for globals  indexTable[itIndex] = it
+
+	setMetatable(env, {
+		__newindex = (templateEnv:table, k:any, v:any) {
+			errorf(2, "cannot add global '%s' (globals are disabled)", toString(k))
+		},
+		__index = indexTable,
+	})
+
+	return env
 }
 
 

@@ -1733,13 +1733,25 @@ export setupGuiCallbacks :: () {
 	--==============================================================
 
 	guiState.onAction.exportProject_exportClipboard = (buttons:gui.Buttons, buttonIndex:int) {
+		local lua            :: !import "lua"
+		local setEnvironment :: (f:(), env:table)                   !foreign lua "setfenv"
+		local pcall          :: (callback:()) -> bool, string       !foreign lua "pcall"
+
+		local ok, chunk, err = lua.loadFile(io.APP_DIRECTORY.."/exportTemplates/luaClipboard.lua", ())
+		if not ok {
+			setErrorText("Could not load template: %s", err)
+			return
+		}
+
+		-- Prepare data for template.
 		local project = app.projects[app.currentProjectIndex]
-		local buffer: []string
+		local publicParticleSystems: []table
 
 		for system: project.systems {
-			if itIndex > 1  insert(buffer, "\n")
-
 			local ps = system.particles
+
+			local publicParticleSystem: table
+			insert(publicParticleSystems, publicParticleSystem)
 
 			do {
 				local _, particleLifetime = ps.getParticleLifetime!() -- s
@@ -1748,65 +1760,151 @@ export setupGuiCallbacks :: () {
 				local relevantTime        = emitterLifetime < 0 ? particleLifetime : math.min(particleLifetime, emitterLifetime)
 				local bufferSize          = rate * relevantTime + 10  -- n/s * s  =  n
 
-				if system.texturePath
-					insert(buffer, format("local ps = love.graphics.newParticleSystem(love.graphics.newImage(%q), %d)\n", system.texturePath, bufferSize))
-				else
-					insert(buffer, format("local ps = love.graphics.newParticleSystem(?%s?, %d)\n", system.textureName, bufferSize))
+				publicParticleSystem.texturePath   = system.texturePath
+				publicParticleSystem.texturePreset = system.textureName
+				publicParticleSystem.bufferSize    = bufferSize
 			}
 
-			insert(buffer, format("ps:setDirection(%s)\n",                      ps.getDirection!()))
-			insert(buffer, format("ps:setEmissionRate(%s)\n",                   ps.getEmissionRate!()))
-			insert(buffer, format("ps:setEmitterLifetime(%s)\n",                ps.getEmitterLifetime!()))
-			insert(buffer, format("ps:setInsertMode(%q)\n",                     cast(string) ps.getInsertMode!()))
-			insert(buffer, format("ps:setLinearAcceleration(%s, %s, %s, %s)\n", ps.getLinearAcceleration!()))
-			insert(buffer, format("ps:setLinearDamping(%s, %s)\n",              ps.getLinearDamping!()))
-			insert(buffer, format("ps:setOffset(%s, %s)\n",                     ps.getOffset!()))
-			insert(buffer, format("ps:setParticleLifetime(%s, %s)\n",           ps.getParticleLifetime!()))
-			insert(buffer, format("ps:setRadialAcceleration(%s, %s)\n",         ps.getRadialAcceleration!()))
-			insert(buffer, format("ps:setRelativeRotation(%s)\n",               toString(ps.hasRelativeRotation!())))
-			insert(buffer, format("ps:setRotation(%s, %s)\n",                   ps.getRotation!()))
-			insert(buffer, format("ps:setSizes(%s)\n",                          concatinate({ps.getSizesAsVararg!()}, ", ")))
-			insert(buffer, format("ps:setSizeVariation(%s)\n",                  ps.getSizeVariation!()))
-			insert(buffer, format("ps:setSpeed(%s, %s)\n",                      ps.getSpeed!()))
-			insert(buffer, format("ps:setSpin(%s, %s)\n",                       ps.getSpin!()))
-			insert(buffer, format("ps:setSpinVariation(%s)\n",                  ps.getSpinVariation!()))
-			insert(buffer, format("ps:setSpread(%s)\n",                         ps.getSpread!()))
-			insert(buffer, format("ps:setTangentialAcceleration(%s, %s)\n",     ps.getTangentialAcceleration!()))
+			publicParticleSystem.blendMode        = system.blendMode
+			publicParticleSystem.direction        = ps.getDirection!()
+			publicParticleSystem.emissionRate     = ps.getEmissionRate!()
+			publicParticleSystem.emitterLifetime  = ps.getEmitterLifetime!()
+			publicParticleSystem.insertMode       = ps.getInsertMode!()
+			publicParticleSystem.relativeRotation = ps.hasRelativeRotation!()
+			publicParticleSystem.sizes            = cast([]float) {ps.getSizesAsVararg!()}
+			publicParticleSystem.sizeVariation    = ps.getSizeVariation!()
+			publicParticleSystem.spinVariation    = ps.getSpinVariation!()
+			publicParticleSystem.spread           = ps.getSpread!()
+
+			do { local min,max = ps.getLinearDamping!()          ; publicParticleSystem.linearDamping          = cast(table) {min,max, min=min,max=max} }
+			do { local min,max = ps.getOffset!()                 ; publicParticleSystem.offset                 = cast(table) {min,max, min=min,max=max} }
+			do { local min,max = ps.getParticleLifetime!()       ; publicParticleSystem.particleLifetime       = cast(table) {min,max, min=min,max=max} }
+			do { local min,max = ps.getRadialAcceleration!()     ; publicParticleSystem.radialAcceleration     = cast(table) {min,max, min=min,max=max} }
+			do { local min,max = ps.getRotation!()               ; publicParticleSystem.rotation               = cast(table) {min,max, min=min,max=max} }
+			do { local min,max = ps.getSpeed!()                  ; publicParticleSystem.speed                  = cast(table) {min,max, min=min,max=max} }
+			do { local min,max = ps.getSpin!()                   ; publicParticleSystem.spin                   = cast(table) {min,max, min=min,max=max} }
+			do { local min,max = ps.getTangentialAcceleration!() ; publicParticleSystem.tangentialAcceleration = cast(table) {min,max, min=min,max=max} }
+
+			do {
+				local xmin, ymin, xmax, ymax = ps.getLinearAcceleration!()
+				publicParticleSystem.linearAcceleration = cast(table) {
+					xmin, ymin, xmax, ymax,
+					xmin=xmin, ymin=ymin, xmax=xmax, ymax=ymax
+				}
+			}
 
 			do {
 				local distribution, dx, dy, angle, relative = ps.getEmissionArea!()
-				insert(buffer, format("ps:setEmissionArea(%q, %s, %s, %s, %s)\n", cast(string)distribution, dx, dy, angle, toString(relative)))
+				publicParticleSystem.emissionArea = cast(table) {
+					distribution, dx, dy, angle, relative,
+					distribution=distribution, dx=dx, dy=dy, angle=angle, relative=relative,
+				}
 			}
 
-			if system.frames {
-				insert(buffer, "ps:setColors(")
+			do {
+				local colors = system.colors
+				local publicColors: []float
 
-				for {ps.getColorsAsVararg!()} { -- Note: We don't need to use system.colors.
-					if itIndex > 1  insert(buffer, ", ")
-					insert(buffer, format("%s,%s,%s,%s", unpack(it)))
+				for i = 1, #colors, 4 {
+					local r, g, b = hsvToRgb(colors[i], colors[i+1], colors[i+2])
+					insert(publicColors, r)
+					insert(publicColors, g)
+					insert(publicColors, b)
+					insert(publicColors, colors[i+3])
 				}
 
-				insert(buffer, ")\n")
+				publicParticleSystem.colors = publicColors
 			}
 
-			if system.frames {
-				insert(buffer, "ps:setQuads(")
+			do {
+				local image  = cast(LG.Image) ps.getTexture!()
+				local iw, ih = image.getDimensions!()
+				local publicQuads: []table
 
-				for ps.getQuads!() {
-					if itIndex > 1  insert(buffer, ", ")
-
-					local qx, qy, qw, qh = it.getViewport!()
-					local iw, ih         = it.getTextureDimensions!()
-
-					insert(buffer, format("love.graphics.newQuad(%d,%d,%d,%d,%d,%d)", qx, qy, qw, qh, iw, ih))
+				for system.frames {
+					local publicQuad: table = {
+						it.x, it.y, it.w, it.h, iw, ih,
+						x=it.x, y=it.y, width=it.w, height=it.h,
+					}
+					insert(publicQuads, publicQuad)
 				}
 
-				insert(buffer, ")\n")
+				publicParticleSystem.textureWidth  = iw
+				publicParticleSystem.textureHeight = ih
+				publicParticleSystem.quads         = publicQuads
 			}
-
-			insert(buffer, format("-- love.graphics.setBlendMode(%q)\n", cast(string) system.blendMode))
 		}
 
+		-- Run template.
+		local writeLuaValue :: (buffer:[]string, level:int, v:any) {
+			using lua.LuaType
+			level += 1
+
+			if !complete lua.getType(v) == {
+				case BOOLEAN: !through
+				case NIL:     !through
+				case NUMBER:
+					insert(buffer, format("%s", cast(string)v)) -- The type we cast to doesn't matter.
+
+				case STRING:
+					insert(buffer, format("%q", cast(string)v))
+
+				case TABLE: -- Assume it's an array.
+					insert(buffer, "{")
+					writeLuaCsv(buffer, level, cast([]any)v)
+					insert(buffer, "}")
+
+				case FUNCTION: !through
+				case THREAD:   !through
+				case USERDATA:
+					errorf(level, "cannot serialize values of type '%s'", cast(string)lua.getType(v))
+
+				case:
+					errorf(level, "values of type '%s' are not supported", cast(string)lua.getType(v))
+			}
+		}
+
+		local writeLuaCsv :: (buffer:[]string, level:int, arr:[]any) {
+			level += 1
+			for arr {
+				if itIndex > 1  insert(buffer, ", ")
+				writeLuaValue(buffer, level, it)
+			}
+		}
+
+		local buffer: []string
+
+		local templateEnv = prepareSandbox({
+			Text = [buffer] (s:string) {
+				if lua.getType(s) ~= lua.LuaType.STRING {
+					errorf(2, "bad argument #1 to 'Text'. (string expected, got %s)", cast(string)lua.getType(s))
+				}
+				insert(buffer, s)
+			},
+
+			Lua = [buffer] (v:any) {
+				writeLuaValue(buffer, 2, v)
+			},
+
+			LuaCsv = [buffer] (v:any) {
+				if lua.getType(v) == lua.LuaType.TABLE
+					writeLuaCsv(buffer, 2, cast([]any)v)
+				else
+					writeLuaValue(buffer, 2, v)
+			},
+
+			particleSystems = publicParticleSystems,
+		})
+
+		setEnvironment(chunk, templateEnv)
+
+		ok, err = pcall(chunk)
+		if not ok {
+			setErrorText("Error in template: %s", err)
+			return
+		}
+
+		-- Aaaand export!
 		love.system.setClipboardText(concatinate(buffer))
 		setMessageText("Lua copied to clipboard")
 	}
