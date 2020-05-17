@@ -125,7 +125,7 @@ export State :: struct {
 	onRefresh:      struct { !key:string, !value:any--[[ (el:Element) ]] },
 	onActive:       struct { !key:string, !value:any--[[ (el:Element) ]] },
 	onInactive:     struct { !key:string, !value:any--[[ (el:Element) ]] },
-	onSubmit:       struct { !key:string, !value:any--[[ (widget:Widget) ]] },
+	onSubmit:       struct { !key:string, !value:any--[[ (el:Element) ]] },
 	onBeforeAction: struct { !key:string, !value:any--[[ (widget:Widget, i:int) -> (ignore:bool) ]] }, -- Only used for Radio and Tabs.
 	onAction:       struct { !key:string, !value:any--[[ (widget:Widget, i:int) ]] },
 	onDouble:       struct { !key:string, !value:any--[[ (widget:Widget, i:int) ]] },
@@ -427,10 +427,20 @@ export onKeyPressed :: (state:State, key:LK.KeyConstant, scancode:LK.Scancode, i
 		return true
 	}
 
+	-- Submit modals.
+	if key == "return" or key == "kpenter" {
+		local topModal = getTopmostActiveModal(state)
+
+		if topModal ~= NULL {
+			triggerSubmitEvent(state, topModal)
+			return true
+		}
+	}
+
+	-- Key events for other widgets.
 	local widget = cast(Widget) state.elementsById[state.hoveredId]
 	local mod    = getModifierKey()
 
-	-- Key events for other widgets.
 	if widget ~= NULL  if widget.type == {
 		case Direction:
 			local direction = cast(Direction) widget
@@ -2357,11 +2367,11 @@ local triggerDrawEvent :: (state:State, canvasEl:Canvas, cw,ch:int) {
 	cb(canvasEl, cw, ch)
 }
 
-local triggerSubmitEvent :: (state:State, widget:Widget) {
-	local cb = cast((widget:Widget)) state.onSubmit[widget.name]
+local triggerSubmitEvent :: (state:State, el:Element) {
+	local cb = cast((el:Element)) state.onSubmit[el.name]
 	if cb == NULL  return
 
-	cb(widget)
+	cb(el)
 }
 
 local triggerBeforeActionEvent :: (state:State, widget:Widget, name:string, subid:int) -> (ignore:bool) {

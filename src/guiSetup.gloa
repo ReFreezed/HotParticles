@@ -397,12 +397,6 @@ export setupGuiFrames :: () {
 				buttons = {{name="util_popPanel",label="Close"}},
 			}),
 		}),
-
-		guiState.frame!({ name="exit", width=DIALOG_WIDTH, layout=gui.Layout.FLOATING, modal=true, active=false,
-			guiState.buttons!({ height=BIG_BUTTON_HEIGHT,
-				buttons = {{name="exit_exit",label="Exit"},{name="util_popPanel",label="Cancel"}},
-			}),
-		}),
 	}
 }
 
@@ -417,30 +411,45 @@ export pushPanel :: (name:string) {
 	insert(panelStack, name)
 }
 
-export pushTempDialog :: (title:string, text:string, buttonList:[]gui.Button, cb:(choice:int)) {
+export pushTempChoiceDialog :: (title:string, text:string, buttonList:[]gui.Button, cb:(choice:int), submitIndex=0) {
 	static tempN = 0 ; tempN += 1
 
 	local name        = format("temp%d", tempN)
 	local nameButtons = name.."_buttons"
 
-	local frame: gui.Frame = guiState.frame!({ name=name, temp=true, layout=gui.Layout.FLOATING, modal=true, width=DIALOG_WIDTH, active=false,
-		guiState.text!({ text=title, large=true }),
-		guiState.separator!({ thick=true }),
-		guiState.text!({ text=text }),
-		guiState.separator!({ thick=false }),
-		guiState.buttons!({ name=nameButtons, height=BIG_BUTTON_HEIGHT, buttons={ unpack(buttonList) } }),
-	})
+	local frame = guiState.frame!({ name=name, temp=true, layout=gui.Layout.FLOATING, modal=true, width=DIALOG_WIDTH, active=false })
 	insert(guiState.frames, frame)
 
-	guiState.onAction[nameButtons] = [cb,nameButtons] (buttons:gui.Buttons, choice:int) {
-		guiState.onAction[nameButtons]   = NULL
-		guiState.onInactive[nameButtons] = NULL
+	if title {
+		insert(frame, guiState.text!({ text=title, large=true }))
+		insert(frame, guiState.separator!({ thick=true }))
+	}
+	if text {
+		insert(frame, guiState.text!({ text=text }))
+		insert(frame, guiState.separator!({ thick=false }))
+	}
+	insert(frame, guiState.buttons!({ name=nameButtons, height=BIG_BUTTON_HEIGHT, buttons={ unpack(buttonList) } }))
+
+	local cleanUp = [name,nameButtons] () {
+		guiState.onSubmit[name]        = NULL
+		guiState.onAction[nameButtons] = NULL
+		guiState.onInactive[name]      = NULL
+	}
+
+	if submitIndex {
+		guiState.onSubmit[name] = [cb,cleanUp,submitIndex] (frame:gui.Frame) {
+			cleanUp()
+			popPanel()
+			cb(submitIndex)
+		}
+	}
+	guiState.onAction[nameButtons] = [cb,cleanUp] (buttons:gui.Buttons, choice:int) {
+		cleanUp()
 		popPanel()
 		cb(choice)
 	}
-	guiState.onInactive[name] = [cb,nameButtons] (frame:gui.Frame) {
-		guiState.onAction[nameButtons]   = NULL
-		guiState.onInactive[nameButtons] = NULL
+	guiState.onInactive[name] = [cb,cleanUp] (frame:gui.Frame) {
+		cleanUp()
 		cb(0)
 	}
 
@@ -737,7 +746,7 @@ export setupGuiCallbacks :: () {
 		-- @UX: Don't confirm if the system has no modifications.
 		local BUTTONS: []gui.Button = {{label="Delete"},{label="Cancel"}}
 
-		pushTempDialog("Confirm delete", "Delete the particle system?", BUTTONS, [systemIndexToDelete] (i:int) {
+		pushTempChoiceDialog("Confirm delete", "Delete the particle system?", BUTTONS, submitIndex=1, [systemIndexToDelete] (i:int) {
 			if i ~= 1  return
 
 			local project   = app.projects[app.currentProjectIndex]
@@ -1670,7 +1679,7 @@ export setupGuiCallbacks :: () {
 			} elseif fileExists {
 				local BUTTONS: []gui.Button = {{label="Overwrite"},{label="Cancel"}}
 
-				pushTempDialog("Confirm save as", filename.." already exists. Overwite it?", BUTTONS, (i:int) {
+				pushTempChoiceDialog("Confirm save as", filename.." already exists. Overwite it?", BUTTONS, submitIndex=1, (i:int) {
 					if i ~= 1  return
 
 					local project = app.projects[app.currentProjectIndex]
@@ -2051,14 +2060,6 @@ export setupGuiCallbacks :: () {
 			guiState.activeId  = dragContainer[targetIndex][1].id -- Must happen after refreshRecursively()! @Volatile
 			guiState.hoveredId = guiState.activeId
 		}
-	}
-
-	--==============================================================
-	--= Exit
-	--==============================================================
-
-	guiState.onAction.exit_exit = (buttons:gui.Buttons, i:int) {
-		pushQuitEvent()
 	}
 
 	--==============================================================

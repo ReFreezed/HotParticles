@@ -613,7 +613,13 @@ export onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool)
 	-- Context-sensitive global keys.
 	if key == {
 		case "escape":
-			if not popPanel()  pushPanel("exit")
+			if not popPanel() {
+				local BUTTONS: []gui.Button : {{label="Exit"},{label="Cancel"}}
+
+				pushTempChoiceDialog("", "", BUTTONS, submitIndex=1, (i:int) {
+					if i == 1  pushQuitEvent()
+				})
+			}
 			return
 
 		case "r":
