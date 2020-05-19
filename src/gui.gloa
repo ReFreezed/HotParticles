@@ -184,20 +184,21 @@ local unregisterTree :: (state:State, el:Element) {
 export Style :: enum { NORMAL, CONTEXT_MENU, LIST }
 
 export Element :: struct {
-	active    = true,
-	name      = "",
-	label     = "",
-	labelLeft = "",
-	tooltip   = "",
-	weight    = .0,
-	inset     = 0,
-	width     = 0, -- Zero means automatic.
-	height    = 0, -- Zero means automatic. For scrollables, non-positive means distance from the bottom of the screen.
-	minWidth  = 0,
-	minHeight = 0,
-	maxWidth  = -1, -- Negative means no limit.
-	maxHeight = -1, -- Negative means no limit.
-	style     = Style.NORMAL,
+	active         = true,
+	name           = "",
+	label          = "",
+	labelLeft      = "",
+	labelLeftAlign = Alignment.CENTER,
+	tooltip        = "",
+	weight         = .0,
+	inset          = 0,
+	width          = 0, -- Zero means automatic.
+	height         = 0, -- Zero means automatic. For scrollables, non-positive means distance from the bottom of the screen.
+	minWidth       = 0,
+	minHeight      = 0,
+	maxWidth       = -1, -- Negative means no limit.
+	maxHeight      = -1, -- Negative means no limit.
+	style          = Style.NORMAL,
 	data: any,
 
 	type: Type = NULL,
@@ -294,7 +295,7 @@ export Button :: struct {
 	suffixWidth = 0,
 }
 
-export Alignment :: enum { CENTER, LEFT, RIGHT }
+export Alignment :: enum { CENTER, LEFT, RIGHT, TOP, BOTTOM }
 
 export Buttons :: struct {
 	using Widget,
@@ -1122,7 +1123,7 @@ local calculateNaturalSize :: (state:State, el:Element) {
 		case Text:
 			local textEl        = cast(Text) el
 			local font          = textEl.large ? fontLarge : fontNormal
-			textEl.layoutWidth  = font.getWidth!(textEl.text)
+			textEl.layoutWidth  = font.getWidth!(textEl.text) + (textEl.large ? 1 : 0)
 			textEl.layoutHeight = font.getHeight!()
 
 		case Separator:
@@ -1439,13 +1440,17 @@ local drawElement :: (state:State, el:Element) {
 	}
 
 	if el.labelLeft {
+		local textY: int = NULL
+
+		if el.labelLeftAlign == {
+			case Alignment.TOP:    textY = el.layoutY
+			case Alignment.BOTTOM: textY = el.layoutY + el.layoutHeight - fontSmall.getHeight!()
+			case:                  textY = el.layoutY + (el.layoutHeight - fontSmall.getHeight!()) // 2
+		}
+
 		LG.setFont(fontSmall)
 		LG.setColor(1, 1, 1)
-		LG.print(
-			el.labelLeft,
-			el.layoutX - SPACING - fontSmall.getWidth!(el.labelLeft),
-			el.layoutY + (el.layoutHeight - fontSmall.getHeight!()) // 2
-		)
+		LG.print(el.labelLeft, el.layoutX-SPACING-fontSmall.getWidth!(el.labelLeft), textY)
 		LG.setFont(fontNormal)
 	}
 
@@ -1551,10 +1556,17 @@ local drawElement :: (state:State, el:Element) {
 
 		case Text:
 			local textEl = cast(Text) el
+
+			LG.pushAll()
+			intersectScissor(textEl.layoutX, 0, textEl.layoutWidth, LG.getHeight())
+
 			LG.setFont(textEl.large ? fontLarge : fontNormal)
 			LG.setColor(1, 1, 1)
+
 			LG.print(textEl.text, textEl.layoutX, textEl.layoutY)
-			LG.setFont(fontNormal)
+			if textEl.large  LG.print(textEl.text, textEl.layoutX+1, textEl.layoutY)
+
+			LG.pop()
 
 		case Separator:
 			local separator = cast(Separator) el
@@ -1717,9 +1729,9 @@ local drawElement :: (state:State, el:Element) {
 					} else {
 						using Alignment
 						if buttons.align == {
-							case LEFT:   textX = bx1[itIndex] + paddingX
-							case RIGHT:  textX = bx1[itIndex] + math.max(math.round(bw[itIndex] - paddingX - (it.labelWidth+it.suffixWidth)), paddingX)
-							case CENTER: textX = bx1[itIndex] + math.max((bw[itIndex] - (it.labelWidth+it.suffixWidth)) // 2,                 paddingX)
+							case LEFT:  textX = bx1[itIndex] + paddingX
+							case RIGHT: textX = bx1[itIndex] + math.max(math.round(bw[itIndex] - paddingX - (it.labelWidth+it.suffixWidth)), paddingX)
+							case:       textX = bx1[itIndex] + math.max((bw[itIndex] - (it.labelWidth+it.suffixWidth)) // 2,                 paddingX)
 						}
 					}
 
@@ -2114,7 +2126,7 @@ export draw :: (state:State) {
 		if a > 0 {
 			local w = fontNormal.getWidth!(state.currentTooltip) + 2*SPACING
 			local h = fontNormal.getHeight!() + 2*BUTTON_PADDING_Y
-			local x = math.min(state.tooltipX, ww-w)
+			local x = math.max(math.min(state.tooltipX, ww-w), 0)
 			local y = state.tooltipY1 - h - 1
 
 			if y < 0  y = state.tooltipY2 + 1
@@ -2500,7 +2512,7 @@ export setFocus :: (state:State, input:InputText) {
 }
 
 export blurFocus :: (state:State, abort=false) {
-	if state.focusId == 0  return
+	if not state.focusId  return
 
 	local input = cast(InputText) state.elementsById[state.focusId]
 	if abort {
@@ -2511,6 +2523,7 @@ export blurFocus :: (state:State, abort=false) {
 	}
 
 	state.focusId = 0
+	scheduleSaveWorkspace()
 }
 
 

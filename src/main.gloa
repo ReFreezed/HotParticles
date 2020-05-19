@@ -33,6 +33,7 @@ export love :: !import "love"
 export LD :: love.data
 export LF :: love.filesystem
 export LG :: love.graphics
+export LI :: love.image
 export LK :: love.keyboard
 export LM :: love.mouse
 export LT :: love.timer
@@ -61,8 +62,9 @@ export imagePixel:    LG.Image = NULL
 export imageRainbow:  LG.Image = NULL
 
 export particleImageNames: []string
-export particleImages: struct { !key:string, !value:LG.Image }
-export guiImages:      struct { !key:string, !value:LG.Image }
+export particleImageDatas: struct { !key:string, !value:LF.FileData } -- FileData, not ImageData! The latter is problematic when we export textures.
+export particleImages:     struct { !key:string, !value:LG.Image    }
+export guiImages:          struct { !key:string, !value:LG.Image    }
 
 local canvasGui:   LG.Canvas = NULL
 local canvasWorld: LG.Canvas = NULL
@@ -138,6 +140,16 @@ export Project :: struct {
 	movementSpeed  = 1.0,
 
 	path = "", -- Only save in workspace.
+
+	exportBaseDirectory      = "",
+	exportParticles          = true,
+	exportParticlesOverwrite = false,
+	exportParticlesPath      = "",
+	exportParticlesTemplate  = "defaultLuaModule",
+	exportTextures           = false,
+	exportTexturesOverwrite  = false,
+	exportTexturesDirectory  = "",
+	exportClipboardTemplate  = "defaultLuaClipboard",
 
 	guiLimits: struct { !key:string, !value:float },
 
@@ -219,10 +231,16 @@ export System :: struct {
 	-- Runtime-only:
 	visible = true,
 
+	currentImageData: LF.FileData = NULL,
+	currentImage:     LG.Image    = NULL,
+
 	!call :: () -> System {
 		local system: System
 
-		local ps = LG.newParticleSystem(particleImages.light)
+		system.currentImageData = particleImageDatas.light
+		system.currentImage     = particleImages    .light
+
+		local ps = LG.newParticleSystem(system.currentImage)
 		ps.start!()
 		system.particles = ps
 
@@ -279,9 +297,7 @@ export updateParticleColors :: (system:System) {
 }
 
 export updateParticleTexture :: (project:Project, system:System) {
-	local loadParticleTexture :: (project:Project, path:string) -> LG.Image {
-		local pcall :: (func:any, path:string) -> bool, LG.Image|string !foreign lua "pcall"
-
+	local loadParticleTexture :: (project:Project, path:string) -> LF.FileData, LG.Image {
 		if isPathAbsolute(path) {
 			-- void
 		} elseif project.fileIsSaved {
@@ -289,29 +305,42 @@ export updateParticleTexture :: (project:Project, system:System) {
 			path = dir..path
 		} else {
 			setErrorText("Relative paths require the project to be saved: %s", path)
-			return NULL
+			return NULL, NULL
 		}
 
 		local dir, filename = splitDirectoryAndFilename(path, keepSlash=true) -- Do we need to normalize dir after this?
 
 		if not connectToRemoteDirectory(dir) {
 			setErrorText("Could not access folder '%s'", dir)
-			return NULL
+			return NULL, NULL
 		}
 		defer disconnectFromRemoteDirectory()
 
-		local ok, image = pcall(variant_of(LG.newImage(filename)), filename)
+		local pcall :: (func:any, path:string) -> bool, LF.FileData|string !foreign lua "pcall"
+		local ok, imageData = pcall(variant_of(LF.newFileData(filename)), filename)
+
 		if not ok {
-			setErrorText(cast(string)image)
-			return NULL
+			setErrorText(cast(string)imageData)
+			return NULL, NULL
 		}
 
-		return cast(LG.Image)image
+		local image = LG.newImage(filename)
+
+		return cast(LF.FileData)imageData, image
 	}
 
-	local image: LG.Image = NULL
-	if system.texturePath  image = loadParticleTexture(project, system.texturePath) -- @Speed: Don't reload the texture if there's no change.
-	if image == NULL       image = particleImages[system.textureName]
+	local imageData: LF.FileData = NULL
+	local image:     LG.Image    = NULL
+
+	if system.texturePath  imageData, image = loadParticleTexture(project, system.texturePath) -- @Speed: Don't reload the texture if there's no change.
+
+	if imageData == NULL {
+		imageData = particleImageDatas[system.textureName]
+		image     = particleImages    [system.textureName]
+	}
+
+	system.currentImageData = imageData
+	system.currentImage     = image
 
 	system.particles.setTexture!(image)
 	updateParticleAnimation(system)
@@ -321,15 +350,16 @@ export updateParticleTexture :: (project:Project, system:System) {
 }
 
 export updateParticleAnimation :: (system:System) {
-	local image  = cast(LG.Image) system.particles.getTexture!()
-	local iw, ih = image.getDimensions!()
-
 	if system.frames {
+		local iw, ih = system.currentImage.getDimensions!()
 		local quads: []LG.Quad
+
 		for system.frames {
 			insert(quads, LG.newQuad(it.x, it.y, it.w, it.h, iw, ih))
 		}
+
 		system.particles.setQuads!(quads)
+
 	} else {
 		system.particles.setQuads!()
 	}
@@ -341,8 +371,7 @@ export updateParticleTextureOffset :: (system:System) {
 		local animFrame1 = system.frames[1]
 		system.particles.setOffset!(animFrame1.w*system.offsetX, animFrame1.h*system.offsetY)
 	} else {
-		local image  = cast(LG.Image) system.particles.getTexture!()
-		local iw, ih = image.getDimensions!()
+		local iw, ih = system.currentImage.getDimensions!()
 		system.particles.setOffset!(iw*system.offsetX, ih*system.offsetY)
 	}
 }
@@ -358,8 +387,7 @@ export updateParticleImageFilters :: () {
 	}
 
 	local system = project.systems[project.systemIndex]
-	local image  = cast(LG.Image) system.particles.getTexture!()
-	image.setFilter!(filter, filter) -- In case this is a custom texture.
+	system.currentImage.setFilter!(filter, filter) -- In case this is a custom texture.
 }
 
 
@@ -547,10 +575,13 @@ export onLoad :: (args:[]string, argsRaw:[]string) {
 		local found, name = matchPattern(it, "^(.+)%.png$")
 
 		if found {
-			local image = LG.newImage("gfx/particles/"..it)
+			local path      = "gfx/particles/"..it
+			local imageData = LF.newFileData(path)
+			local image     = LG.newImage(path)
 
-			particleImages[cast(string)name] = image
-			guiImages[cast(string)name]      = image
+			particleImageDatas[cast(string)name] = imageData
+			particleImages    [cast(string)name] = image
+			guiImages         [cast(string)name] = image
 
 			insert(particleImageNames, cast(string)name)
 		}
@@ -1004,7 +1035,7 @@ export onDraw :: () {
 
 			local system = project.systems[project.systemIndex]
 			local ps     = system.particles
-			local image  = cast(LG.Image) ps.getTexture!()
+			local image  = system.currentImage
 			local iw, ih = image.getDimensions!()
 
 			local scale = math.min((ww-2*PADDING-MAIN_PANEL_WIDTH)/iw, (wh-2*PADDING)/ih)
@@ -1168,8 +1199,8 @@ export onDraw :: () {
 			if visibility <= 0  return
 
 			local w = fontLarge.getWidth!(text)
-			local x = math.round((LG.getWidth() + MAIN_PANEL_WIDTH - w) / 2)
-			local a = visibility^.5
+			local x = (LG.getWidth() + (gui.getTopmostActiveModal(guiState) == NULL ? MAIN_PANEL_WIDTH : 0) - w) // 2
+			local a = visibility ^ .5
 
 			LG.setColor(0, 0, 0, a)
 			LG.print(text, x+1, y+1)

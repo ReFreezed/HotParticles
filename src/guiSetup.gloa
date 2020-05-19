@@ -11,6 +11,8 @@
 
 local BIG_BUTTON_HEIGHT :: 40
 
+local EXPORT_TEMPLATES_DIRECTORY :: "exportTemplates"
+
 
 
 export setupGuiFrames :: () {
@@ -109,9 +111,9 @@ export setupGuiFrames :: () {
 					guiState.separator!({ thick=false }),
 
 					guiState.section!({ label="Lifetime",
-						guiState.slider!({ name="emitterLifetime",     labelLeft="emitter",     min=0, max=16, limitName="emitterLifetime", readout="%.2f sec", readoutZero="∞" }),
-						guiState.slider!({ name="particleLifetimeMin", labelLeft="paricle min", min=0, max=16, limitName="particleLifetime", readout="%.2f sec", linkMultiDrag={"particleLifetimeMax"} }),
-						guiState.slider!({ name="particleLifetimeMax", labelLeft="paricle max", min=0, max=16, limitName="particleLifetime", readout="%.2f sec", linkMultiDrag={"particleLifetimeMin"} }),
+						guiState.slider!({ name="emitterLifetime",     labelLeft="emitter",      min=0, max=16, limitName="emitterLifetime", readout="%.2f sec", readoutZero="∞" }),
+						guiState.slider!({ name="particleLifetimeMin", labelLeft="particle min", min=0, max=16, limitName="particleLifetime", readout="%.2f sec", linkMultiDrag={"particleLifetimeMax"} }),
+						guiState.slider!({ name="particleLifetimeMax", labelLeft="particle max", min=0, max=16, limitName="particleLifetime", readout="%.2f sec", linkMultiDrag={"particleLifetimeMin"} }),
 					}),
 
 					guiState.separator!({ thick=true }),
@@ -366,13 +368,54 @@ export setupGuiFrames :: () {
 			}),
 		}),
 
-		guiState.frame!({ name="exportProject", width=MAIN_PANEL_WIDTH, active=false,
+		guiState.frame!({ name="exportProject", width=DIALOG_WIDTH, modal=true, layout=gui.Layout.FLOATING, active=false,
 			guiState.text!({ text="Export", large=true }),
-			guiState.scrollable!({
-				-- guiState.text!({ text="@Incomplete" }),
+
+			guiState.separator!({ thick=false }),
+			guiState.section!({ label="Base folder",
+				guiState.inputText!({ name="exportProject_baseDirectory", tooltip="Absolute path, or relative to the .hotparticles file" }),
+				guiState.hbox!({ labelLeft="resulting path",
+					guiState.text!({ name="exportProject_baseDirectoryResult", weight=1 }),
+					guiState.buttons!({ name="exportProject_baseDirectoryResultInfo", buttons={{image="iconEye"}} }),
+				}),
 			}),
+
+			guiState.separator!({ thick=true }),
+			guiState.section!({ label="Particles",
+				guiState.hbox!({
+					guiState.checkbox!({ name="exportProject_particles_writeFile", label="export particle systems" }),
+					guiState.checkbox!({ name="exportProject_particles_overwrite", label="overwrite existing", tooltip="Overwrite existing files without confirmation" }),
+				}),
+				guiState.inputText!({ name="exportProject_particles_path", labelLeft="output filename", tooltip="Absolute path, or relative to base folder" }),
+				guiState.hbox!({ labelLeft="resulting path",
+					guiState.text!({ name="exportProject_particles_pathResult", weight=1 }),
+					guiState.buttons!({ name="exportProject_particles_pathResultInfo", buttons={{image="iconEye"}} }),
+				}),
+				guiState.buttons!({ name="exportProject_particles_template", labelLeft="template", vertical=true, align=gui.Alignment.LEFT, buttons={{image="iconDown",label="defaultLuaModule"}}}),
+			}),
+
+			guiState.separator!({ thick=true }),
+			guiState.section!({ label="Textures",
+				guiState.hbox!({
+					guiState.checkbox!({ name="exportProject_textures_copyFiles", label="copy texture files" }),
+					guiState.checkbox!({ name="exportProject_textures_overwrite", label="overwrite existing", tooltip="Overwrite existing files without confirmation" }),
+				}),
+				guiState.inputText!({ name="exportProject_textures_directory", labelLeft="output folder", tooltip="Absolute path, or relative to base folder" }),
+				guiState.hbox!({ labelLeft="resulting paths",
+					guiState.text!({ name="exportProject_textures_pathResults", weight=1 }),
+					guiState.buttons!({ name="exportProject_textures_pathResultsInfo", buttons={{image="iconEye"}} }),
+				}),
+			}),
+
+			guiState.separator!({ thick=true }),
+			guiState.section!({ label="Clipboard",
+				guiState.buttons!({ align=gui.Alignment.LEFT, buttons={{name="exportProject_clipboard_export",label="Export to clipboard"}}}),
+				guiState.buttons!({ name="exportProject_clipboard_template", labelLeft="template", align=gui.Alignment.LEFT, buttons={{image="iconDown",label="defaultLuaClipboard"}}}),
+			}),
+
+			guiState.separator!({ thick=true }),
 			guiState.buttons!({ height=BIG_BUTTON_HEIGHT,
-				buttons = {{name="exportProject_exportClipboard",label="Export Lua to clipboard"},{name="util_popPanel",label="Close"}},
+				buttons = {{name="exportProject_exportFiles",label="Export files"},{name="util_popPanel",label="Close"}},
 			}),
 		}),
 
@@ -756,7 +799,7 @@ export setupGuiCallbacks :: () {
 	}
 	local confirmDeleteSystem :: (systemIndexToDelete:int) {
 		-- @UX: Don't confirm if the system has no modifications.
-		local BUTTONS: []gui.Button = {{label="Delete"},{label="Cancel"}}
+		local BUTTONS: []gui.Button : {{label="Delete"},{label="Cancel"}}
 
 		pushTempChoiceDialog("Confirm delete", "Delete the particle system?", BUTTONS, submitIndex=1, [systemIndexToDelete] (i:int) {
 			if i ~= 1  return
@@ -1689,7 +1732,7 @@ export setupGuiCallbacks :: () {
 				popPanel()
 
 			} elseif fileExists {
-				local BUTTONS: []gui.Button = {{label="Overwrite"},{label="Cancel"}}
+				local BUTTONS: []gui.Button : {{label="Overwrite"},{label="Cancel"}}
 
 				pushTempChoiceDialog("Confirm save as", filename.." already exists. Overwite it?", BUTTONS, submitIndex=1, (i:int) {
 					if i ~= 1  return
@@ -1732,15 +1775,391 @@ export setupGuiCallbacks :: () {
 	--= Export project
 	--==============================================================
 
-	guiState.onAction.exportProject_exportClipboard = (buttons:gui.Buttons, buttonIndex:int) {
-		local lua            :: !import "lua"
-		local setEnvironment :: (f:(), env:table)                   !foreign lua "setfenv"
-		local pcall          :: (callback:()) -> bool, string       !foreign lua "pcall"
+	guiState.onActive.exportProject = (frame:gui.Frame) {
+		gui.refreshRecursively(guiState, "exportProject")
+	}
 
-		local ok, chunk, err = lua.loadFile(io.APP_DIRECTORY.."/exportTemplates/luaClipboard.lua", ())
+	-- Files.
+	local resolveBaseOuputPath :: (project:Project) -> (success:bool, dir:string) {
+		local dir = project.exportBaseDirectory ?: "."
+
+		if not isPathAbsolute(dir) {
+			if not project.path  return false, ""
+			dir = splitDirectoryAndFilename(project.path).."/"..dir
+		}
+
+		return true, (normalizeDirectoryPath(dir))
+	}
+	local resolveParticlesOuputPath :: (project:Project) -> (success:bool, path:string) {
+		local dir, filename = splitDirectoryAndFilename(project.exportParticlesPath, keepSlash=true)
+		if not dir  dir = "."
+
+		if not isPathAbsolute(dir)  dir = (project.exportBaseDirectory ?: ".").."/"..dir
+
+		if not isPathAbsolute(dir) {
+			if not project.path  return false, ""
+			dir = splitDirectoryAndFilename(project.path).."/"..dir
+		}
+
+		if not filename {
+			_, filename = splitDirectoryAndFilename(project.path)
+			filename    = replacePatternWithPattern(filename, "(.)%.[^.]+", "%1") ?: "untitled"
+			filename    = filename..".lua"
+		}
+
+		return true, (normalizeFilePath(dir.."/"..filename))
+	}
+	local resolveTextureOuputPath :: (project:Project, system:System) -> (success:bool, path:string) {
+		local path = system.texturePath ?: system.textureName..".png"
+
+		if not isPathAbsolute(path)  path = (project.exportTexturesDirectory ?: ".").."/"..path
+		if not isPathAbsolute(path)  path = (project.exportBaseDirectory     ?: ".").."/"..path
+
+		if not isPathAbsolute(path) {
+			if not project.path  return false, ""
+			path = splitDirectoryAndFilename(project.path).."/"..path
+		}
+
+		return true, normalizeFilePath(path)
+	}
+
+	guiState.onRefresh.exportProject_baseDirectory = (input:gui.InputText) {
+		local project = app.projects[app.currentProjectIndex]
+		input.value   = project.exportBaseDirectory
+	}
+	guiState.onAction.exportProject_baseDirectory = (input:gui.InputText, _:int) {
+		local project               = app.projects[app.currentProjectIndex]
+		project.exportBaseDirectory = normalizeDirectoryPath(input.value)
+		gui.refreshRecursively(guiState, "exportProject_baseDirectoryResult")
+		gui.refreshRecursively(guiState, "exportProject_baseDirectoryResultInfo")
+		gui.refreshRecursively(guiState, "exportProject_particles_path")
+		gui.refreshRecursively(guiState, "exportProject_particles_pathResult")
+		gui.refreshRecursively(guiState, "exportProject_particles_pathResultInfo")
+		gui.refreshRecursively(guiState, "exportProject_textures_directory")
+		gui.refreshRecursively(guiState, "exportProject_textures_pathResults")
+		gui.refreshRecursively(guiState, "exportProject_textures_pathResultsInfo")
+	}
+	guiState.onRefresh.exportProject_baseDirectoryResult = (textEl:gui.Text) {
+		local project  = app.projects[app.currentProjectIndex]
+		local ok, path = resolveBaseOuputPath(project)
+
+		if not ok {
+			textEl.text = "Missing path!"
+			return
+		}
+
+		textEl.text = path
+	}
+	guiState.onRefresh.exportProject_baseDirectoryResultInfo = (buttons:gui.Buttons) {
+		buttons.tooltip = gui.getElement(guiState, "exportProject_baseDirectoryResult", gui.Text).text
+	}
+
+	-- Particles file.
+	guiState.onRefresh.exportProject_particles_writeFile = (checkbox:gui.Checkbox) {
+		local project    = app.projects[app.currentProjectIndex]
+		checkbox.checked = project.exportParticles
+	}
+	guiState.onAction.exportProject_particles_writeFile = (checkbox:gui.Checkbox, _:int) {
+		local project           = app.projects[app.currentProjectIndex]
+		project.exportParticles = checkbox.checked
+		gui.refreshRecursively(guiState, "exportProject_particles_pathResult")
+		gui.refreshRecursively(guiState, "exportProject_particles_pathResultInfo")
+	}
+
+	guiState.onRefresh.exportProject_particles_overwrite = (checkbox:gui.Checkbox) {
+		local project    = app.projects[app.currentProjectIndex]
+		checkbox.checked = project.exportParticlesOverwrite
+	}
+	guiState.onAction.exportProject_particles_overwrite = (checkbox:gui.Checkbox, _:int) {
+		local project                    = app.projects[app.currentProjectIndex]
+		project.exportParticlesOverwrite = checkbox.checked
+	}
+
+	guiState.onRefresh.exportProject_particles_path = (input:gui.InputText) {
+		local project = app.projects[app.currentProjectIndex]
+		input.value   = project.exportParticlesPath
+	}
+	guiState.onAction.exportProject_particles_path = (input:gui.InputText, _:int) {
+		local project               = app.projects[app.currentProjectIndex]
+		project.exportParticlesPath = normalizeFilePath(input.value)
+		gui.refreshRecursively(guiState, "exportProject_particles_pathResult")
+		gui.refreshRecursively(guiState, "exportProject_particles_pathResultInfo")
+	}
+	guiState.onRefresh.exportProject_particles_pathResult = (textEl:gui.Text) {
+		local project = app.projects[app.currentProjectIndex]
+
+		if not project.exportParticles {
+			textEl.text = ""
+			return
+		}
+
+		local ok, path = resolveParticlesOuputPath(project)
+
+		if not ok {
+			textEl.text = "Missing path!"
+			return
+		}
+
+		textEl.text = path
+	}
+	guiState.onRefresh.exportProject_particles_pathResultInfo = (buttons:gui.Buttons) {
+		buttons.tooltip = gui.getElement(guiState, "exportProject_particles_pathResult", gui.Text).text
+	}
+
+	guiState.onRefresh.exportProject_particles_template = (buttons:gui.Buttons) {
+		local project            = app.projects[app.currentProjectIndex]
+		buttons.buttons[1].label = project.exportParticlesTemplate
+	}
+	guiState.onAction.exportProject_particles_template = (buttons:gui.Buttons, buttonIndex:int) {
+		showTemplateDropdownMenu(buttons, (templateName:string) {
+			local project                   = app.projects[app.currentProjectIndex]
+			project.exportParticlesTemplate = templateName
+			gui.refreshRecursively(guiState, "exportProject_particles_template")
+		})
+	}
+	local showTemplateDropdownMenu :: (buttons:gui.Buttons, cb:(templateName:string)) {
+		local templateNames: []string
+
+		for LF.getDirectoryItems(EXPORT_TEMPLATES_DIRECTORY) {
+			static info: LF.FileInfo
+
+			if findPattern(it, "%.lua$") and LF.getInfo(EXPORT_TEMPLATES_DIRECTORY.."/"..it, info) ~= nil and info.type == LF.FileType.FILE {
+				insert(templateNames, getSubstring(it, 1, -5))
+			}
+		}
+		if not templateNames  return
+
+		local x = buttons.layoutX
+		local y = buttons.layoutY + buttons.layoutHeight + gui.getScrollOffset(buttons)
+
+		gui.showContextMenu(guiState, x, y, templateNames, [templateNames,cb] (choice:int) {
+			if choice > 0  cb(templateNames[choice])
+		})
+	}
+
+	-- Texture files.
+	guiState.onRefresh.exportProject_textures_copyFiles = (checkbox:gui.Checkbox) {
+		local project    = app.projects[app.currentProjectIndex]
+		checkbox.checked = project.exportTextures
+	}
+	guiState.onAction.exportProject_textures_copyFiles = (checkbox:gui.Checkbox, _:int) {
+		local project          = app.projects[app.currentProjectIndex]
+		project.exportTextures = checkbox.checked
+		gui.refreshRecursively(guiState, "exportProject_textures_pathResults")
+		gui.refreshRecursively(guiState, "exportProject_textures_pathResultsInfo")
+	}
+
+	guiState.onRefresh.exportProject_textures_overwrite = (checkbox:gui.Checkbox) {
+		local project    = app.projects[app.currentProjectIndex]
+		checkbox.checked = project.exportTexturesOverwrite
+	}
+	guiState.onAction.exportProject_textures_overwrite = (checkbox:gui.Checkbox, _:int) {
+		local project                   = app.projects[app.currentProjectIndex]
+		project.exportTexturesOverwrite = checkbox.checked
+	}
+
+	guiState.onRefresh.exportProject_textures_directory = (input:gui.InputText) {
+		local project = app.projects[app.currentProjectIndex]
+		input.value   = project.exportTexturesDirectory
+	}
+	guiState.onAction.exportProject_textures_directory = (input:gui.InputText, _:int) {
+		local project                   = app.projects[app.currentProjectIndex]
+		project.exportTexturesDirectory = normalizeDirectoryPath(input.value)
+		gui.refreshRecursively(guiState, "exportProject_textures_pathResults")
+		gui.refreshRecursively(guiState, "exportProject_textures_pathResultsInfo")
+	}
+
+	guiState.onRefresh.exportProject_textures_pathResults = (textEl:gui.Text) {
+		local project = app.projects[app.currentProjectIndex]
+
+		if not project.exportTextures {
+			textEl.text = ""
+			return
+		}
+
+		local paths: []string
+		local pathSet: struct { !key:string, !value:bool }
+
+		for project.systems {
+			local ok, path = resolveTextureOuputPath(project, it)
+
+			if not ok {
+				textEl.text = "Missing path(s)!"
+				return
+			}
+
+			if not pathSet[path] {
+				pathSet[path] = true
+				insert(paths, path)
+			}
+		}
+
+		textEl.text = concatinate(paths, ", ")
+	}
+	guiState.onRefresh.exportProject_textures_pathResultsInfo = (buttons:gui.Buttons) {
+		buttons.tooltip = gui.getElement(guiState, "exportProject_textures_pathResults", gui.Text).text
+	}
+	guiState.onAction.exportProject_exportFiles = (buttons:gui.Buttons, buttonIndex:int) {
+		local project = app.projects[app.currentProjectIndex]
+
+		if not (project.exportParticles or project.exportTextures) {
+			setErrorText("Nothing to export")
+			return
+		}
+
+		-- Gather data.
+		local particlesData = ""
+		local particlesPath = ""
+
+		if project.exportParticles {
+			local ok, ^particlesData = generateDataToExportFromTemplate(project.exportParticlesTemplate)
+			if not ok  return -- Error already reported.
+
+			ok, particlesPath = resolveParticlesOuputPath(project)
+			if not ok {
+				setErrorText("No particle system output path")
+				return
+			}
+		}
+
+		local texturePaths: []string
+
+		if project.exportTextures  for project.systems {
+			local ok, path = resolveTextureOuputPath(project, it)
+
+			if not ok {
+				setErrorText("Missing texture output path(s)")
+				return
+			}
+
+			texturePaths[itIndex] = path
+		}
+
+		-- Check existing files.
+		static info: LF.FileInfo
+		local filesToConfirmOverwrite: []string
+
+		if project.exportParticles and not project.exportParticlesOverwrite {
+			local dir, filename = splitDirectoryAndFilename(particlesPath, keepSlash=true)
+
+			if not connectToRemoteDirectory(dir) {
+				setErrorText("Could not access folder '%s'", dir)
+				return
+			}
+			defer disconnectFromRemoteDirectory()
+
+			if LF.getInfo(filename, info) ~= NULL  insert(filesToConfirmOverwrite, particlesPath)
+		}
+
+		local texturePathSet: struct { !key:string, !value:bool }
+
+		if project.exportTextures and not project.exportTexturesOverwrite  for system: project.systems {
+			local path = texturePaths[itIndex]
+
+			if texturePathSet[path] continue
+			texturePathSet[path] = true
+
+			local dir, filename = splitDirectoryAndFilename(path, keepSlash=true)
+
+			if not connectToRemoteDirectory(dir) {
+				setErrorText("Could not access folder '%s'", dir)
+				return
+			}
+			defer disconnectFromRemoteDirectory()
+
+			if LF.getInfo(filename, info) ~= NULL  insert(filesToConfirmOverwrite, path)
+		}
+
+		-- Write files.
+		local writeExportFiles = [project, particlesData, particlesPath, texturePaths] () {
+			if project.exportParticles {
+				local dir, filename = splitDirectoryAndFilename(particlesPath, keepSlash=true)
+
+				if not connectToRemoteDirectory(dir) {
+					setErrorText("Could not access folder '%s'", dir)
+					return
+				}
+				defer disconnectFromRemoteDirectory()
+
+				local ok, err = LF.write(filename, particlesData)
+				if not ok {
+					setErrorText(err)
+					return
+				}
+			}
+
+			local texturePathSet: struct { !key:string, !value:bool }
+
+			if project.exportTextures  for system: project.systems {
+				local path = texturePaths[itIndex]
+
+				if texturePathSet[path] continue
+				texturePathSet[path] = true
+
+				local dir, filename = splitDirectoryAndFilename(path, keepSlash=true)
+
+				if not connectToRemoteDirectory(dir) {
+					setErrorText("Could not access folder '%s'", dir)
+					return
+				}
+				defer disconnectFromRemoteDirectory()
+
+				local ok, err = LF.write(filename, system.currentImageData.getString!())
+				if not ok {
+					setErrorText(err)
+					return
+				}
+			}
+
+			setMessageText("Exported files")
+		}
+
+		if filesToConfirmOverwrite {
+			local BUTTONS: []gui.Button : {{label="Overwrite"},{label="Cancel"}}
+
+			local text = (
+				#filesToConfirmOverwrite == 1
+				? format(
+					"This file will be overwritten: %s",
+					concatinate(filesToConfirmOverwrite, ", ")
+				)
+				: format(
+					"These %d files will be overwritten: %s",
+					#filesToConfirmOverwrite,
+					concatinate(filesToConfirmOverwrite, ", ")
+				)
+			)
+
+			-- @Incomplete: Handle 'text' usually not fitting in the dialog.
+			pushTempChoiceDialog("Confirm export", text, BUTTONS, submitIndex=1, [writeExportFiles] (choice:int) {
+				if choice ~= 1  return
+
+				writeExportFiles()
+				popPanel()
+			})
+
+		} else {
+			writeExportFiles()
+			popPanel()
+		}
+	}
+
+	local generateDataToExportFromTemplate :: (templateName:string) -> (success:bool, data:string) {
+		local lua            :: !import "lua"
+		local setEnvironment :: (f:(), env:table)              !foreign lua "setfenv"
+		local pcall          :: (callback:any) -> bool, string !foreign lua "pcall"
+
+		local path               = format("%s/%s.lua", EXPORT_TEMPLATES_DIRECTORY, templateName)
+		local luaCode, sizeOrErr = LF.read(path)
+		if luaCode == NULL {
+			setErrorText("Could not load template: %s", cast(string)sizeOrErr)
+			return false, ""
+		}
+
+		local ok, chunk, err = lua.loadString(cast(string)luaCode, (), "@"..path)
 		if not ok {
 			setErrorText("Could not load template: %s", err)
-			return
+			return false, ""
 		}
 
 		-- Prepare data for template.
@@ -1758,7 +2177,7 @@ export setupGuiCallbacks :: () {
 				local emitterLifetime     = ps.getEmitterLifetime!()  -- s
 				local rate                = ps.getEmissionRate!()     -- n/s
 				local relevantTime        = emitterLifetime < 0 ? particleLifetime : math.min(particleLifetime, emitterLifetime)
-				local bufferSize          = rate * relevantTime + 10  -- n/s * s  =  n
+				local bufferSize          = math.ceil(rate * relevantTime + 10) -- n/s * s  =  n
 
 				publicParticleSystem.texturePath   = system.texturePath
 				publicParticleSystem.texturePreset = system.textureName
@@ -1817,8 +2236,7 @@ export setupGuiCallbacks :: () {
 			}
 
 			do {
-				local image  = cast(LG.Image) ps.getTexture!()
-				local iw, ih = image.getDimensions!()
+				local iw, ih = system.currentImage.getDimensions!()
 				local publicQuads: []table
 
 				for system.frames {
@@ -1893,7 +2311,8 @@ export setupGuiCallbacks :: () {
 					writeLuaValue(buffer, 2, v)
 			},
 
-			particleSystems = publicParticleSystems,
+			particleSystems  = publicParticleSystems,
+			pixelateTextures = project.pixelateTextures,
 		})
 
 		setEnvironment(chunk, templateEnv)
@@ -1901,12 +2320,32 @@ export setupGuiCallbacks :: () {
 		ok, err = pcall(chunk)
 		if not ok {
 			setErrorText("Error in template: %s", err)
-			return
+			return false, ""
 		}
 
-		-- Aaaand export!
-		love.system.setClipboardText(concatinate(buffer))
-		setMessageText("Lua copied to clipboard")
+		return true, concatinate(buffer)
+	}
+
+	-- Clipboard.
+	guiState.onRefresh.exportProject_clipboard_template = (buttons:gui.Buttons) {
+		local project            = app.projects[app.currentProjectIndex]
+		buttons.buttons[1].label = project.exportClipboardTemplate
+	}
+	guiState.onAction.exportProject_clipboard_template = (buttons:gui.Buttons, buttonIndex:int) {
+		showTemplateDropdownMenu(buttons, (templateName:string) {
+			local project                   = app.projects[app.currentProjectIndex]
+			project.exportClipboardTemplate = templateName
+			gui.refreshRecursively(guiState, "exportProject_clipboard_template")
+		})
+	}
+
+	guiState.onAction.exportProject_clipboard_export = (buttons:gui.Buttons, buttonIndex:int) {
+		local project  = app.projects[app.currentProjectIndex]
+		local ok, data = generateDataToExportFromTemplate(project.exportClipboardTemplate)
+		if not ok  return
+
+		love.system.setClipboardText(data)
+		setMessageText("Exported to clipboard")
 	}
 
 	--==============================================================
@@ -1941,7 +2380,7 @@ export setupGuiCallbacks :: () {
 			local project = app.projects[app.currentProjectIndex]
 			local system  = project.systems[project.systemIndex]
 			local ps      = system.particles
-			local image   = cast(LG.Image) ps.getTexture!()
+			local image   = system.currentImage
 			local iw, ih  = image.getDimensions!()
 
 			local r, g, b = hsvToRgb(project.bgColorH, project.bgColorS, project.bgColorV)
@@ -2027,8 +2466,7 @@ export setupGuiCallbacks :: () {
 		guiState.onAction.animation_sequence_generateFromSize = (buttons:gui.Buttons, buttonIndex:int) {
 			local project = app.projects[app.currentProjectIndex]
 			local system  = project.systems[project.systemIndex]
-			local image   = cast(LG.Image) system.particles.getTexture!()
-			local iw, ih  = image.getDimensions!()
+			local iw, ih  = system.currentImage.getDimensions!()
 
 			local areaPosStr   = trim(gui.getElement(guiState, "animation_sequence_areaPosition", gui.InputText).value)
 			local areaSizeStr  = trim(gui.getElement(guiState, "animation_sequence_areaSize",     gui.InputText).value)
@@ -2089,8 +2527,7 @@ export setupGuiCallbacks :: () {
 		guiState.onAction.animation_sequence_generateFromDivision = (buttons:gui.Buttons, buttonIndex:int) {
 			local project = app.projects[app.currentProjectIndex]
 			local system  = project.systems[project.systemIndex]
-			local image   = cast(LG.Image) system.particles.getTexture!()
-			local iw, ih  = image.getDimensions!()
+			local iw, ih  = system.currentImage.getDimensions!()
 
 			local areaPosStr   = trim(gui.getElement(guiState, "animation_sequence_areaPosition", gui.InputText).value)
 			local areaSizeStr  = trim(gui.getElement(guiState, "animation_sequence_areaSize",     gui.InputText).value)

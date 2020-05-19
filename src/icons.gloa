@@ -136,4 +136,18 @@ export generateIcons :: () {
 		"            ",
 		"            ",
 	})
+	guiImages.iconEye = newMonochromeImage({
+		"            ",
+		"            ",
+		"            ",
+		"   4DFFD4   ",
+		" 8FD4  4DF8 ",
+		"DF   FF   FD",
+		"DF   FF   FD",
+		" 8FD4  4DF8 ",
+		"   4DFFD4   ",
+		"            ",
+		"            ",
+		"            ",
+	})
 }

@@ -60,6 +60,16 @@ local writeProject :: (buffer:[]string, project:Project, writePath:bool) {
 	insert(buffer, "pixelateTextures") ; writeValue(buffer, eol=true, project.pixelateTextures)
 	insert(buffer, "zoom")             ; writeValue(buffer, eol=true, project.zoomLevel)
 
+	insert(buffer, "exportBaseDirectory")      ; writeValue(buffer, eol=true, project.exportBaseDirectory)
+	insert(buffer, "exportParticles")          ; writeValue(buffer, eol=true, project.exportParticles)
+	insert(buffer, "exportParticlesOverwrite") ; writeValue(buffer, eol=true, project.exportParticlesOverwrite)
+	insert(buffer, "exportParticlesTemplate")  ; writeValue(buffer, eol=true, project.exportParticlesTemplate)
+	insert(buffer, "exportParticlesPath")      ; writeValue(buffer, eol=true, project.exportParticlesPath)
+	insert(buffer, "exportTextures")           ; writeValue(buffer, eol=true, project.exportTextures)
+	insert(buffer, "exportTexturesOverwrite")  ; writeValue(buffer, eol=true, project.exportTexturesOverwrite)
+	insert(buffer, "exportTexturesDirectory")  ; writeValue(buffer, eol=true, project.exportTexturesDirectory)
+	insert(buffer, "exportClipboardTemplate")  ; writeValue(buffer, eol=true, project.exportClipboardTemplate)
+
 	insert(buffer, "movement")
 	writeValue(buffer, cast(int) project.movementPreset)
 	writeValue(buffer, project.movementScaleX)
@@ -485,6 +495,43 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 						project.zoom       = 2^zoomLevel
 						project.zoomSource = project.zoom
 						project.zoomTarget = project.zoom
+
+					case "exportBaseDirectory":
+						local ^ok, ^ptr, dir = readString(line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
+						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
+						project.exportBaseDirectory = dir
+					case "exportParticles":
+						local ^ok, ^ptr, flag = readBool(line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
+						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
+						project.exportParticles = flag
+					case "exportParticlesOverwrite":
+						local ^ok, ^ptr, flag = readBool(line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
+						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
+						project.exportParticlesOverwrite = flag
+					case "exportParticlesTemplate":
+						local ^ok, ^ptr, name = readString(line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
+						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
+						project.exportParticlesTemplate = name
+					case "exportParticlesPath":
+						local ^ok, ^ptr, pathValue = readString(line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
+						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
+						project.exportParticlesPath = pathValue
+					case "exportTextures":
+						local ^ok, ^ptr, flag = readBool(line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
+						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
+						project.exportTextures = flag
+					case "exportTexturesOverwrite":
+						local ^ok, ^ptr, flag = readBool(line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
+						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
+						project.exportTexturesOverwrite = flag
+					case "exportTexturesDirectory":
+						local ^ok, ^ptr, dir = readString(line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
+						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
+						project.exportTexturesDirectory = dir
+					case "exportClipboardTemplate":
+						local ^ok, ^ptr, name = readString(line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
+						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
+						project.exportClipboardTemplate = name
 
 					case "movement":
 						local ^ok, ^ptr, preset = readInt  (line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)

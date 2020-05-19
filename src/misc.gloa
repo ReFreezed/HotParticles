@@ -252,7 +252,7 @@ export newMonochromeImage :: (pixelRows:[]string) -> LG.Image {
 	return newMonochromeImage(pixelRows, 1, 1, 1)
 }
 export newMonochromeImage :: (pixelRows:[]string, r,g,b:float) -> LG.Image {
-	local imageData = love.image.newImageData(#pixelRows[1], #pixelRows)
+	local imageData = LI.newImageData(#pixelRows[1], #pixelRows)
 
 	for pixelRow, row: pixelRows {
 		for col = 1, #pixelRow {
@@ -286,7 +286,7 @@ export newMonochromeImage :: (pixelRows:[]string, r,g,b:float) -> LG.Image {
 ]]
 export newImageUsingPalette :: (pixelRows:[]string, palette:struct{!key:string,!value:string}) -> LG.Image {
 	local TRANSPARENT: []float : {1,1,1,0}
-	local imageData = love.image.newImageData(#pixelRows[1], #pixelRows)
+	local imageData = LI.newImageData(#pixelRows[1], #pixelRows)
 
 	for pixelRow, row: pixelRows {
 		for col = 1, #pixelRow {
@@ -360,12 +360,23 @@ export addRecent :: (list:[]string, item:string, maxItems:int) {
 
 
 export splitDirectoryAndFilename :: (path:string, keepSlash=false) -> (dir:string, filename:string) {
+	-- @Robustness: Handle the filename being "." or "..".
+	path = replacePattern(path, "/+$", "") -- Trailing slashes are actually an error!
+
 	local pattern = keepSlash ? "^(.*/)([^/]+)$" : "^(.*)/([^/]+)$"
 
 	local ok, dir, filename = matchPattern(path, pattern)
-	if not ok  return  "", path
+	if ok  return cast(string)dir, cast(string)filename
 
-	return cast(string)dir, cast(string)filename
+	-- There's no slash at this point.
+
+	local ^ok, drive, ^filename = matchPattern(path, "^(%a:)(.*)")
+	if ok  return (cast(string)drive)..(keepSlash ? "/" : ""), cast(string)filename
+
+	ok, drive, filename = matchPattern(path, "^(~)(.*)")
+	if ok  return (cast(string)drive)..(keepSlash ? "/" : ""), cast(string)filename
+
+	return "", path
 }
 
 export splitBasenameAndExtension :: (filename:string, keepDot=false) -> (basename:string, ext:string) {
