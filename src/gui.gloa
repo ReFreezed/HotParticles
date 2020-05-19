@@ -1469,6 +1469,11 @@ local drawElement :: (state:State, el:Element) {
 				LG.rectangle(LG.DrawMode.FILL, x-BORDER, y-BORDER, w+2*BORDER, h+2*BORDER, SPACING+BUTTON_RADIUS+BORDER)
 			}
 
+			if frame.style == Style.CONTEXT_MENU {
+				LG.setColor(0, 0, 0, .6)
+				drawBoxGradient(x, y, w, h)
+			}
+
 			if frame.style == Style.CONTEXT_MENU
 				LG.setColor(.7, .7, .7)
 			else
@@ -2131,6 +2136,8 @@ export draw :: (state:State) {
 
 			if y < 0  y = state.tooltipY2 + 1
 
+			LG.setColor(0, 0, 0, .3*a)
+			drawBoxGradient(x, y, w, h)
 			LG.setColor(0, 0, 0, .8*a)
 			LG.rectangle(LG.DrawMode.FILL, x-1, y-1, w+2, h+2, BUTTON_RADIUS)
 			LG.setColor(.8, .8, .8, a)
@@ -2347,6 +2354,44 @@ export drawCheckerBox :: (x,y,w,h:int) {
 	LG.rectangle(LG.DrawMode.FILL, x, y, w, h)
 	LG.setColor(.27, .27, .27)
 	drawChecker(x, y, w, h)
+}
+
+
+
+export drawBoxGradient :: (x,y,w,h:int, bw=10) {
+	static quad11: LG.Quad = NULL
+	static quad12: LG.Quad = NULL
+	static quad13: LG.Quad = NULL
+	static quad21: LG.Quad = NULL
+	static quad22: LG.Quad = NULL
+	static quad23: LG.Quad = NULL
+	static quad31: LG.Quad = NULL
+	static quad32: LG.Quad = NULL
+	static quad33: LG.Quad = NULL
+
+	if quad11 == NULL {
+		local iw, ih = imageBoxGradient.getDimensions!()
+
+		quad11 = LG.newQuad(0,0, 1,1, 3,3)
+		quad12 = LG.newQuad(1,0, 1,1, 3,3)
+		quad13 = LG.newQuad(2,0, 1,1, 3,3)
+		quad21 = LG.newQuad(0,1, 1,1, 3,3)
+		quad22 = LG.newQuad(1,1, 1,1, 3,3)
+		quad23 = LG.newQuad(2,1, 1,1, 3,3)
+		quad31 = LG.newQuad(0,2, 1,1, 3,3)
+		quad32 = LG.newQuad(1,2, 1,1, 3,3)
+		quad33 = LG.newQuad(2,2, 1,1, 3,3)
+	}
+
+	LG.draw(imageBoxGradient, quad11, x-bw, y-bw, 0, bw, bw)
+	LG.draw(imageBoxGradient, quad12, x,    y-bw, 0, w,  bw)
+	LG.draw(imageBoxGradient, quad13, x+w,  y-bw, 0, bw, bw)
+	LG.draw(imageBoxGradient, quad21, x-bw, y,    0, bw, h)
+	LG.draw(imageBoxGradient, quad22, x,    y,    0, w,  h)
+	LG.draw(imageBoxGradient, quad23, x+w,  y,    0, bw, h)
+	LG.draw(imageBoxGradient, quad31, x-bw, y+h,  0, bw, bw)
+	LG.draw(imageBoxGradient, quad32, x,    y+h,  0, w,  bw)
+	LG.draw(imageBoxGradient, quad33, x+w,  y+h,  0, bw, bw)
 }
 
 
