@@ -9,7 +9,8 @@
 --=
 --============================================================]]
 
-local BIG_BUTTON_HEIGHT :: 40
+local BIG_BUTTON_HEIGHT    :: 40
+local MEDIUM_BUTTON_HEIGHT :: 16
 
 local EXPORT_TEMPLATES_DIRECTORY :: "exportTemplates"
 
@@ -80,7 +81,7 @@ export setupGuiFrames :: () {
 					guiState.section!({ label="Texture",
 						guiState.radio!({ name="textureName", labelLeft="preset" }),
 						guiState.hbox!({
-							guiState.inputText!({ name="texturePath", labelLeft="path", weight=1 }),
+							guiState.inputText!({ name="texturePath", labelLeft="path", tooltip="Absolute path, or relative to the saved .hotparticles file", weight=1 }),
 							guiState.buttons!({ name="reloadTexture", buttons={{image="iconReload",tooltip="Reload texture"}} }),
 						}),
 						guiState.hbox!({
@@ -325,7 +326,7 @@ export setupGuiFrames :: () {
 			guiState.separator!({ thick=true }),
 			guiState.inputText!({ name="openProject_directory" }),
 			guiState.scrollable!({
-				guiState.buttons!({ name="openProject_items", vertical=true, align=gui.Alignment.LEFT, style=gui.Style.LIST, buttonMinHeight=16 }),
+				guiState.buttons!({ name="openProject_items", vertical=true, align=gui.Alignment.LEFT, style=gui.Style.LIST, buttonMinHeight=MEDIUM_BUTTON_HEIGHT }),
 			}),
 
 			guiState.separator!({ thick=true }),
@@ -358,7 +359,7 @@ export setupGuiFrames :: () {
 			guiState.separator!({ thick=true }),
 			guiState.inputText!({ name="saveProjectAs_directory" }),
 			guiState.scrollable!({
-				guiState.buttons!({ name="saveProjectAs_items", vertical=true, align=gui.Alignment.LEFT, style=gui.Style.LIST, buttonMinHeight=16 }),
+				guiState.buttons!({ name="saveProjectAs_items", vertical=true, align=gui.Alignment.LEFT, style=gui.Style.LIST, buttonMinHeight=MEDIUM_BUTTON_HEIGHT }),
 			}),
 
 			guiState.separator!({ thick=true }),
@@ -391,7 +392,9 @@ export setupGuiFrames :: () {
 					guiState.text!({ name="exportProject_particles_pathResult", weight=1 }),
 					guiState.buttons!({ name="exportProject_particles_pathResultInfo", buttons={{image="iconEye"}} }),
 				}),
-				guiState.buttons!({ name="exportProject_particles_template", labelLeft="template", vertical=true, align=gui.Alignment.LEFT, buttons={{image="iconDown",label="defaultLuaModule"}}}),
+				guiState.buttons!({ name="exportProject_particles_template", labelLeft="template", vertical=true, align=gui.Alignment.LEFT, buttonMinHeight=MEDIUM_BUTTON_HEIGHT,
+					buttons={{image="iconDown",label="defaultLuaModule"}},
+				}),
 			}),
 
 			guiState.separator!({ thick=true }),
@@ -409,8 +412,10 @@ export setupGuiFrames :: () {
 
 			guiState.separator!({ thick=true }),
 			guiState.section!({ label="Clipboard",
-				guiState.buttons!({ align=gui.Alignment.LEFT, buttons={{name="exportProject_clipboard_export",label="Export to clipboard"}}}),
-				guiState.buttons!({ name="exportProject_clipboard_template", labelLeft="template", align=gui.Alignment.LEFT, buttons={{image="iconDown",label="defaultLuaClipboard"}}}),
+				guiState.buttons!({ align=gui.Alignment.LEFT, buttonMinHeight=MEDIUM_BUTTON_HEIGHT, buttons={{name="exportProject_clipboard_export",label="Export to clipboard"}}}),
+				guiState.buttons!({ name="exportProject_clipboard_template", labelLeft="template", align=gui.Alignment.LEFT, buttonMinHeight=MEDIUM_BUTTON_HEIGHT,
+					buttons={{image="iconDown",label="defaultLuaClipboard"}},
+				}),
 			}),
 
 			guiState.separator!({ thick=true }),
@@ -874,7 +879,7 @@ export setupGuiCallbacks :: () {
 	guiState.onAction.texturePath = (input:gui.InputText) {
 		local project      = app.projects[app.currentProjectIndex]
 		local system       = project.systems[project.systemIndex]
-		local path         = normalizeFilePath(trim(input.value))
+		local path         = Path(trim(input.value)).toString!()
 		system.texturePath = path
 		input.value        = path
 		updateParticleTexture(project, system)
@@ -1486,6 +1491,7 @@ export setupGuiCallbacks :: () {
 		local Item :: struct { isDir=false, name="" }
 		static dirCurrent:  string = NULL
 		static dirFallback: string = NULL
+		static projectBeingSaved: Project = NULL
 
 		static lastProjectBeforeTemp: Project = NULL
 
@@ -1517,11 +1523,13 @@ export setupGuiCallbacks :: () {
 		}
 
 		guiState.onActive.saveProjectAs = (frame:gui.Frame) {
-			local isSave            = (frame.name == "saveProjectAs")
-			local project           = app.projects[app.currentProjectIndex]
-			local path              = project.path
-			local ok, dir, filename = matchPattern(path, "^(.+)/([^/]+)$")
+			local isSave  = (frame.name == "saveProjectAs")
+			local project = app.projects[app.currentProjectIndex]
+			local pathObj = Path(project.path)
 
+			if isSave  projectBeingSaved = project -- Needed as we load previews even in the save dialog, which means app.currentProjectIndex may change.
+
+			local ok, dir, filename = pathObj.getDirectoryAndFilename!()
 			if not ok {
 				dir      = LF.getSaveDirectory().."/projects"
 				filename = "untitled.hotparticles"
@@ -1546,6 +1554,7 @@ export setupGuiCallbacks :: () {
 
 		guiState.onInactive.saveProjectAs = (frame:gui.Frame) {
 			unloadPreview()
+			projectBeingSaved = NULL
 		}
 		guiState.onInactive.openProject = guiState.onInactive.saveProjectAs
 
@@ -1636,7 +1645,7 @@ export setupGuiCallbacks :: () {
 					if not connectToRemoteDirectory(dir) {
 						dir = LF.getSaveDirectory()
 						if not connectToRemoteDirectory(dir) {
-							dir = LF.getWorkingDirectory()
+							dir = getCwd()
 							assert(connectToRemoteDirectory(dir))
 						}
 					}
@@ -1709,26 +1718,34 @@ export setupGuiCallbacks :: () {
 		guiState.onSubmit.saveProjectAs_filename = (input:gui.InputText)        { save() }
 		guiState.onAction.saveProjectAs_save     = (buttons:gui.Buttons, i:int) { save() }
 		local save :: () {
-			local input    = gui.getElement(guiState, "saveProjectAs_filename", gui.InputText)
-			local filename = input.value
-			filename       = normalizeFilePath(trim(filename))
+			local input   = gui.getElement(guiState, "saveProjectAs_filename", gui.InputText)
+			input.value   = trim(input.value)
+			local pathObj = Path(input.value)
 
-			if filename == "" {
-				input.value = filename
+			if pathObj.isEmpty!() {
+				gui.setFocus(guiState, input)
+				return
+			}
+
+			pathObj.prepend!(dirCurrent) -- Fails if pathObj is absolute.
+
+			local ok, filename = pathObj.getFilename!()
+			if not ok {
 				gui.setFocus(guiState, input)
 				return
 			}
 
 			if not findPattern(filename, "%.hotparticles$") {
 				filename    = filename..".hotparticles"
-				input.value = filename
+				input.value = input.value..".hotparticles"
+				pathObj.setFilename!(filename)
 			}
 
-			local project = app.projects[app.currentProjectIndex]
-			project.path  = dirCurrent.."/"..filename
+			projectBeingSaved.path = pathObj.toString!()
 
-			local ok, fileExists = saveProject(project)
+			local ^ok, fileExists = saveProject(projectBeingSaved)
 			if ok {
+				updateParticleTextures(projectBeingSaved) -- In case any texture uses a relative path.
 				popPanel()
 
 			} elseif fileExists {
@@ -1737,8 +1754,9 @@ export setupGuiCallbacks :: () {
 				pushTempChoiceDialog("Confirm save as", filename.." already exists. Overwite it?", BUTTONS, submitIndex=1, (i:int) {
 					if i ~= 1  return
 
-					local project = app.projects[app.currentProjectIndex]
-					saveProject(project, overwrite=true)
+					saveProject(projectBeingSaved, overwrite=true)
+
+					updateParticleTextures(projectBeingSaved) -- In case any texture uses a relative path.
 					popPanel("saveProjectAs")
 				})
 
@@ -1752,22 +1770,26 @@ export setupGuiCallbacks :: () {
 		guiState.onSubmit.openProject_filename = (input:gui.InputText)        { open() }
 		guiState.onAction.openProject_open     = (buttons:gui.Buttons, i:int) { open() }
 		local open :: () {
-			local input    = gui.getElement(guiState, "openProject_filename", gui.InputText)
-			local filename = input.value
-			filename       = normalizeFilePath(trim(filename))
+			local input   = gui.getElement(guiState, "openProject_filename", gui.InputText)
+			input.value   = trim(input.value)
+			local pathObj = Path(input.value)
 
-			if filename == "" {
-				input.value = filename
+			if pathObj.isEmpty!() {
 				gui.setFocus(guiState, input)
 				return
 			}
 
-			local path = dirCurrent.."/"..filename
-			local ok, project = openProject(path)
-			if ok {
-				project.preview = false -- In case the project was already opened as a preview (which it probably always is).
-				popPanel()
+			pathObj.prepend!(dirCurrent) -- Fails if pathObj is absolute.
+
+			local path        = pathObj.toString!()
+			local ok, project = openProject(pathObj.toString!())
+			if not ok {
+				gui.setFocus(guiState, input)
+				return
 			}
+
+			project.preview = false -- In case the project was already opened as a preview (which it probably always is).
+			popPanel()
 		}
 	}
 
@@ -1780,47 +1802,102 @@ export setupGuiCallbacks :: () {
 	}
 
 	-- Files.
-	local resolveBaseOuputPath :: (project:Project) -> (success:bool, dir:string) {
-		local dir = project.exportBaseDirectory ?: "."
+	local replaceQuestionMarks :: (project:Project, path:string) -> string {
+		if not find(path, "?")  return path
 
-		if not isPathAbsolute(dir) {
-			if not project.path  return false, ""
-			dir = splitDirectoryAndFilename(project.path).."/"..dir
+		local filename = "untitled"
+
+		if project.path {
+			_, filename = Path(project.path).getFilename!()
+			filename    = replacePatternWithPattern(filename, "(.)%.[^.]+", "%1") ?: "untitled"
 		}
 
-		return true, (normalizeDirectoryPath(dir))
+		return (replace(path, "?", filename))
+	}
+	local resolveBaseOuputPath :: (project:Project) -> (success:bool, dir:string) {
+		local dirObj = Path(replaceQuestionMarks(project, project.exportBaseDirectory))
+
+		if not dirObj.isAbsolute {
+			local ok, dir = Path(project.path).getDirectory!()
+			if not ok  return false, NULL
+			dirObj.prepend!(dir)
+		}
+
+		return true, dirObj.toString!()
 	}
 	local resolveParticlesOuputPath :: (project:Project) -> (success:bool, path:string) {
-		local dir, filename = splitDirectoryAndFilename(project.exportParticlesPath, keepSlash=true)
-		if not dir  dir = "."
+		local pathObj      = Path(replaceQuestionMarks(project, project.exportParticlesPath))
+		local ok, filename = pathObj.getFilename!()
 
-		if not isPathAbsolute(dir)  dir = (project.exportBaseDirectory ?: ".").."/"..dir
+		if not ok {
+			if not project.path  return false, NULL
 
-		if not isPathAbsolute(dir) {
-			if not project.path  return false, ""
-			dir = splitDirectoryAndFilename(project.path).."/"..dir
-		}
-
-		if not filename {
-			_, filename = splitDirectoryAndFilename(project.path)
+			_, filename = Path(project.path).getFilename!()
 			filename    = replacePatternWithPattern(filename, "(.)%.[^.]+", "%1") ?: "untitled"
 			filename    = filename..".lua"
+
+			pathObj.setFilename!(filename)
+
+		} elseif filename == "." or filename == ".." {
+			return false, NULL
 		}
 
-		return true, (normalizeFilePath(dir.."/"..filename))
+		if not pathObj.isAbsolute  pathObj.prepend!(replaceQuestionMarks(project, project.exportBaseDirectory))
+
+		if not pathObj.isAbsolute {
+			local ^ok, dir = Path(project.path).getDirectory!()
+			if not ok  return false, NULL
+			pathObj.prepend!(dir)
+		}
+
+		return true, pathObj.toString!()
 	}
-	local resolveTextureOuputPath :: (project:Project, system:System) -> (success:bool, path:string) {
-		local path = system.texturePath ?: system.textureName..".png"
+	local resolveTextureOuputPath :: (project:Project, system:System) -> (success:bool, path:string, sameAsInput:bool) {
+		local pathObj = Path(system.texturePath ?: system.textureName..".png")
 
-		if not isPathAbsolute(path)  path = (project.exportTexturesDirectory ?: ".").."/"..path
-		if not isPathAbsolute(path)  path = (project.exportBaseDirectory     ?: ".").."/"..path
+		if not pathObj.isAbsolute  pathObj.prepend!(replaceQuestionMarks(project, project.exportTexturesDirectory))
 
-		if not isPathAbsolute(path) {
-			if not project.path  return false, ""
-			path = splitDirectoryAndFilename(project.path).."/"..path
+		if not pathObj.isAbsolute {
+			-- Prepend base directory.
+			local baseDirObj = Path(replaceQuestionMarks(project, project.exportBaseDirectory))
+
+			if not baseDirObj.isAbsolute {
+				local ok, dir = Path(project.path).getDirectory!()
+				if not ok  return false, NULL, NULL
+				baseDirObj.prepend!(dir)
+			}
+
+			pathObj.prepend!(baseDirObj)
+
+			if not baseDirObj.contains!(pathObj) {
+				pathObj = Path(pathObj.path[#pathObj.path])
+				pathObj.prepend!(replaceQuestionMarks(project, project.exportTexturesDirectory))
+				pathObj.prepend!(baseDirObj)
+			}
+
+		} elseif project.exportBaseDirectory {
+			-- Check if target path is in base directory.
+			local baseDirObj = Path(replaceQuestionMarks(project, project.exportBaseDirectory))
+
+			if not baseDirObj.isAbsolute and project.path {
+				local _, dir = Path(project.path).getDirectory!()
+				baseDirObj.prepend!(dir)
+			}
+
+			if baseDirObj.isAbsolute and not baseDirObj.contains!(pathObj) {
+				pathObj = Path(pathObj.path[#pathObj.path])
+				pathObj.prepend!(replaceQuestionMarks(project, project.exportTexturesDirectory))
+				pathObj.prepend!(baseDirObj)
+			}
 		}
 
-		return true, normalizeFilePath(path)
+		local ok, inputPath = getTextureFullPath(project, system)
+		if not ok  inputPath = ""
+
+		local path = pathObj.toString!()
+		-- printf("%-40s  %-40s  %-40s  %s", system.texturePath ?: system.textureName..".png", inputPath, path, toString(path == inputPath)) -- DEBUG
+
+		return true, path, (path == inputPath)
 	}
 
 	guiState.onRefresh.exportProject_baseDirectory = (input:gui.InputText) {
@@ -1829,7 +1906,8 @@ export setupGuiCallbacks :: () {
 	}
 	guiState.onAction.exportProject_baseDirectory = (input:gui.InputText, _:int) {
 		local project               = app.projects[app.currentProjectIndex]
-		project.exportBaseDirectory = normalizeDirectoryPath(input.value)
+		input.value                 = Path(trim(input.value)).toString!()
+		project.exportBaseDirectory = input.value
 		gui.refreshRecursively(guiState, "exportProject_baseDirectoryResult")
 		gui.refreshRecursively(guiState, "exportProject_baseDirectoryResultInfo")
 		gui.refreshRecursively(guiState, "exportProject_particles_path")
@@ -1844,7 +1922,7 @@ export setupGuiCallbacks :: () {
 		local ok, path = resolveBaseOuputPath(project)
 
 		if not ok {
-			textEl.text = "Missing path!"
+			textEl.text = "Missing/invalid path!"
 			return
 		}
 
@@ -1881,7 +1959,8 @@ export setupGuiCallbacks :: () {
 	}
 	guiState.onAction.exportProject_particles_path = (input:gui.InputText, _:int) {
 		local project               = app.projects[app.currentProjectIndex]
-		project.exportParticlesPath = normalizeFilePath(input.value)
+		input.value                 = Path(trim(input.value)).toString!()
+		project.exportParticlesPath = input.value
 		gui.refreshRecursively(guiState, "exportProject_particles_pathResult")
 		gui.refreshRecursively(guiState, "exportProject_particles_pathResultInfo")
 	}
@@ -1896,7 +1975,7 @@ export setupGuiCallbacks :: () {
 		local ok, path = resolveParticlesOuputPath(project)
 
 		if not ok {
-			textEl.text = "Missing path!"
+			textEl.text = "Missing/invalid path!"
 			return
 		}
 
@@ -1964,7 +2043,8 @@ export setupGuiCallbacks :: () {
 	}
 	guiState.onAction.exportProject_textures_directory = (input:gui.InputText, _:int) {
 		local project                   = app.projects[app.currentProjectIndex]
-		project.exportTexturesDirectory = normalizeDirectoryPath(input.value)
+		input.value                     = Path(trim(input.value)).toString!()
+		project.exportTexturesDirectory = input.value
 		gui.refreshRecursively(guiState, "exportProject_textures_pathResults")
 		gui.refreshRecursively(guiState, "exportProject_textures_pathResultsInfo")
 	}
@@ -1984,7 +2064,7 @@ export setupGuiCallbacks :: () {
 			local ok, path = resolveTextureOuputPath(project, it)
 
 			if not ok {
-				textEl.text = "Missing path(s)!"
+				textEl.text = "Missing/invalid paths!"
 				return
 			}
 
@@ -2023,16 +2103,18 @@ export setupGuiCallbacks :: () {
 		}
 
 		local texturePaths: []string
+		local texturePathSameAsInput: []bool
 
 		if project.exportTextures  for project.systems {
-			local ok, path = resolveTextureOuputPath(project, it)
+			local ok, path, sameAsInput = resolveTextureOuputPath(project, it)
 
 			if not ok {
 				setErrorText("Missing texture output path(s)")
 				return
 			}
 
-			texturePaths[itIndex] = path
+			texturePaths[itIndex]           = path
+			texturePathSameAsInput[itIndex] = sameAsInput
 		}
 
 		-- Check existing files.
@@ -2040,7 +2122,7 @@ export setupGuiCallbacks :: () {
 		local filesToConfirmOverwrite: []string
 
 		if project.exportParticles and not project.exportParticlesOverwrite {
-			local dir, filename = splitDirectoryAndFilename(particlesPath, keepSlash=true)
+			local _, dir, filename = Path(particlesPath).getDirectoryAndFilename!()
 
 			if not connectToRemoteDirectory(dir) {
 				setErrorText("Could not access folder '%s'", dir)
@@ -2053,13 +2135,15 @@ export setupGuiCallbacks :: () {
 
 		local texturePathSet: struct { !key:string, !value:bool }
 
-		if project.exportTextures and not project.exportTexturesOverwrite  for system: project.systems {
+		if project.exportTextures and not project.exportTexturesOverwrite  for project.systems {
 			local path = texturePaths[itIndex]
 
-			if texturePathSet[path] continue
+			if texturePathSet[path]  continue
 			texturePathSet[path] = true
 
-			local dir, filename = splitDirectoryAndFilename(path, keepSlash=true)
+			if texturePathSameAsInput[itIndex]  continue
+
+			local _, dir, filename = Path(path).getDirectoryAndFilename!()
 
 			if not connectToRemoteDirectory(dir) {
 				setErrorText("Could not access folder '%s'", dir)
@@ -2071,9 +2155,9 @@ export setupGuiCallbacks :: () {
 		}
 
 		-- Write files.
-		local writeExportFiles = [project, particlesData, particlesPath, texturePaths] () {
+		local writeExportFiles = [project, particlesData, particlesPath, texturePaths, texturePathSameAsInput] () {
 			if project.exportParticles {
-				local dir, filename = splitDirectoryAndFilename(particlesPath, keepSlash=true)
+				local _, dir, filename = Path(particlesPath).getDirectoryAndFilename!()
 
 				if not connectToRemoteDirectory(dir) {
 					setErrorText("Could not access folder '%s'", dir)
@@ -2096,7 +2180,9 @@ export setupGuiCallbacks :: () {
 				if texturePathSet[path] continue
 				texturePathSet[path] = true
 
-				local dir, filename = splitDirectoryAndFilename(path, keepSlash=true)
+				if texturePathSameAsInput[itIndex]  continue
+
+				local _, dir, filename = Path(path).getDirectoryAndFilename!()
 
 				if not connectToRemoteDirectory(dir) {
 					setErrorText("Could not access folder '%s'", dir)
@@ -2687,7 +2773,7 @@ export setupGuiCallbacks :: () {
 			updateParticleAnimation(system)
 			gui.refreshRecursively(guiState, dragContainer)
 
-			guiState.activeId  = dragContainer[targetIndex][1].id -- Must happen after refreshRecursively()! @Volatile
+			guiState.activeId  = dragContainer[targetIndex][1].id -- Must happen after refreshRecursively() as all elements are replaced! @Volatile
 			guiState.hoveredId = guiState.activeId
 		}
 	}

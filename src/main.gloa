@@ -25,6 +25,7 @@ export DEV :: !run isDev()
 export !import "basic"
 export !import "color"
 export !import "string"
+export !import "io/path"
 export io     :: !import "io"
 export math   :: !import "math"
 export physfs :: !import "love/physfs"
@@ -297,19 +298,23 @@ export updateParticleColors :: (system:System) {
 	system.particles.setColors!(colorsRgba)
 }
 
+export updateParticleTextures :: (project:Project) {
+	for project.systems  updateParticleTexture(project, it)
+}
+
 export updateParticleTexture :: (project:Project, system:System) {
-	local loadParticleTexture :: (project:Project, path:string) -> LF.FileData, LG.Image {
-		if isPathAbsolute(path) {
-			-- void
-		} elseif project.fileIsSaved {
-			local dir = splitDirectoryAndFilename(project.path, keepSlash=true)
-			path = dir..path
-		} else {
-			setErrorText("Relative paths require the project to be saved: %s", path)
+	local loadParticleTexture :: (project:Project, system:System) -> LF.FileData, LG.Image {
+		local ok, path, isDangling = getTextureFullPath(project, system)
+		if not ok {
+			if isDangling
+				setErrorText("Relative paths require the project to be saved: %s", path)
+			else
+				setErrorText("Bad texture path '%s'", path)
 			return NULL, NULL
 		}
 
-		local dir, filename = splitDirectoryAndFilename(path, keepSlash=true) -- Do we need to normalize dir after this?
+		local ^ok, dir, filename = Path(path).getDirectoryAndFilename!()
+		assert(ok)
 
 		if not connectToRemoteDirectory(dir) {
 			setErrorText("Could not access folder '%s'", dir)
@@ -317,11 +322,10 @@ export updateParticleTexture :: (project:Project, system:System) {
 		}
 		defer disconnectFromRemoteDirectory()
 
-		local pcall :: (func:any, path:string) -> bool, LF.FileData|string !foreign lua "pcall"
-		local ok, imageData = pcall(variant_of(LF.newFileData(filename)), filename)
+		local imageData, err = LF.newFileData(filename)
 
-		if not ok {
-			setErrorText(cast(string)imageData)
+		if imageData == NULL {
+			setErrorText(err)
 			return NULL, NULL
 		}
 
@@ -333,7 +337,7 @@ export updateParticleTexture :: (project:Project, system:System) {
 	local imageData: LF.FileData = NULL
 	local image:     LG.Image    = NULL
 
-	if system.texturePath  imageData, image = loadParticleTexture(project, system.texturePath) -- @Speed: Don't reload the texture if there's no change.
+	if system.texturePath  imageData, image = loadParticleTexture(project, system) -- @Speed: Don't reload the texture if there's no change.
 
 	if imageData == NULL {
 		imageData = particleImageDatas[system.textureName]
@@ -704,6 +708,10 @@ export onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool)
 		case "o":
 			if mod == {
 				case ModifierKey.C: pushPanel("openProject")
+
+				case ModifierKey.CS:
+					local ok, dir = Path(app.projects[app.currentProjectIndex].path).getDirectory!()
+					if ok  love.system.openURL("file://"..dir)
 			}
 
 		case "p":
@@ -1345,8 +1353,16 @@ export scheduleSaveWorkspace :: () {
 
 
 export openProject :: (path:string, asPreview=false) -> (success:bool, project:Project) {
-	local dir, filename = splitDirectoryAndFilename(path)
-	dir                 = normalizeDirectoryPath(dir)
+	local pathObj = Path(path)
+
+	local ok, dir, filename = pathObj.getDirectoryAndFilename!()
+	if not ok {
+		removeRecent(app.recentFiles, path)
+		if not asPreview  setErrorText("Bad project path '%s'", path)
+		return false, NULL
+	}
+
+	path = pathObj.toString!()
 
 	for app.projects  if it.path == path {
 		setCurrentProject(itIndex)
@@ -1354,6 +1370,7 @@ export openProject :: (path:string, asPreview=false) -> (success:bool, project:P
 	}
 
 	if not connectToRemoteDirectory(dir) {
+		removeRecent(app.recentFiles, path)
 		if not asPreview  setErrorText("Could not access folder '%s'", dir)
 		return false, NULL
 	}
@@ -1361,8 +1378,9 @@ export openProject :: (path:string, asPreview=false) -> (success:bool, project:P
 
 	addRecent(app.recentFolders, dir, MAX_RECENT_FOLDERS)
 
-	local ok, gotError, _app = loadWorkspace(filename)
+	local ^ok, gotError, _app = loadWorkspace(filename)
 	if not ok {
+		removeRecent(app.recentFiles, path)
 		if not asPreview  setErrorText("Could not load '%s'", filename)
 		return false, NULL
 	}
@@ -1410,6 +1428,29 @@ export getQuadForAnimationPreview :: (ps:LG.ParticleSystem, quads:[]LG.Quad) -> 
 	local progress = (LT.getTime() / lifetime) % 1
 	local i        = math.clamp(math.floor(1 + progress * #quads), 1, #quads)
 	return quads[i], progress
+}
+
+
+
+export getTextureFullPath :: (project:Project, system:System) -> (success:bool, path:string, isDanglingRelativePath:bool) {
+	local path = system.texturePath
+
+	if not path {
+		return true, format("%s/gfx/particles/%s.png", getAppDirectory(), system.textureName), false
+
+	} elseif Path(path).isAbsolute {
+		if not Path(path).getFilename!()  return false, "", false
+		return true, path, false
+
+	} elseif project.fileIsSaved {
+		local pathObj = Path(project.path)
+		pathObj.pop!() -- @Robustness: Should we check if the path empty after this?
+		pathObj.append!(path)
+		return true, pathObj.toString!(), false
+
+	} else {
+		return false, "", true
+	}
 }
 
 
