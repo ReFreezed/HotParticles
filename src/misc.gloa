@@ -366,3 +366,19 @@ export prepareSandbox :: (globals:table) -> (env:table) {
 }
 
 
+
+export combineKeyAndModifier :: (mod:ModifierKey, key:LK.KeyConstant) -> string {
+	local PREFIXES: Table(ModifierKey, string) : {
+		[ModifierKey.NONE] = "",
+		[ModifierKey.C]    = "c-",
+		[ModifierKey.A]    = "a-",
+		[ModifierKey.S]    = "s-",
+		[ModifierKey.CA]   = "c-a-",
+		[ModifierKey.CS]   = "c-s-",
+		[ModifierKey.AS]   = "a-s-",
+		[ModifierKey.CAS]  = "c-a-s-",
+	}
+	return PREFIXES[mod] .. key
+}
+
+

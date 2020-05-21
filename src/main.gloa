@@ -650,112 +650,88 @@ local onFileDropped :: (file:LF.DroppedFile) {
 
 
 local onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool) {
-	local mod     = getModifierKey()
-	local project = app.projects[app.currentProjectIndex]
+	local mod       = getModifierKey()
+	local modAndKey = combineKeyAndModifier(mod, key)
+	local project   = app.projects[app.currentProjectIndex]
 
 	-- Global keys.
-	if not LM.isGrabbed()  if key == {
-		case "q":
-			if mod == {
-				case ModifierKey.C: pushQuitEvent() ; return
-			}
+	if not LM.isGrabbed()  if modAndKey == {
+		case "c-q":
+			pushQuitEvent()
+			return
 
-		case "f10":
-			if mod == {
-				case ModifierKey.C: saveWorkspace() ; LE.restart() ; return
-			}
+		case "c-f10":
+			saveWorkspace()
+			LE.restart()
+			return
 
 		case "f1":
-			if mod == {
-				case ModifierKey.NONE:
-					app.showStats = not app.showStats
-					love.window.setVSync(app.showStats ? 0 : 1)
-					scheduleSaveWorkspace()
-					return
-			}
+			app.showStats = not app.showStats
+			love.window.setVSync(app.showStats ? 0 : 1)
+			scheduleSaveWorkspace()
+			return
 
 		case "f2":
-			if mod == {
-				case ModifierKey.NONE:
-					app.showPanelNumbers = not app.showPanelNumbers
-					scheduleSaveWorkspace()
-					return
-			}
+			app.showPanelNumbers = not app.showPanelNumbers
+			scheduleSaveWorkspace()
+			return
 	}
 
 	if gui.onKeyPressed(guiState, key, scancode, isRepeat)  return
 	if LM.isGrabbed()  return
 
 	-- Context-sensitive global keys.
-	if key == {
-		case "escape":
-			if not popPanel() {
-				local BUTTONS: []gui.Button : {{label="Exit"},{label="Cancel"}}
+	if key == "escape" {
+		if popPanel()  return
 
-				pushTempChoiceDialog("", "", BUTTONS, submitIndex=1, (i:int) {
-					if i == 1  pushQuitEvent()
-				})
+		local BUTTONS: []gui.Button : {{label="Exit"},{label="Cancel"}}
+
+		pushTempChoiceDialog("", "", BUTTONS, submitIndex=1, (i:int) {
+			if i == 1  pushQuitEvent()
+		})
+
+		return
+	}
+
+	if modAndKey == {
+		case "r":
+			for project.systems {
+				it.particles.reset!()
+				it.particles.start!()
 			}
 			return
 
-		case "r":
-			if mod == {
-				case ModifierKey.NONE:
-					for project.systems {
-						it.particles.reset!()
-						it.particles.start!()
-					}
-					return
-			}
-
-		case "o":
-			if mod == {
-				case ModifierKey.CS:
-					local ok, dir = Path(app.projects[app.currentProjectIndex].path).getDirectory!()
-					if ok  love.system.openURL("file://"..dir)
-					return
-			}
+		case "c-s-o":
+			local ok, dir = Path(app.projects[app.currentProjectIndex].path).getDirectory!()
+			if ok  love.system.openURL("file://"..dir)
+			return
 	}
 
 	if panelStack  return
 
 	-- Keys in normal view.
-	if key == {
-		case "tab":
-			if mod == {
-				case ModifierKey.NONE: setCurrentSystem ((project.systemIndex-0) % #project.systems + 1)
-				case ModifierKey.S:    setCurrentSystem ((project.systemIndex-2) % #project.systems + 1)
-				case ModifierKey.C:    setCurrentProject((app.currentProjectIndex-0) % #app.projects    + 1)
-				case ModifierKey.CS:   setCurrentProject((app.currentProjectIndex-2) % #app.projects    + 1)
+	if modAndKey == {
+		case "c-s":   if project.fileIsSaved  saveProject(project, overwrite=true)  else  pushPanel("saveProjectAs")
+		case "c-s-s": pushPanel("saveProjectAs")
+		case "c-e":   pushPanel("exportProject")
+		case "c-o":   pushPanel("openProject")
+		case "c-n":   addNewProject() ; gui.refreshRecursively(guiState, "projects") ; setCurrentProject(#app.projects) ; scheduleSaveWorkspace()
+		case "c-w":   if not (#app.projects == 1 and not (app.projects[1].path or app.projects[1].edited))  confirmCloseProject(app.currentProjectIndex)
+
+		case "c-s-t":
+			for app.recentFiles  if not indexWith(app.projects, "path", it) {
+				openProject(it)
+				break
 			}
 
-		case "h":
-			if mod == {
-				case ModifierKey.NONE:
-					local system   = project.systems[project.systemIndex]
-					system.visible = not system.visible
-			}
+		case "tab":     setCurrentSystem ((project.systemIndex     - 0) % #project.systems + 1)
+		case "s-tab":   setCurrentSystem ((project.systemIndex     - 2) % #project.systems + 1)
+		case "c-tab":   setCurrentProject((app.currentProjectIndex - 0) % #app.projects    + 1)
+		case "c-s-tab": setCurrentProject((app.currentProjectIndex - 2) % #app.projects    + 1)
 
-		case "s":
-			if mod == {
-				case ModifierKey.C:  if project.fileIsSaved  saveProject(project, overwrite=true)  else  pushPanel("saveProjectAs")
-				case ModifierKey.CS: pushPanel("saveProjectAs")
-			}
+		case "h": local system = project.systems[project.systemIndex] ; system.visible = not system.visible
 
-		case "e":
-			if mod == {
-				case ModifierKey.C: pushPanel("exportProject")
-			}
-
-		case "o":
-			if mod == {
-				case ModifierKey.C: pushPanel("openProject")
-			}
-
-		case "p":
-			if mod == {
-				case ModifierKey.NONE: gui.setActive(guiState, "main", not gui.getElement(guiState, "main").active)
-			}
+		case "p": gui.setActive(guiState, "main", not gui.getElement(guiState, "main").active)
 	}
 }
 
@@ -1451,6 +1427,37 @@ export openProject :: (path:string, asPreview=false) -> (success:bool, project:P
 	scheduleSaveWorkspace()
 
 	return true, project, true
+}
+
+export confirmCloseProject :: (projectIndex:int) {
+	local closeProject :: (projectIndex:int) {
+		local isCurrent  = (projectIndex == app.currentProjectIndex)
+		local _, project = remove(app.projects, projectIndex)
+
+		if project.path  addRecent(app.recentFiles, project.path, MAX_RECENT_FILES)
+
+		if app.projects[1] == NULL
+			addNewProject()
+		elseif projectIndex < app.currentProjectIndex
+			app.currentProjectIndex -= 1
+		else
+			app.currentProjectIndex = math.min(app.currentProjectIndex, #app.projects)
+
+		gui.refreshRecursively(guiState, "projects")
+		if isCurrent  setCurrentProject(app.currentProjectIndex, force=true)
+		scheduleSaveWorkspace()
+	}
+
+	if app.projects[projectIndex].edited {
+		local BUTTONS: []gui.Button : {{label="Close"},{label="Cancel"}}
+
+		pushTempChoiceDialog("Confirm close", "The project has unsaved changes. Close it anyway?", BUTTONS, submitIndex=1, [projectIndex] (choice:int) {
+			if choice == 1  closeProject(projectIndex)
+		})
+
+	} else {
+		closeProject(projectIndex)
+	}
 }
 
 

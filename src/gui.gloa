@@ -69,6 +69,7 @@ local SPECIAL_TAB_WIDTH     :: 32
 
 local TAB_BOTTOM_LINE_WIDTH :: 2
 
+local TEXT_OPACITY                 :: .85
 local HOVER_OUTLINE_OPACITY        :: .3
 local HOVER_OUTLINE_OPACITY_STRONG :: .7
 
@@ -280,19 +281,22 @@ export Separator :: struct {
 
 
 export Button :: struct {
-	name    = "", -- Inherited from parent if empty.
-	label   = "",
-	suffix  = "", -- Appears faded after the label.
-	image   = "",
-	tooltip = "",
+	name     = "", -- Inherited from parent if empty.
+	label    = "",
+	suffix   = "", -- Appears faded after the label.
+	shortcut = "", -- Appears on the right side. Requires the parent's Buttons.align to be LEFT to work properly.
+	image    = "",
+	tooltip  = "",
 	value: any,
 	draggable = false,
 	system: System = NULL,
 
 	imageScale = 1.0,
 
-	labelWidth  = 0,
-	suffixWidth = 0,
+	labelWidth    = 0,
+	suffixWidth   = 0,
+	shortcutWidth = 0,
+	contentWidth  = 0,
 }
 
 export Alignment :: enum { CENTER, LEFT, RIGHT, TOP, BOTTOM }
@@ -1142,16 +1146,17 @@ local calculateNaturalSize :: (state:State, el:Element) {
 				local w: int = NULL
 				local h: int = NULL
 
-				it.labelWidth  = fontNormal.getWidth!(it.label)
-				it.suffixWidth = fontNormal.getWidth!(it.suffix)
+				it.labelWidth    = fontNormal.getWidth!(it.label)
+				it.suffixWidth   = fontNormal.getWidth!(it.suffix)
+				it.shortcutWidth = it.shortcut ? fontNormal.getWidth!(it.shortcut) + SPACING_LARGE : 0
 
 				if it.system ~= NULL {
 					w             = BUTTON_IMAGE_MAX_SIZE
 					h             = BUTTON_IMAGE_MAX_SIZE
-				} elseif (it.label or it.suffix) and it.image {
+				} elseif (it.label or it.suffix or it.shortcut) and it.image {
 					w, h          = guiImages[it.image].getDimensions!()
 					it.imageScale = math.min(BUTTON_IMAGE_MAX_SIZE/w, BUTTON_IMAGE_MAX_SIZE/h, 1)
-					w             = math.round(w*it.imageScale) + SPACING + it.labelWidth+it.suffixWidth
+					w             = math.round(w*it.imageScale) + SPACING + it.labelWidth+it.suffixWidth+it.shortcutWidth
 					h             = math.max(math.round(h*it.imageScale), fontNormal.getHeight!())
 				} elseif it.image {
 					w, h          = guiImages[it.image].getDimensions!()
@@ -1159,9 +1164,11 @@ local calculateNaturalSize :: (state:State, el:Element) {
 					w             = math.round(w*it.imageScale)
 					h             = math.round(h*it.imageScale)
 				} else {
-					w             = it.labelWidth + it.suffixWidth
+					w             = it.labelWidth + it.suffixWidth + it.shortcutWidth
 					h             = fontNormal.getHeight!()
 				}
+
+				it.contentWidth = w
 
 				buttonMaxW = math.max(buttonMaxW, w)
 				buttonMaxH = math.max(buttonMaxH, h)
@@ -1449,7 +1456,7 @@ local drawElement :: (state:State, el:Element) {
 		}
 
 		LG.setFont(fontSmall)
-		LG.setColor(1, 1, 1)
+		LG.setColor(1, 1, 1, TEXT_OPACITY)
 		LG.print(el.labelLeft, el.layoutX-SPACING-fontSmall.getWidth!(el.labelLeft), textY)
 		LG.setFont(fontNormal)
 	}
@@ -1545,7 +1552,7 @@ local drawElement :: (state:State, el:Element) {
 			local section = cast(Section) el
 
 			if section.label {
-				LG.setColor(1, 1, 1)
+				LG.setColor(1, 1, 1, TEXT_OPACITY)
 				LG.print(section.label, section.layoutX, section.layoutY)
 			}
 
@@ -1566,7 +1573,7 @@ local drawElement :: (state:State, el:Element) {
 			intersectScissor(textEl.layoutX, 0, textEl.layoutWidth, LG.getHeight())
 
 			LG.setFont(textEl.large ? fontLarge : fontNormal)
-			LG.setColor(1, 1, 1)
+			LG.setColor(1, 1, 1, TEXT_OPACITY)
 
 			LG.print(textEl.text, textEl.layoutX, textEl.layoutY)
 			if textEl.large  LG.print(textEl.text, textEl.layoutX+1, textEl.layoutY)
@@ -1667,19 +1674,19 @@ local drawElement :: (state:State, el:Element) {
 				local image  = guiImages[it.image]
 				local iw, ih = image.getDimensions!()
 
-				if it.label or it.suffix {
-					LG.draw(image,
-						bx1[itIndex] + paddingX,
-						by1[itIndex] + bh[itIndex] // 2,
-						0, it.imageScale, it.imageScale, 0, ih/2
-					)
-				} else {
-					LG.draw(image,
-						bx1[itIndex] + bw[itIndex] // 2,
-						by1[itIndex] + bh[itIndex] // 2,
-						0, it.imageScale, it.imageScale, iw/2, ih/2
-					)
+				local imageX: int = NULL
+
+				if buttons.align == {
+					case Alignment.LEFT:  imageX = bx1[itIndex] + paddingX
+					case Alignment.RIGHT: imageX = bx1[itIndex] + math.max(math.round(bw[itIndex] - paddingX - it.contentWidth), paddingX)
+					case:                 imageX = bx1[itIndex] + math.max((bw[itIndex] - it.contentWidth) // 2,                 paddingX)
 				}
+
+				LG.draw(image,
+					imageX,
+					by1[itIndex] + bh[itIndex] // 2,
+					0, it.imageScale, it.imageScale, 0, ih/2
+				)
 			}
 
 			-- Particle previews.
@@ -1720,7 +1727,7 @@ local drawElement :: (state:State, el:Element) {
 			}
 
 			-- Labels.
-			for buttons.buttons  if it.label or it.suffix {
+			for buttons.buttons  if it.label or it.suffix or it.shortcut {
 				local scissorX1 = bx1[itIndex] + (paddingX-1)
 				local scissorX2 = bx2[itIndex] - (paddingX-1)
 
@@ -1728,16 +1735,15 @@ local drawElement :: (state:State, el:Element) {
 					local textY = by1[itIndex] + (bh[itIndex] - fontNormal.getHeight!()) // 2
 					local textX: int = NULL
 
+					if buttons.align == {
+						case Alignment.LEFT:  textX = bx1[itIndex] + paddingX
+						case Alignment.RIGHT: textX = bx1[itIndex] + math.max(math.round(bw[itIndex] - paddingX - it.contentWidth), paddingX)
+						case:                 textX = bx1[itIndex] + math.max((bw[itIndex] - it.contentWidth) // 2,                 paddingX)
+					}
+
 					if it.image {
-						local iw = guiImages[it.image].getWidth!()
-						textX    = math.ceil(bx1[itIndex] + paddingX + iw*it.imageScale + SPACING)
-					} else {
-						using Alignment
-						if buttons.align == {
-							case LEFT:  textX = bx1[itIndex] + paddingX
-							case RIGHT: textX = bx1[itIndex] + math.max(math.round(bw[itIndex] - paddingX - (it.labelWidth+it.suffixWidth)), paddingX)
-							case:       textX = bx1[itIndex] + math.max((bw[itIndex] - (it.labelWidth+it.suffixWidth)) // 2,                 paddingX)
-						}
+						local iw  = guiImages[it.image].getWidth!()
+						textX    += math.round(iw*it.imageScale + SPACING)
 					}
 
 					local grey, a: float
@@ -1751,12 +1757,16 @@ local drawElement :: (state:State, el:Element) {
 					LG.pushAll()
 					intersectScissor(scissorX1, 0, scissorX2-scissorX1, LG.getHeight())
 					if it.label {
-						LG.setColor(grey, grey, grey, a)
+						LG.setColor(grey, grey, grey, TEXT_OPACITY*a)
 						LG.print(it.label, textX, textY)
 					}
 					if it.suffix {
-						LG.setColor(grey, grey, grey, a*.6)
+						LG.setColor(grey, grey, grey, TEXT_OPACITY*a*.6)
 						LG.print(it.suffix, textX+it.labelWidth, textY)
+					}
+					if it.shortcut {
+						LG.setColor(grey, grey, grey, TEXT_OPACITY*a)
+						LG.print(it.shortcut, bx2[itIndex]-paddingX-it.shortcutWidth+SPACING_LARGE, textY)
 					}
 					LG.pop()
 				}
@@ -1785,7 +1795,7 @@ local drawElement :: (state:State, el:Element) {
 			}
 
 			LG.setFont(fontSmall)
-			LG.setColor(1, 1, 1)
+			LG.setColor(1, 1, 1, TEXT_OPACITY)
 			LG.print(checkbox.label, checkbox.layoutX+CHECKBOX_SIZE+SPACING, y-fontSmall.getHeight!()//2)
 			LG.setFont(fontNormal)
 
@@ -1823,7 +1833,7 @@ local drawElement :: (state:State, el:Element) {
 			-- Value.
 			local textOffset = focused ? field.getTextOffset!() : 0
 			local text       = focused ? field.getText!() : input.value
-			LG.setColor(1, 1, 1)
+			LG.setColor(1, 1, 1, TEXT_OPACITY)
 			LG.print(text, valueX+textOffset, y+SPACING)
 
 			-- Cursor.
@@ -1884,8 +1894,8 @@ local drawElement :: (state:State, el:Element) {
 			-- LG.circle(LG.DrawMode.FILL, handleX, y, 3, 16)
 
 			-- Readout.
-			local COLOR_TEXT:   love.Color: {1,1,1,.8}
-			local COLOR_SHADOW: love.Color: {0,0,0,.5}
+			local COLOR_TEXT:   love.Color: {1,1,1,.8*TEXT_OPACITY}
+			local COLOR_SHADOW: love.Color: {0,0,0,.5*TEXT_OPACITY}
 
 			if showLimits {
 				local textMin = format("min "..slider.readout, applyLimitMultiplier(slider, slider.min) * slider.readoutMulti)
@@ -2074,9 +2084,9 @@ local drawElement :: (state:State, el:Element) {
 				local textX = x - fontSmall.getWidth!(text) // 2
 				local textY = (angle % math.TAU < math.PI) ? direction.layoutY+5 : direction.layoutY+2*r-5-fontSmall.getHeight!()
 				LG.setFont(fontSmall)
-				LG.setColor(0, 0, 0)
+				LG.setColor(0, 0, 0, TEXT_OPACITY)
 				LG.print(text, textX+1, textY+1)
-				LG.setColor(1, 1, 1)
+				LG.setColor(1, 1, 1, TEXT_OPACITY)
 				LG.print(text, textX, textY)
 				LG.setFont(fontNormal)
 			}
@@ -2613,7 +2623,13 @@ export showContextMenu :: (state:State, x,y:int, items:[]string, cb:(i:int)) {
 	hideContextMenu(state)
 
 	local buttonList: []Button
-	for items  insert(buttonList, cast(Button){ label=it })
+	for items {
+		local ok, label, shortcut = matchPattern(it, "^(.*)\t(.*)$")
+		if ok
+			insert(buttonList, cast(Button){ label=cast(string)label, shortcut=cast(string)shortcut })
+		else
+			insert(buttonList, cast(Button){ label=it })
+	}
 
 	local contextMenu = state.frame!({ data=cb, x=x, y=y, minWidth=CONTEXT_MENU_MIN_WIDTH, layout=Layout.FLOATING, style=Style.CONTEXT_MENU,
 		guiState.buttons!({ name="__contextMenuButtons", vertical=true, align=Alignment.LEFT, style=Style.CONTEXT_MENU, buttonMinHeight=16,

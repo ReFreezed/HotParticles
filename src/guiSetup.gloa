@@ -23,11 +23,11 @@ export setupGuiFrames :: () {
 
 			guiState.buttons!({ name="saveOpenBar",
 				buttons = {
-					{label="Open...",    tooltip="Ctrl+O"},
-					{label="Save",       tooltip="Ctrl+S"},
-					{label="Save as...", tooltip="Ctrl+Shift+S"},
-					{label="Export...",  tooltip="Ctrl+E"},
-					{label="Settings"},
+					{label="Open...",    tooltip="Open project  (Ctrl+O)"},
+					{label="Save",       tooltip="Save project  (Ctrl+S)"},
+					{label="Save as...", tooltip="Save new project  (Ctrl+Shift+S)"},
+					{label="Export...",  tooltip="Export particles/textures to files/clipboard  (Ctrl+E)"},
+					{label="Settings",   tooltip="Toggle project settings"},
 				},
 			}),
 
@@ -87,7 +87,7 @@ export setupGuiFrames :: () {
 						guiState.hbox!({
 							guiState.slider!({ name="textureOffsetX", value=.5, min=0, max=1, limitName="textureOffset", limitCenter=.5, readoutMulti=100, readout="%d%%", weight=1, labelLeft="offset x/y" }),
 							guiState.slider!({ name="textureOffsetY", value=.5, min=0, max=1, limitName="textureOffset", limitCenter=.5, readoutMulti=100, readout="%d%%", weight=1 }),
-							guiState.buttons!({ name="util_pushPanel", data="animation", buttons={{label="Animation"}} }),
+							guiState.buttons!({ name="util_pushPanel", data="animation", buttons={{label="Animation",tooltip="Create/edit particle animation"}} }),
 						}),
 					}),
 
@@ -564,7 +564,7 @@ export setupGuiCallbacks :: () {
 		setCurrentProject(#app.projects)
 	}
 	guiState.onOption.projects = (tabs:gui.Tabs, projectIndex:int) {
-		gui.showContextMenu(guiState, {"Close","Duplicate"}, [projectIndex] (i:int) {
+		gui.showContextMenu(guiState, {"Close\tCtrl+W","Duplicate"}, [projectIndex] (i:int) {
 			if i == {
 				case 1:
 					confirmCloseProject(projectIndex)
@@ -580,35 +580,6 @@ export setupGuiCallbacks :: () {
 	}
 	guiState.onClose.projects = (tabs:gui.Tabs, i:int) {
 		if i < #tabs.buttons  confirmCloseProject(i)
-	}
-	local confirmCloseProject :: (projectIndex:int) {
-		local closeProject :: (projectIndex:int) {
-			local isCurrent  = (projectIndex == app.currentProjectIndex)
-			local _, project = remove(app.projects, projectIndex)
-
-			if project.path  addRecent(app.recentFiles, project.path, MAX_RECENT_FILES)
-
-			if app.projects[1] == NULL
-				addNewProject()
-			elseif projectIndex < app.currentProjectIndex
-				app.currentProjectIndex -= 1
-			else
-				app.currentProjectIndex = math.min(app.currentProjectIndex, #app.projects)
-
-			gui.refreshRecursively(guiState, "projects")
-			if isCurrent  setCurrentProject(app.currentProjectIndex, force=true)
-		}
-
-		if app.projects[projectIndex].edited {
-			local BUTTONS: []gui.Button : {{label="Close"},{label="Cancel"}}
-
-			pushTempChoiceDialog("Confirm close", "The project has unsaved changes. Close it anyway?", BUTTONS, submitIndex=1, [projectIndex] (choice:int) {
-				if choice == 1  closeProject(projectIndex)
-			})
-
-		} else {
-			closeProject(projectIndex)
-		}
 	}
 	guiState.onDrag.projects = (tabs:gui.Tabs, i:int, mx,my:int) {
 		local targetIndex = math.clamp(math.floor(1 + (mx - tabs.layoutX) / tabs.buttonWidth), 1, #app.projects)
