@@ -87,76 +87,48 @@ local writeProject :: (buffer:[]string, project:Project, isSavingWorkspace:bool)
 
 	for system: project.systems {
 		insert(buffer, ":system\n")
-		insert(buffer, "colors")      ; writeValue(buffer, eol=true, system.colors)
-		insert(buffer, "blendMode")   ; writeValue(buffer, eol=true, cast(string) system.blendMode)
-		insert(buffer, "texture")     ; writeValue(buffer, eol=true, system.textureName)
-		insert(buffer, "texturePath") ; writeValue(buffer, eol=true, system.texturePath)
 
-		local ps = system.particles
-		insert(buffer, "direction")        ; writeValue(buffer, eol=true, ps.getDirection!())
-		insert(buffer, "emissionRate")     ; writeValue(buffer, eol=true, ps.getEmissionRate!())
-		insert(buffer, "emitterLifetime")  ; writeValue(buffer, eol=true, (ps.getEmitterLifetime!() <= 0) ? .0 : ps.getEmitterLifetime!())
-		insert(buffer, "insertMode")       ; writeValue(buffer, eol=true, cast(string) ps.getInsertMode!())
-		insert(buffer, "offset")           ; writeValues(buffer,eol=true, system.offsetX, system.offsetY)
-		insert(buffer, "relativeRotation") ; writeValue(buffer, eol=true, ps.hasRelativeRotation!())
-		insert(buffer, "sizes")            ; writeValue(buffer, eol=true, {ps.getSizesAsVararg!()})
-		insert(buffer, "sizeVariation")    ; writeValue(buffer, eol=true, ps.getSizeVariation!())
-		insert(buffer, "spinVariation")    ; writeValue(buffer, eol=true, ps.getSpinVariation!())
-		insert(buffer, "spread")           ; writeValue(buffer, eol=true, ps.getSpread!())
+		insert(buffer, "blendMode")        ; writeValue(buffer, eol=true, cast(string) system.blendMode)
+		insert(buffer, "colors")           ; writeValue(buffer, eol=true, system.colors)
+		insert(buffer, "direction")        ; writeValue(buffer, eol=true, system.psDirection)
+		insert(buffer, "emissionRate")     ; writeValue(buffer, eol=true, system.psEmissionRate)
+		insert(buffer, "emitterLifetime")  ; writeValue(buffer, eol=true, system.psEmitterLifetime)
+		insert(buffer, "insertMode")       ; writeValue(buffer, eol=true, cast(string) system.psInsertMode)
+		insert(buffer, "relativeRotation") ; writeValue(buffer, eol=true, system.psRelativeRotation)
+		insert(buffer, "sizes")            ; writeValue(buffer, eol=true, system.psSizes)
+		insert(buffer, "sizeVariation")    ; writeValue(buffer, eol=true, system.psSizeVariation)
+		insert(buffer, "spinVariation")    ; writeValue(buffer, eol=true, system.psSpinVariation)
+		insert(buffer, "spread")           ; writeValue(buffer, eol=true, system.psSpread)
+		insert(buffer, "texture")          ; writeValue(buffer, eol=true, system.textureName)
+		insert(buffer, "texturePath")      ; writeValue(buffer, eol=true, system.texturePath)
+
+		insert(buffer, "linearDamping")          ; writeValues(buffer, eol=true, system.psLinearDampingMin,          system.psLinearDampingMax)
+		insert(buffer, "offset")                 ; writeValues(buffer, eol=true, system.offsetX,                     system.offsetY)
+		insert(buffer, "particleLifetime")       ; writeValues(buffer, eol=true, system.psParticleLifetimeMin,       system.psParticleLifetimeMax)
+		insert(buffer, "radialAcceleration")     ; writeValues(buffer, eol=true, system.psRadialAccelerationMin,     system.psRadialAccelerationMax)
+		insert(buffer, "rotation")               ; writeValues(buffer, eol=true, system.psRotationMin,               system.psRotationMax)
+		insert(buffer, "speed")                  ; writeValues(buffer, eol=true, system.psSpeedMin,                  system.psSpeedMax)
+		insert(buffer, "spin")                   ; writeValues(buffer, eol=true, system.psSpinMin,                   system.psSpinMax)
+		insert(buffer, "tangentialAcceleration") ; writeValues(buffer, eol=true, system.psTangentialAccelerationMin, system.psTangentialAccelerationMax)
+
 		do {
-			local min, max = ps.getLinearDamping!()
-			insert(buffer, "linearDamping")
-			writeValues(buffer, eol=true, min, max)
-		}
-		do {
-			local min, max = ps.getParticleLifetime!()
-			insert(buffer, "particleLifetime")
-			writeValues(buffer, eol=true, min, max)
-		}
-		do {
-			local min, max = ps.getRadialAcceleration!()
-			insert(buffer, "radialAcceleration")
-			writeValues(buffer, eol=true, min, max)
-		}
-		do {
-			local min, max = ps.getRotation!()
-			insert(buffer, "rotation")
-			writeValues(buffer, eol=true, min, max)
-		}
-		do {
-			local min, max = ps.getSpeed!()
-			insert(buffer, "speed")
-			writeValues(buffer, eol=true, min, max)
-		}
-		do {
-			local min, max = ps.getSpin!()
-			insert(buffer, "spin")
-			writeValues(buffer, eol=true, min, max)
-		}
-		do {
-			local min, max = ps.getTangentialAcceleration!()
-			insert(buffer, "tangentialAcceleration")
-			writeValues(buffer, eol=true, min, max)
-		}
-		do {
-			local distribution, dx, dy, angle, relative = ps.getEmissionArea!()
 			insert(buffer, "emissionArea")
-			writeValue(buffer, cast(string) distribution)
-			writeValue(buffer, dx)
-			writeValue(buffer, dy)
-			writeValue(buffer, angle)
-			writeValue(buffer, relative)
+			writeValue(buffer, cast(string) system.psEmissionAreaDistribution)
+			writeValue(buffer, system.psEmissionAreaDx)
+			writeValue(buffer, system.psEmissionAreaDy)
+			writeValue(buffer, system.psEmissionAreaAngle)
+			writeValue(buffer, system.psEmissionAreaRelative)
 			insert(buffer, "\n")
 		}
 		do {
-			local xmin,ymin, xmax,ymax = ps.getLinearAcceleration!()
 			insert(buffer, "linearAcceleration")
-			writeValue(buffer, xmin)
-			writeValue(buffer, ymin)
-			writeValue(buffer, xmax)
-			writeValue(buffer, ymax)
+			writeValue(buffer, system.psLinearAccelerationXmin)
+			writeValue(buffer, system.psLinearAccelerationYmin)
+			writeValue(buffer, system.psLinearAccelerationXmax)
+			writeValue(buffer, system.psLinearAccelerationYmax)
 			insert(buffer, "\n")
 		}
+
 		if system.frames {
 			insert(buffer, "frames")
 			for system.frames {
@@ -167,6 +139,7 @@ local writeProject :: (buffer:[]string, project:Project, isSavingWorkspace:bool)
 			}
 			insert(buffer, "\n")
 		}
+
 		for cast(table) system.gui {
 			insert(buffer, "gui")
 			writeValue(buffer, cast(string) itIndex)
@@ -376,8 +349,6 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 		local project: Project = NULL
 		local system:  System  = NULL
 
-		local ps: LG.ParticleSystem = NULL
-
 		local ln   = 0
 		local iter = (cast(LF.File)file).lines!()
 
@@ -408,7 +379,6 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 					case "system":
 						if project == NULL  return parsingError(path, ln, "Unexpected 'system' label.")
 						system = System()
-						ps     = system.particles
 						insert(project.systems, system)
 
 					case:
@@ -602,27 +572,27 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 					case "direction":
 						local ^ok, ^ptr, dir = readFloat(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
-						ps.setDirection!(dir)
+						system.psDirection = dir
 
 					case "emissionRate":
 						local ^ok, ^ptr, rate = readFloat(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
-						ps.setEmissionRate!(rate)
+						system.psEmissionRate = rate
 
 					case "emitterLifetime":
 						local ^ok, ^ptr, lifetime = readFloat(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
-						ps.setEmitterLifetime!(lifetime <= 0 ? -1.0 : lifetime)
+						system.psEmitterLifetime = lifetime
 
 					case "insertMode":
 						local ^ok, ^ptr, mode = readString(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
-						ps.setInsertMode!(cast(LG.ParticleInsertMode) mode) -- @Robustness: Validate enum value.
+						system.psInsertMode = cast(LG.ParticleInsertMode) mode -- @Robustness: Validate enum value.
 
 					case "relativeRotation":
 						local ^ok, ^ptr, relative = readBool(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
-						ps.setRelativeRotation!(relative)
+						system.psRelativeRotation = relative
 
 					case "sizes":
 						local ^ok, ^ptr, sizes = readFloatArray(version, line, cast(int)ptr)
@@ -630,67 +600,74 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 						if sizes[1]   == NULL     return parsingError(path, ln, "No sizes.")
 						if sizes[8+1] ~= NULL     return parsingError(path, ln, "Too many sizes. (Max is 8, got %d)", #sizes)
 						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
-						ps.setSizes!(sizes)
+						system.psSizes = sizes
 
 					case "sizeVariation":
 						local ^ok, ^ptr, variation = readFloat(version, line, cast(int)ptr)
 						if not ok                 return parsingError(path, ln, "Bad value format: %s", line)
 						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
-						ps.setSizeVariation!(variation)
+						system.psSizeVariation = variation
 
 					case "spinVariation":
 						local ^ok, ^ptr, variation = readFloat(version, line, cast(int)ptr)
 						if not ok                 return parsingError(path, ln, "Bad value format: %s", line)
 						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
-						ps.setSpinVariation!(variation)
+						system.psSpinVariation = variation
 
 					case "spread":
 						local ^ok, ^ptr, spread = readFloat(version, line, cast(int)ptr)
 						if not ok                 return parsingError(path, ln, "Bad value format: %s", line)
 						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
-						ps.setSpread!(spread)
+						system.psSpread = spread
 
 					case "linearDamping":
 						local ^ok, ^ptr, min = readFloat(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 						local ^ok, ^ptr, max = readFloat(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
-						ps.setLinearDamping!(min, max)
+						system.psLinearDampingMin = min
+						system.psLinearDampingMax = max
 
 					case "particleLifetime":
 						local ^ok, ^ptr, min = readFloat(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 						local ^ok, ^ptr, max = readFloat(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
-						ps.setParticleLifetime!(min, max)
+						system.psParticleLifetimeMin = min
+						system.psParticleLifetimeMax = max
 
 					case "radialAcceleration":
 						local ^ok, ^ptr, min = readFloat(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 						local ^ok, ^ptr, max = readFloat(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
-						ps.setRadialAcceleration!(min, max)
+						system.psRadialAccelerationMin = min
+						system.psRadialAccelerationMax = max
 
 					case "rotation":
 						local ^ok, ^ptr, min = readFloat(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 						local ^ok, ^ptr, max = readFloat(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
-						ps.setRotation!(min, max)
+						system.psRotationMin = min
+						system.psRotationMax = max
 
 					case "speed":
 						local ^ok, ^ptr, min = readFloat(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 						local ^ok, ^ptr, max = readFloat(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
-						ps.setSpeed!(min, max)
+						system.psSpeedMin = min
+						system.psSpeedMax = max
 
 					case "spin":
 						local ^ok, ^ptr, min = readFloat(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 						local ^ok, ^ptr, max = readFloat(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
-						ps.setSpin!(min, max)
+						system.psSpinMin = min
+						system.psSpinMax = max
 
 					case "tangentialAcceleration":
 						local ^ok, ^ptr, min = readFloat(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 						local ^ok, ^ptr, max = readFloat(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
-						ps.setTangentialAcceleration!(min, max)
+						system.psTangentialAccelerationMin = min
+						system.psTangentialAccelerationMax = max
 
 					case "offset":
 						local ^ok, ^ptr, x = readFloat(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
@@ -706,7 +683,11 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 						local ^ok, ^ptr, angle        = readFloat (version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 						local ^ok, ^ptr, relative     = readBool  (version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
-						ps.setEmissionArea!(cast(LG.AreaSpreadDistribution)distribution, dx, dy, angle, relative) -- @Robustness: Validate enum value.
+						system.psEmissionAreaDistribution = cast(LG.AreaSpreadDistribution) distribution -- @Robustness: Validate enum value.
+						system.psEmissionAreaDx           = dx
+						system.psEmissionAreaDy           = dy
+						system.psEmissionAreaAngle        = angle
+						system.psEmissionAreaRelative     = relative
 
 					case "linearAcceleration":
 						local ^ok, ^ptr, xmin = readFloat(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
@@ -714,7 +695,10 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 						local ^ok, ^ptr, xmax = readFloat(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 						local ^ok, ^ptr, ymax = readFloat(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
-						ps.setLinearAcceleration!(xmin,ymin, xmax,ymax)
+						system.psLinearAccelerationXmin = xmin
+						system.psLinearAccelerationYmin = ymin
+						system.psLinearAccelerationXmax = xmax
+						system.psLinearAccelerationYmax = ymax
 
 					case "frames":
 						local ^ok, ^ptr, values = readIntArray(version, line, cast(int)ptr)

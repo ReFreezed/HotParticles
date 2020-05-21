@@ -223,15 +223,46 @@ export Project :: struct {
 
 export System :: struct {
 	-- Saved:
-	particles: LG.ParticleSystem = NULL,
+	psDirection                 = 0.0,
+	psEmissionAreaDistribution  = LG.AreaSpreadDistribution.NONE,
+	psEmissionAreaDx            = 0.0,
+	psEmissionAreaDy            = 0.0,
+	psEmissionAreaAngle         = 0.0,
+	psEmissionAreaRelative      = false,
+	psEmissionRate              = 1.0,
+	psEmitterLifetime           = 0.0, -- 0=infinite
+	psInsertMode                = LG.ParticleInsertMode.TOP,
+	psLinearAccelerationXmin    = 0.0,
+	psLinearAccelerationYmin    = 0.0,
+	psLinearAccelerationXmax    = 0.0,
+	psLinearAccelerationYmax    = 0.0,
+	psLinearDampingMin          = 0.0,
+	psLinearDampingMax          = 0.0,
+	psParticleLifetimeMin       = 1.0,
+	psParticleLifetimeMax       = 1.0,
+	psRadialAccelerationMin     = 0.0,
+	psRadialAccelerationMax     = 0.0,
+	psRelativeRotation          = false,
+	psRotationMin               = 0.0,
+	psRotationMax               = 0.0,
+	psSizes: []float            = {1},
+	psSizeVariation             = 0.0,
+	psSpeedMin                  = 0.0,
+	psSpeedMax                  = 0.0,
+	psSpinMin                   = 0.0,
+	psSpinMax                   = 0.0,
+	psSpinVariation             = 0.0,
+	psSpread                    = 0.0,
+	psTangentialAccelerationMin = 0.0,
+	psTangentialAccelerationMax = 0.0,
 
 	colors: []float = {0,0,1,1}, -- {h1,s1,v1,a1,...}
 	blendMode = LG.BlendMode.ADD,
 
 	texturePath = "",
 	textureName = "light", -- Preset fallback to texturePath.
-	offsetX = .5,
-	offsetY = .5,
+	offsetX     = .5,
+	offsetY     = .5,
 
 	frames: []AnimationFrame,
 
@@ -239,6 +270,8 @@ export System :: struct {
 
 	-- Runtime-only:
 	visible = true,
+
+	particles: LG.ParticleSystem = NULL,
 
 	currentImageData: LF.FileData = NULL,
 	currentImage:     LG.Image    = NULL,
@@ -249,9 +282,8 @@ export System :: struct {
 		system.currentImageData = particleImageDatas.light
 		system.currentImage     = particleImages    .light
 
-		local ps = LG.newParticleSystem(system.currentImage)
-		ps.start!()
-		system.particles = ps
+		system.particles = LG.newParticleSystem(system.currentImage)
+		system.particles.start!()
 
 		return system
 	},
@@ -285,9 +317,32 @@ export AnimationFrame :: struct { x=0.0, y=0.0, w=0.0, h=0.0 }
 
 export updateParticles :: (project:Project) {
 	for project.systems {
+		updateParticleParams(it)
 		updateParticleColors(it)
 		updateParticleTexture(project, it)
 	}
+}
+
+export updateParticleParams :: (system:System) {
+	local ps = system.particles
+	ps.setDirection!(system.psDirection)
+	ps.setEmissionArea!(system.psEmissionAreaDistribution, system.psEmissionAreaDx, system.psEmissionAreaDy, system.psEmissionAreaAngle, system.psEmissionAreaRelative)
+	ps.setEmissionRate!(system.psEmissionRate)
+	ps.setEmitterLifetime!(system.psEmitterLifetime ?: -1)
+	ps.setInsertMode!(system.psInsertMode)
+	ps.setLinearAcceleration!(system.psLinearAccelerationXmin, system.psLinearAccelerationYmin, system.psLinearAccelerationXmax, system.psLinearAccelerationYmax)
+	ps.setLinearDamping!(system.psLinearDampingMin, system.psLinearDampingMax)
+	ps.setParticleLifetime!(system.psParticleLifetimeMin, system.psParticleLifetimeMax)
+	ps.setRadialAcceleration!(system.psRadialAccelerationMin, system.psRadialAccelerationMax)
+	ps.setRelativeRotation!(system.psRelativeRotation)
+	ps.setRotation!(system.psRotationMin, system.psRotationMax)
+	ps.setSizes!(system.psSizes)
+	ps.setSizeVariation!(system.psSizeVariation)
+	ps.setSpeed!(system.psSpeedMin, system.psSpeedMax)
+	ps.setSpin!(system.psSpinMin, system.psSpinMax)
+	ps.setSpinVariation!(system.psSpinVariation)
+	ps.setSpread!(system.psSpread)
+	ps.setTangentialAcceleration!(system.psTangentialAccelerationMin, system.psTangentialAccelerationMax)
 }
 
 export updateParticleColors :: (system:System) {
@@ -406,25 +461,24 @@ export updateParticleImageFilters :: () {
 
 export addNewSystem :: (project:Project, showcase=false) {
 	local system = System()
-	local ps     = system.particles
 	insert(project.systems, system)
 
 	if showcase {
-		system.colors = {0,0,1,0, 0,0,1,1, 0,0,1,.5, 0,0,1,0}
-		ps.setEmissionRate!(20)
-		ps.setDirection!(-math.TAU/4)
-		ps.setSpread!(.05*math.TAU)
-		ps.setParticleLifetime!(1.8, 2.2)
-		ps.setSpeed!(90, 100)
-	} else {
-		ps.setEmissionRate!(1)
-		ps.setParticleLifetime!(1)
+		system.psDirection           = -math.TAU/4
+		system.psEmissionRate        = 20
+		system.psParticleLifetimeMin = 1.8
+		system.psParticleLifetimeMax = 2.2
+		system.psSpeedMin            = 90
+		system.psSpeedMax            = 100
+		system.psSpread              = .05*math.TAU
+		system.colors                = {0,0,1,0, 0,0,1,1, 0,0,1,.5, 0,0,1,0}
 	}
+	updateParticleParams(system)
 	updateParticleColors(system)
 
 	if project.systems[2] ~= NULL {
 		local x, y = project.systems[1].particles.getPosition!()
-		ps.setPosition!(x, y)
+		system.particles.setPosition!(x, y)
 	}
 }
 
@@ -851,9 +905,7 @@ local onUpdate :: (dt:float) {
 		}
 
 		for project.systems {
-			local ps         = it.particles
-			local bufferSize = ps.getBufferSize!()
-
+			local ps      = it.particles
 			systemsActive = systemsActive or ps.isActive!() or ps.getCount!() > 0
 
 			if ps.getCount!() > ps.getBufferSize!() - EXTRA_BUFFER {
@@ -1057,7 +1109,6 @@ local onDraw :: () {
 			local PADDING :: 20
 
 			local system = project.systems[project.systemIndex]
-			local ps     = system.particles
 			local image  = system.currentImage
 			local iw, ih = image.getDimensions!()
 
@@ -1071,8 +1122,8 @@ local onDraw :: () {
 				local h = ih
 
 				if system.frames {
-					local quads        = ps.getQuads!()
-					local quad         = getQuadForAnimationPreview(ps, quads)
+					local quads        = system.particles.getQuads!()
+					local quad         = getQuadForAnimationPreview(system.particles, quads)
 					local _, _, qw, qh = quads[1].getViewport!()
 
 					w = math.round(qw)
@@ -1546,6 +1597,14 @@ export getOptimalBufferSize :: (ps:LG.ParticleSystem, exact=false) -> int {
 export updateWindowTitle :: () {
 	local project = app.projects[app.currentProjectIndex]
 	love.window.setTitle(format("%s%s - %s", (project.path ?: project.displayedName), (project.edited ? " •" : ""), WINDOW_TITLE))
+}
+
+
+
+export getCurrentProjectAndSystem :: () -> Project, System {
+	local project = app.projects[app.currentProjectIndex]
+	local system  = project.systems[project.systemIndex]
+	return project, system
 }
 
 
