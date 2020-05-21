@@ -6,6 +6,7 @@
 --============================================================]]
 
 export MAX_BUFFER_SIZE      :: 16000 -- Default buffer size for ParticleSystem is 1000.  @Incomplete: Make this configurable.
+export EXTRA_BUFFER         :: 10
 export MAIN_PANEL_WIDTH     :: 450
 export DIALOG_WIDTH         :: 400
 export WORKSPACE_SAVE_DELAY :: 1.00
@@ -849,9 +850,8 @@ export onUpdate :: (dt:float) {
 
 			systemsActive = systemsActive or ps.isActive!() or ps.getCount!() > 0
 
-			if ps.getCount!() > bufferSize-10 and bufferSize < MAX_BUFFER_SIZE {
-				ps.setBufferSize!(2*bufferSize)
-				setActionText("Increased buffer size")
+			if ps.getCount!() > ps.getBufferSize!() - EXTRA_BUFFER {
+				if updateBufferSize(ps)  setActionText("Increased buffer size")
 			}
 		}
 
@@ -1199,7 +1199,7 @@ export onDraw :: () {
 
 			drawStatsLine("ParticleCountTotal: ", "%d", particleCountTotal)
 
-			for project.systems  drawStatsLine("ParticleCount_", "%d: %d", itIndex, it.particles.getCount!())
+			for project.systems  drawStatsLine("ParticleCount_", "%d: %d/%d (%d)", itIndex, it.particles.getCount!(), getOptimalBufferSize(it.particles, exact=true), it.particles.getBufferSize!())
 
 			!if not DEV  drawStatsLine("(hide this with F1)", "")
 		}
@@ -1472,6 +1472,30 @@ export markEdited :: (project:Project) {
 
 	project.edited = true
 	gui.refreshRecursively(guiState, "projects")
+}
+
+
+
+export updateBufferSize :: (ps:LG.ParticleSystem) -> (gotUpdated:bool) {
+	local bufferSizeCurrent = ps.getBufferSize!()
+	local bufferSize        = bufferSizeCurrent
+	local optimalBufferSize = getOptimalBufferSize(ps)
+
+	while bufferSize < optimalBufferSize  bufferSize *= 2
+
+	if bufferSize == bufferSizeCurrent  return false
+
+	ps.setBufferSize!(bufferSize)
+	return true
+}
+
+export getOptimalBufferSize :: (ps:LG.ParticleSystem, exact=false) -> int {
+	local _, particleLifetime = ps.getParticleLifetime!() -- s
+	local emitterLifetime     = ps.getEmitterLifetime!()  -- s
+	local rate                = ps.getEmissionRate!()     -- n/s
+	local relevantTime        = emitterLifetime < 0 ? particleLifetime : math.min(particleLifetime, emitterLifetime)
+	local bufferSize          = math.ceil(rate * relevantTime + (exact ? 0 : EXTRA_BUFFER)) -- n/s * s  =  n
+	return math.min(bufferSize, MAX_BUFFER_SIZE)
 }
 
 

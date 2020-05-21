@@ -93,7 +93,6 @@ local writeProject :: (buffer:[]string, project:Project, isSavingWorkspace:bool)
 		insert(buffer, "texturePath") ; writeValue(buffer, eol=true, system.texturePath)
 
 		local ps = system.particles
-		insert(buffer, "bufferSize")       ; writeValue(buffer, eol=true, ps.getBufferSize!())
 		insert(buffer, "direction")        ; writeValue(buffer, eol=true, ps.getDirection!())
 		insert(buffer, "emissionRate")     ; writeValue(buffer, eol=true, ps.getEmissionRate!())
 		insert(buffer, "emitterLifetime")  ; writeValue(buffer, eol=true, (ps.getEmitterLifetime!() <= 0) ? .0 : ps.getEmitterLifetime!())
@@ -597,9 +596,7 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 						system.texturePath = texturePath
 
 					case "bufferSize":
-						local ^ok, ^ptr, size = readInt(version, line, cast(int)ptr)  if not ok  return parsingError(path, ln, "Bad value format: %s", line)
-						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
-						ps.setBufferSize!(size)
+						-- void @Obsolete
 
 					case "direction":
 						local ^ok, ^ptr, dir = readFloat(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
@@ -751,6 +748,8 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 
 	for project: projects {
 		if not project.systems  return parsingError(path, 0, "Missing systems for at least one project.")
+
+		for project.systems  updateBufferSize(it.particles)
 	}
 
 	return true, false, app

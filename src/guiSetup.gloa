@@ -2349,12 +2349,7 @@ export setupGuiCallbacks :: () {
 			insert(publicParticleSystems, publicParticleSystem)
 
 			do {
-				local _, particleLifetime = ps.getParticleLifetime!() -- s
-				local emitterLifetime     = ps.getEmitterLifetime!()  -- s
-				local rate                = ps.getEmissionRate!()     -- n/s
-				local relevantTime        = emitterLifetime < 0 ? particleLifetime : math.min(particleLifetime, emitterLifetime)
-				local bufferSize          = math.ceil(rate * relevantTime + 10) -- n/s * s  =  n
-				local ^ok, texturePath    = resolveTextureOuputPath(project, system)
+				local ^ok, texturePath = resolveTextureOuputPath(project, system)
 
 				if ok {
 					local ^ok, basePath = resolveBaseOuputPath(project)
@@ -2368,7 +2363,7 @@ export setupGuiCallbacks :: () {
 
 				publicParticleSystem.texturePath   = texturePath
 				publicParticleSystem.texturePreset = system.textureName
-				publicParticleSystem.bufferSize    = bufferSize
+				publicParticleSystem.bufferSize    = getOptimalBufferSize(ps)
 			}
 
 			publicParticleSystem.blendMode        = system.blendMode
