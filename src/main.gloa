@@ -13,6 +13,8 @@ export WORKSPACE_SAVE_DELAY :: 1.00
 export MAX_RECENT_FILES     :: 15
 export MAX_RECENT_FOLDERS   :: 4
 
+export WINDOW_TITLE :: !run (DEV ? "Hot Particles [DEBUG]" : "Hot Particles")
+
 
 
 local isDev :: () -> bool {
@@ -29,6 +31,7 @@ export !import "string"
 export !import "io/path"
 export io     :: !import "io"
 export math   :: !import "math"
+export utf8   :: !import "utf8"
 export physfs :: !import "love/physfs"
 
 export love :: !import "love"
@@ -560,7 +563,7 @@ local onLoad :: (args:[]string, argsRaw:[]string) {
 	io.disableBuffering(io.STDERR)
 
 	print("Running Hot Particles")
-	!if DEV  love.window.setTitle(love.window.getTitle().." [DEBUG]")
+	love.window.setTitle(WINDOW_TITLE)
 
 	local projectsToOpen: []string
 
@@ -1366,6 +1369,8 @@ export setCurrentProject :: (i:int, force=false) {
 	updateParticleImageFilters()
 
 	setCurrentSystem(app.projects[i].systemIndex, force=true)
+
+	updateWindowTitle()
 }
 
 export setCurrentSystem :: (i:int, force=true) {
@@ -1501,6 +1506,8 @@ export markEdited :: (project:Project) {
 
 	project.edited = true
 	gui.refreshRecursively(guiState, "projects")
+
+	updateWindowTitle()
 }
 
 
@@ -1525,6 +1532,13 @@ export getOptimalBufferSize :: (ps:LG.ParticleSystem, exact=false) -> int {
 	local relevantTime        = emitterLifetime < 0 ? particleLifetime : math.min(particleLifetime, emitterLifetime)
 	local bufferSize          = math.ceil(rate * relevantTime + (exact ? 0 : EXTRA_BUFFER)) -- n/s * s  =  n
 	return math.min(bufferSize, MAX_BUFFER_SIZE)
+}
+
+
+
+export updateWindowTitle :: () {
+	local project = app.projects[app.currentProjectIndex]
+	love.window.setTitle(format("%s%s - %s", (project.path ?: project.displayedName), (project.edited ? " •" : ""), WINDOW_TITLE))
 }
 
 

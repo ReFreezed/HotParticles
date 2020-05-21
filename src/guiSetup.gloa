@@ -543,7 +543,7 @@ export setupGuiCallbacks :: () {
 		tabs.buttons = {}
 
 		for app.projects {
-			local label = (it.edited ? format("* %s", it.displayedName) : it.displayedName)
+			local label = (it.edited ? format("%s •", it.displayedName) : it.displayedName)
 			insert(tabs.buttons, cast(gui.Button){ label=label, tooltip=it.path, draggable=true })
 		}
 		insert(tabs.buttons, cast(gui.Button){ image="iconAdd", tooltip="New project" })
@@ -1606,18 +1606,19 @@ export setupGuiCallbacks :: () {
 
 			if not isSave  filename = ""
 
-			dirCurrent  = cast(string) dir
+			dirCurrent  = dir
 			dirFallback = LF.getSaveDirectory()
 
 			local filenameInput = gui.getElement(guiState, (isSave ? "saveProjectAs_filename" : "openProject_filename"), gui.InputText)
-			filenameInput.value = cast(string) filename
+			filenameInput.value = filename
 
 			gui.refreshRecursively(guiState, (isSave ? "saveProjectAs_bookmarks" : "openProject_bookmarks"))
 			gui.refreshRecursively(guiState, (isSave ? "saveProjectAs_recent"    : "openProject_recent"))
 			gui.refreshRecursively(guiState, (isSave ? "saveProjectAs_items"     : "openProject_items"))
 			gui.setFocus(guiState, filenameInput)
-			filenameInput.field.selectAll!()
-			-- filenameInput.field.setSelection!(0, utf8.len(basename)) -- @UX
+
+			local basename, ext = splitBasenameAndExtension(filename)
+			filenameInput.field.setSelection!(0, utf8.getLength(basename))
 		}
 		guiState.onActive.openProject = guiState.onActive.saveProjectAs
 
@@ -1773,10 +1774,18 @@ export setupGuiCallbacks :: () {
 			local item   = cast(Item) buttons.buttons[i].value
 
 			if not item.isDir {
-				gui.getElement(guiState, (isSave ? "saveProjectAs_filename" : "openProject_filename"), gui.InputText).value = item.name
+				local input   = gui.getElement(guiState, (isSave ? "saveProjectAs_filename" : "openProject_filename"), gui.InputText)
+				input.value   = item.name
 				local pathObj = Path(dirCurrent)
 				insert(pathObj.path, item.name)
 				loadPreview(pathObj.toString!())
+
+				local ok, filename = pathObj.getFilename!()
+				if isSave and ok {
+					local basename, ext = splitBasenameAndExtension(filename)
+					gui.setFocus(guiState, input)
+					input.field.setSelection!(0, utf8.getLength(basename))
+				}
 
 			} elseif item.name == ".." {
 				local dirObj = Path(dirCurrent)
