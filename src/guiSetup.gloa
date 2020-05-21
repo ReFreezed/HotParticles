@@ -1632,7 +1632,10 @@ export setupGuiCallbacks :: () {
 
 		guiState.onSubmit.saveProjectAs_directory = (input:gui.InputText, i:int) {
 			local isSave = (input.frame.name == "saveProjectAs")
-			dirCurrent   = input.value
+			local dirObj = Path(trim(input.value))
+			if not dirObj.isAbsolute  return
+
+			dirCurrent = dirObj.toString!()
 			gui.refreshRecursively(guiState, (isSave ? "saveProjectAs_items" : "openProject_items"))
 		}
 		guiState.onSubmit.openProject_directory = guiState.onSubmit.saveProjectAs_directory
@@ -1706,12 +1709,20 @@ export setupGuiCallbacks :: () {
 
 			if not item.isDir {
 				gui.getElement(guiState, (isSave ? "saveProjectAs_filename" : "openProject_filename"), gui.InputText).value = item.name
-				loadPreview(dirCurrent.."/"..item.name)
+				local pathObj = Path(dirCurrent)
+				insert(pathObj.path, item.name)
+				loadPreview(pathObj.toString!())
+
 			} elseif item.name == ".." {
-				dirCurrent = replacePattern(dirCurrent, "/[^/]+$", "")
+				local dirObj = Path(dirCurrent)
+				dirObj.pop!()
+				dirCurrent = dirObj.toString!()
 				gui.refreshRecursively(guiState, (isSave ? "saveProjectAs_items" : "openProject_items"))
+
 			} else {
-				dirCurrent = dirCurrent.."/"..item.name
+				local dirObj = Path(dirCurrent)
+				insert(dirObj.path, item.name)
+				dirCurrent = dirObj.toString!()
 				gui.refreshRecursively(guiState, buttons)
 			}
 		}
@@ -1725,6 +1736,7 @@ export setupGuiCallbacks :: () {
 			local input   = gui.getElement(guiState, "saveProjectAs_filename", gui.InputText)
 			input.value   = trim(input.value)
 			local pathObj = Path(input.value)
+			input.value   = pathObj.toString!()
 
 			if pathObj.isEmpty!() {
 				gui.setFocus(guiState, input)
@@ -1777,6 +1789,7 @@ export setupGuiCallbacks :: () {
 			local input   = gui.getElement(guiState, "openProject_filename", gui.InputText)
 			input.value   = trim(input.value)
 			local pathObj = Path(input.value)
+			input.value   = pathObj.toString!()
 
 			if pathObj.isEmpty!() {
 				gui.setFocus(guiState, input)
