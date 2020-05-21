@@ -480,8 +480,8 @@ export connectToRemoteDirectory :: (dir:string) -> (success:bool) {
 }
 
 export disconnectFromRemoteDirectory :: () {
-	for physfs.getSearchPaths()  assert(physfs.unmountReadDirectory(it))
-	for defaultSearchPaths       assert(physfs.mountReadDirectory(it, true))
+	for physfs.getSearchPaths()  assert(physfs.unmountReadDirectory(it),     it)
+	for defaultSearchPaths       assert(physfs.mountReadDirectory(it, true), it)
 
 	assert(physfs.setWriteDirectory(LF.getSaveDirectory()))
 }
@@ -522,7 +522,7 @@ export setErrorText :: (s:string, v,...:int|float|string) {
 
 
 
-export onRun :: () -> (mainLoop:()->int|none) {
+local onRun :: () -> (mainLoop:()->int|none) {
 	local LOVE: struct { !key:string, !value:(...:love.Variant) } : !foreign lua "love"
 
 	local argsRaw = !import"utils".getCommandLineArguments()
@@ -555,7 +555,7 @@ export onRun :: () -> (mainLoop:()->int|none) {
 
 
 
-export onLoad :: (args:[]string, argsRaw:[]string) {
+local onLoad :: (args:[]string, argsRaw:[]string) {
 	io.disableBuffering(io.STDOUT)
 	io.disableBuffering(io.STDERR)
 
@@ -619,7 +619,14 @@ export onLoad :: (args:[]string, argsRaw:[]string) {
 
 
 
-export onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool) {
+local onFileDropped :: (file:LF.DroppedFile) {
+	local path = Path(file.getFilename!()).toString!()
+	openProject(path)
+}
+
+
+
+local onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool) {
 	local mod     = getModifierKey()
 	local project = app.projects[app.currentProjectIndex]
 
@@ -729,15 +736,15 @@ export onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool)
 	}
 }
 
-export onKeyReleased :: (key:LK.KeyConstant, scancode:LK.Scancode) {
+local onKeyReleased :: (key:LK.KeyConstant, scancode:LK.Scancode) {
 	gui.onKeyReleased(guiState, key, scancode)
 }
 
-export onTextInput :: (text:string) {
+local onTextInput :: (text:string) {
 	if gui.onTextInput(guiState, text)  return
 }
 
-export onMousePressed :: (mx,my:int, mbutton:int, isTouch:bool, presses:int) {
+local onMousePressed :: (mx,my:int, mbutton:int, isTouch:bool, presses:int) {
 	if isTouch         return
 	if LM.isGrabbed()  return
 
@@ -754,7 +761,7 @@ export onMousePressed :: (mx,my:int, mbutton:int, isTouch:bool, presses:int) {
 	}
 }
 
-export onMouseMoved :: (mx,my:int, dx,dy:int, isTouch:bool) {
+local onMouseMoved :: (mx,my:int, dx,dy:int, isTouch:bool) {
 	if isTouch  return
 
 	if isPositioningParticles {
@@ -770,7 +777,7 @@ export onMouseMoved :: (mx,my:int, dx,dy:int, isTouch:bool) {
 	gui.onMouseMoved(guiState, mx, my, dx, dy)
 }
 
-export onMouseReleased :: (mx,my:int, mbutton:int, isTouch:bool, presses:int) {
+local onMouseReleased :: (mx,my:int, mbutton:int, isTouch:bool, presses:int) {
 	if isTouch  return
 
 	if isPositioningParticles and mbutton == 1 {
@@ -784,7 +791,7 @@ export onMouseReleased :: (mx,my:int, mbutton:int, isTouch:bool, presses:int) {
 	gui.onMouseReleased(guiState, mx, my, mbutton, presses)
 }
 
-export onMouseWheel :: (dx,dy:int) {
+local onMouseWheel :: (dx,dy:int) {
 	if LM.isGrabbed()                      return
 	if gui.onMouseWheel(guiState, dx, dy)  return
 	if not dy                              return
@@ -822,7 +829,7 @@ export onMouseWheel :: (dx,dy:int) {
 
 
 
-export onUpdate :: (dt:float) {
+local onUpdate :: (dt:float) {
 	if freezeDtThisFrame {
 		dt                = 0
 		freezeDtThisFrame = false
@@ -980,7 +987,7 @@ local getVisibilityFlags :: () -> bool, bool, bool {
 	return showTextureOffset, showAnimationFrames, showWorld
 }
 
-export onDraw :: () {
+local onDraw :: () {
 	static statsAll:   LG.Stats
 	static statsWorld: LG.Stats
 
@@ -1295,7 +1302,7 @@ export onDraw :: () {
 
 
 
-export onResize :: (w,h:int) {
+local onResize :: (w,h:int) {
 	createCanvases()
 	guiState.layoutNeedsUpdate = true
 	freezeDtThisFrame          = true -- Fixes things jumping forward like crazy (in Windows at least).
@@ -1303,12 +1310,13 @@ export onResize :: (w,h:int) {
 
 
 
-export main :: () {
+local main :: () {
 	!import "utils"
 	local LOVE: table : !foreign lua "love"
 
 	LOVE.run           = wrapFunctionInGloaErrorHandler(onRun)
 	LOVE.load          = wrapFunctionInGloaErrorHandler(onLoad)
+	LOVE.filedropped   = wrapFunctionInGloaErrorHandler(onFileDropped)
 	LOVE.keypressed    = wrapFunctionInGloaErrorHandler(onKeyPressed)
 	LOVE.keyreleased   = wrapFunctionInGloaErrorHandler(onKeyReleased)
 	LOVE.textinput     = wrapFunctionInGloaErrorHandler(onTextInput)
@@ -1415,6 +1423,7 @@ export openProject :: (path:string, asPreview=false) -> (success:bool, project:P
 
 	gui.refreshRecursively(guiState, "projects")
 	setCurrentProject(#app.projects, force=true)
+	scheduleSaveWorkspace()
 
 	return true, project
 }

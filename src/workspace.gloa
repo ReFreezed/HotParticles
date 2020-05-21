@@ -367,6 +367,7 @@ local readStringArray :: (version:int, line:string, ptr:int) -> (success:bool, p
 export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) {
 	local file, err = LF.newFile(path, LF.FileMode.READ)
 	if file == NULL  return false, false, NULL
+	defer (cast(LF.File)file).close!()
 
 	local app: App !shadow
 	local projects = app.projects
