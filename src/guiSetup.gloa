@@ -470,7 +470,7 @@ export pushPanel :: (name:string) {
 	insert(panelStack, name)
 }
 
-export pushTempChoiceDialog :: (title:string, text:string, buttonList:[]gui.Button, cb:(choice:int), submitIndex=0) {
+export pushTempChoiceDialog :: (title:string, text:string, buttonList:[]gui.Button, cb:(choice:int), submitIndex=0, extraContent:gui.Element=NULL) {
 	static tempN = 0 ; tempN += 1
 
 	local name        = format("temp%d", tempN)
@@ -485,6 +485,10 @@ export pushTempChoiceDialog :: (title:string, text:string, buttonList:[]gui.Butt
 	}
 	if text {
 		insert(frame, guiState.text!({ text=text }))
+		insert(frame, guiState.separator!({ thick=false }))
+	}
+	if extraContent ~= NULL {
+		insert(frame, extraContent)
 		insert(frame, guiState.separator!({ thick=false }))
 	}
 	insert(frame, guiState.buttons!({ name=nameButtons, height=BIG_BUTTON_HEIGHT, buttons={ unpack(buttonList) } }))
@@ -2205,19 +2209,19 @@ export setupGuiCallbacks :: () {
 
 			local text = (
 				#filesToConfirmOverwrite == 1
-				? format(
-					"This file will be overwritten: %s",
-					concatinate(filesToConfirmOverwrite, ", ")
-				)
+				? "This file will be overwritten:"
 				: format(
-					"These %d files will be overwritten: %s",
-					#filesToConfirmOverwrite,
-					concatinate(filesToConfirmOverwrite, ", ")
+					"These %d files will be overwritten:",
+					#filesToConfirmOverwrite
 				)
 			)
 
-			-- @Incomplete: Handle 'text' usually not fitting in the dialog.
-			pushTempChoiceDialog("Confirm export", text, BUTTONS, submitIndex=1, [writeExportFiles] (choice:int) {
+			local buttonList: []gui.Button
+			for filesToConfirmOverwrite  insert(buttonList, cast(gui.Button){ label=it })
+
+			local fileListEl = guiState.buttons!({ vertical=true, align=gui.Alignment.LEFT, style=gui.Style.LIST, buttons=buttonList })
+
+			pushTempChoiceDialog("Confirm export", text, BUTTONS, submitIndex=1, extraContent=fileListEl, [writeExportFiles] (choice:int) {
 				if choice ~= 1  return
 
 				writeExportFiles()
@@ -2264,8 +2268,19 @@ export setupGuiCallbacks :: () {
 				local rate                = ps.getEmissionRate!()     -- n/s
 				local relevantTime        = emitterLifetime < 0 ? particleLifetime : math.min(particleLifetime, emitterLifetime)
 				local bufferSize          = math.ceil(rate * relevantTime + 10) -- n/s * s  =  n
+				local ^ok, texturePath    = resolveTextureOuputPath(project, system)
 
-				publicParticleSystem.texturePath   = system.texturePath
+				if ok {
+					local ^ok, basePath = resolveBaseOuputPath(project)
+					if ok {
+						local ^ok, texturePathObj = Path.getRelativeTo(texturePath, basePath)
+						if ok  texturePath = texturePathObj.toString!()
+					}
+				} else {
+					texturePath = ""
+				}
+
+				publicParticleSystem.texturePath   = texturePath
 				publicParticleSystem.texturePreset = system.textureName
 				publicParticleSystem.bufferSize    = bufferSize
 			}

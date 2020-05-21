@@ -673,6 +673,14 @@ export onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool)
 					}
 					return
 			}
+
+		case "o":
+			if mod == {
+				case ModifierKey.CS:
+					local ok, dir = Path(app.projects[app.currentProjectIndex].path).getDirectory!()
+					if ok  love.system.openURL("file://"..dir)
+					return
+			}
 	}
 
 	if panelStack  return
@@ -708,10 +716,6 @@ export onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool)
 		case "o":
 			if mod == {
 				case ModifierKey.C: pushPanel("openProject")
-
-				case ModifierKey.CS:
-					local ok, dir = Path(app.projects[app.currentProjectIndex].path).getDirectory!()
-					if ok  love.system.openURL("file://"..dir)
 			}
 
 		case "p":
