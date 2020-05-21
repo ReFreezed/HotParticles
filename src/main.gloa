@@ -562,6 +562,20 @@ local onLoad :: (args:[]string, argsRaw:[]string) {
 	print("Running Hot Particles")
 	!if DEV  love.window.setTitle(love.window.getTitle().." [DEBUG]")
 
+	local projectsToOpen: []string
+
+	for args {
+		if not findPattern(it, "^%-") {
+			insert(projectsToOpen, it)
+
+		} elseif it == "--help" or it == "-help" or it == "-?" or it == "/help" or it == "/?" {
+			print("Argument synopsis:  HotParticles.exe [fileToOpen1 fileToOpen2 ...]")
+
+		} else {
+			printf("Unknown option '%s'.", it)
+		}
+	}
+
 	LK.setKeyRepeat(true)
 
 	defaultSearchPaths = physfs.getSearchPaths()
@@ -597,16 +611,18 @@ local onLoad :: (args:[]string, argsRaw:[]string) {
 		}
 	}
 
-	local ok, gotError, _app = loadWorkspace("workspace")
-	if ok {
-		app = _app
-		assert(app.projects[1] ~= NULL)
-	} else {
-		if gotError  setErrorText("Could not load previous workspace")
-		addNewProject()
-	}
+	do {
+		local ok, gotError, _app = loadWorkspace("workspace")
+		if ok {
+			app = _app
+			assert(app.projects[1] ~= NULL)
+		} else {
+			if gotError  setErrorText("Could not load previous workspace")
+			addNewProject()
+		}
 
-	for app.projects  updateParticles(it)
+		for app.projects  updateParticles(it)
+	}
 
 	love.window.setVSync(app.showStats ? 0 : 1)
 
@@ -615,13 +631,17 @@ local onLoad :: (args:[]string, argsRaw:[]string) {
 	gui.refreshAll(guiState)
 
 	setCurrentProject(app.currentProjectIndex, force=true)
+
+	for projectsToOpen {
+		local ok, project, isNew = openProject(it)
+		if ok and not isNew  updateParticles(project)
+	}
 }
 
 
 
 local onFileDropped :: (file:LF.DroppedFile) {
-	local path = Path(file.getFilename!()).toString!()
-	openProject(path)
+	openProject(file.getFilename!())
 }
 
 
@@ -1367,27 +1387,27 @@ export scheduleSaveWorkspace :: () {
 
 
 
-export openProject :: (path:string, asPreview=false) -> (success:bool, project:Project) {
+export openProject :: (path:string, asPreview=false) -> (success:bool, project:Project, isNew:bool) {
 	local pathObj = Path(path)
 
 	local ok, dir, filename = pathObj.getDirectoryAndFilename!()
 	if not ok {
 		removeRecent(app.recentFiles, path)
 		if not asPreview  setErrorText("Bad project path '%s'", path)
-		return false, NULL
+		return false, NULL, NULL
 	}
 
 	path = pathObj.toString!()
 
 	for app.projects  if it.path == path {
 		setCurrentProject(itIndex)
-		return true, it
+		return true, it, false
 	}
 
 	if not connectToRemoteDirectory(dir) {
 		removeRecent(app.recentFiles, path)
 		if not asPreview  setErrorText("Could not access folder '%s'", dir)
-		return false, NULL
+		return false, NULL, NULL
 	}
 	defer disconnectFromRemoteDirectory()
 
@@ -1397,13 +1417,13 @@ export openProject :: (path:string, asPreview=false) -> (success:bool, project:P
 	if not ok {
 		removeRecent(app.recentFiles, path)
 		if not asPreview  setErrorText("Could not load '%s'", filename)
-		return false, NULL
+		return false, NULL, NULL
 	}
 
 	local project = _app.projects[1]
 	if project == NULL {
 		if not asPreview  setErrorText("File is missing data")
-		return false, NULL
+		return false, NULL, NULL
 	}
 
 	addRecent(app.recentFiles, path, MAX_RECENT_FILES)
@@ -1425,7 +1445,7 @@ export openProject :: (path:string, asPreview=false) -> (success:bool, project:P
 	setCurrentProject(#app.projects, force=true)
 	scheduleSaveWorkspace()
 
-	return true, project
+	return true, project, true
 }
 
 
