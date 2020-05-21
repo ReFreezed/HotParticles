@@ -543,7 +543,8 @@ export setupGuiCallbacks :: () {
 		tabs.buttons = {}
 
 		for app.projects {
-			insert(tabs.buttons, cast(gui.Button){ label=it.displayedName, tooltip=it.path, draggable=true })
+			local label = (it.edited ? format("* %s", it.displayedName) : it.displayedName)
+			insert(tabs.buttons, cast(gui.Button){ label=label, tooltip=it.path, draggable=true })
 		}
 		insert(tabs.buttons, cast(gui.Button){ image="iconAdd", tooltip="New project" })
 
@@ -566,7 +567,7 @@ export setupGuiCallbacks :: () {
 		gui.showContextMenu(guiState, {"Close","Duplicate"}, [projectIndex] (i:int) {
 			if i == {
 				case 1:
-					closeProject(projectIndex)
+					confirmCloseProject(projectIndex)
 
 				case 2:
 					local project = app.projects[projectIndex].clone!()
@@ -578,25 +579,36 @@ export setupGuiCallbacks :: () {
 		})
 	}
 	guiState.onClose.projects = (tabs:gui.Tabs, i:int) {
-		if i < #tabs.buttons  closeProject(i)
+		if i < #tabs.buttons  confirmCloseProject(i)
 	}
-	local closeProject :: (i:int) {
-		local isCurrent = (i == app.currentProjectIndex)
+	local confirmCloseProject :: (projectIndex:int) {
+		local closeProject :: (projectIndex:int) {
+			local isCurrent  = (projectIndex == app.currentProjectIndex)
+			local _, project = remove(app.projects, projectIndex)
 
-		-- @UX: Confirm closing project if there are changes.
-		local _, project = remove(app.projects, i)
+			if project.path  addRecent(app.recentFiles, project.path, MAX_RECENT_FILES)
 
-		if project.path  addRecent(app.recentFiles, project.path, MAX_RECENT_FILES)
+			if app.projects[1] == NULL
+				addNewProject()
+			elseif projectIndex < app.currentProjectIndex
+				app.currentProjectIndex -= 1
+			else
+				app.currentProjectIndex = math.min(app.currentProjectIndex, #app.projects)
 
-		if app.projects[1] == NULL
-			addNewProject()
-		elseif i < app.currentProjectIndex
-			app.currentProjectIndex -= 1
-		else
-			app.currentProjectIndex = math.min(app.currentProjectIndex, #app.projects)
+			gui.refreshRecursively(guiState, "projects")
+			if isCurrent  setCurrentProject(app.currentProjectIndex, force=true)
+		}
 
-		gui.refreshRecursively(guiState, "projects")
-		if isCurrent  setCurrentProject(app.currentProjectIndex, force=true)
+		if app.projects[projectIndex].edited {
+			local BUTTONS: []gui.Button : {{label="Close"},{label="Cancel"}}
+
+			pushTempChoiceDialog("Confirm close", "The project has unsaved changes. Close it anyway?", BUTTONS, submitIndex=1, [projectIndex] (choice:int) {
+				if choice == 1  closeProject(projectIndex)
+			})
+
+		} else {
+			closeProject(projectIndex)
+		}
 	}
 	guiState.onDrag.projects = (tabs:gui.Tabs, i:int, mx,my:int) {
 		local targetIndex = math.clamp(math.floor(1 + (mx - tabs.layoutX) / tabs.buttonWidth), 1, #app.projects)
@@ -674,6 +686,7 @@ export setupGuiCallbacks :: () {
 		local project            = app.projects[app.currentProjectIndex]
 		project.pixelateWorld    = checkbox.checked
 		scheduleRecreateCanvases = true
+		markEdited(project)
 
 		if project.pixelateWorld and project.zoomLevel < -1 {
 			project.zoomLevel  = -1
@@ -689,6 +702,7 @@ export setupGuiCallbacks :: () {
 		local project            = app.projects[app.currentProjectIndex]
 		project.pixelateTextures = checkbox.checked
 		scheduleRecreateCanvases = true
+		markEdited(project)
 		updateParticleImageFilters()
 
 		if project.pixelateTextures and project.zoomLevel < -1 {
@@ -709,6 +723,7 @@ export setupGuiCallbacks :: () {
 		project.bgColorH = colorEl.color[1]
 		project.bgColorS = colorEl.color[2]
 		project.bgColorV = colorEl.color[3]
+		markEdited(project)
 	}
 	guiState.onRefresh.bgChecker = (slider:gui.Slider) {
 		local project = app.projects[app.currentProjectIndex]
@@ -717,6 +732,7 @@ export setupGuiCallbacks :: () {
 	guiState.onAction.bgChecker = (slider:gui.Slider, i:int) {
 		local project     = app.projects[app.currentProjectIndex]
 		project.bgChecker = slider.value
+		markEdited(project)
 	}
 
 	guiState.onRefresh.emitterMovement = (radio:gui.Radio) {
@@ -728,6 +744,7 @@ export setupGuiCallbacks :: () {
 	guiState.onAction.emitterMovement = (radio:gui.Radio, i:int) {
 		local project          = app.projects[app.currentProjectIndex]
 		project.movementPreset = cast(Movement) radio.buttons[i].value
+		markEdited(project)
 	}
 	guiState.onRefresh.emitterMovementSx = (slider:gui.Slider) {
 		local project = app.projects[app.currentProjectIndex]
@@ -736,6 +753,7 @@ export setupGuiCallbacks :: () {
 	guiState.onAction.emitterMovementSx = (slider:gui.Slider, i:int) {
 		local project          = app.projects[app.currentProjectIndex]
 		project.movementScaleX = slider.value
+		markEdited(project)
 	}
 	guiState.onRefresh.emitterMovementSy = (slider:gui.Slider) {
 		local project = app.projects[app.currentProjectIndex]
@@ -744,6 +762,7 @@ export setupGuiCallbacks :: () {
 	guiState.onAction.emitterMovementSy = (slider:gui.Slider, i:int) {
 		local project          = app.projects[app.currentProjectIndex]
 		project.movementScaleY = slider.value
+		markEdited(project)
 	}
 	guiState.onRefresh.emitterMovementSpeed = (slider:gui.Slider) {
 		local project = app.projects[app.currentProjectIndex]
@@ -752,6 +771,7 @@ export setupGuiCallbacks :: () {
 	guiState.onAction.emitterMovementSpeed = (slider:gui.Slider, i:int) {
 		local project         = app.projects[app.currentProjectIndex]
 		project.movementSpeed = slider.value
+		markEdited(project)
 	}
 
 	-- Systems.
@@ -784,6 +804,7 @@ export setupGuiCallbacks :: () {
 		}
 
 		addNewSystem(project)
+		markEdited(project)
 		gui.refreshRecursively(guiState, "systems")
 		setCurrentSystem(#project.systems)
 	}
@@ -798,6 +819,7 @@ export setupGuiCallbacks :: () {
 					local system  = project.systems[systemIndex].clone!()
 					insert(project.systems, systemIndex+1, system)
 
+					markEdited(project)
 					gui.refreshRecursively(guiState, "systems")
 					setCurrentSystem(systemIndex+1, force=true)
 			}
@@ -825,6 +847,7 @@ export setupGuiCallbacks :: () {
 			else
 				project.systemIndex = math.min(project.systemIndex, #project.systems)
 
+			markEdited(project)
 			gui.refreshRecursively(guiState, "systems")
 			if isCurrent  setCurrentSystem(project.systemIndex, force=true)
 		})
@@ -840,6 +863,7 @@ export setupGuiCallbacks :: () {
 		local _, button = remove(tabs.buttons, i)
 		insert(project.systems, targetIndex, system)
 		insert(tabs.buttons,    targetIndex, button)
+		markEdited(project)
 
 		if isCurrent
 			project.systemIndex = targetIndex
@@ -872,6 +896,7 @@ export setupGuiCallbacks :: () {
 		local project      = app.projects[app.currentProjectIndex]
 		local system       = project.systems[project.systemIndex]
 		system.textureName = cast(string) radio.buttons[i].value
+		markEdited(project)
 		updateParticleTexture(project, system)
 	}
 
@@ -886,6 +911,7 @@ export setupGuiCallbacks :: () {
 		local path         = Path(trim(input.value)).toString!()
 		system.texturePath = path
 		input.value        = path
+		markEdited(project)
 		updateParticleTexture(project, system)
 	}
 
@@ -904,6 +930,7 @@ export setupGuiCallbacks :: () {
 		local project  = app.projects[app.currentProjectIndex]
 		local system   = project.systems[project.systemIndex]
 		system.offsetX = slider.value
+		markEdited(project)
 		updateParticleTextureOffset(system)
 	}
 
@@ -916,6 +943,7 @@ export setupGuiCallbacks :: () {
 		local project  = app.projects[app.currentProjectIndex]
 		local system   = project.systems[project.systemIndex]
 		system.offsetY = slider.value
+		markEdited(project)
 		updateParticleTextureOffset(system)
 	}
 	--
@@ -931,6 +959,7 @@ export setupGuiCallbacks :: () {
 		local project = app.projects[app.currentProjectIndex]
 		local system  = project.systems[project.systemIndex]
 		system.particles.setInsertMode!(cast(LG.ParticleInsertMode) radio.buttons[i].value)
+		markEdited(project)
 	}
 
 	guiState.onRefresh.emitterLifetime = (slider:gui.Slider) {
@@ -942,6 +971,7 @@ export setupGuiCallbacks :: () {
 		local project = app.projects[app.currentProjectIndex]
 		local system  = project.systems[project.systemIndex]
 		system.particles.setEmitterLifetime!(slider.value > 0 ? slider.value : -1.0)
+		markEdited(project)
 		if slider.value <= 0  system.particles.start!()
 	}
 	guiState.onRefresh.particleLifetimeMin = (slider:gui.Slider) {
@@ -954,6 +984,7 @@ export setupGuiCallbacks :: () {
 		local project  = app.projects[app.currentProjectIndex]
 		local system   = project.systems[project.systemIndex]
 		local min, max = system.particles.getParticleLifetime!()
+		markEdited(project)
 		system.particles.setParticleLifetime!(slider.value, max)
 	}
 	guiState.onRefresh.particleLifetimeMax = (slider:gui.Slider) {
@@ -966,6 +997,7 @@ export setupGuiCallbacks :: () {
 		local project  = app.projects[app.currentProjectIndex]
 		local system   = project.systems[project.systemIndex]
 		local min, max = system.particles.getParticleLifetime!()
+		markEdited(project)
 		system.particles.setParticleLifetime!(min, slider.value)
 	}
 
@@ -978,6 +1010,7 @@ export setupGuiCallbacks :: () {
 		local project = app.projects[app.currentProjectIndex]
 		local system  = project.systems[project.systemIndex]
 		system.particles.setEmissionRate!(slider.value)
+		markEdited(project)
 	}
 
 	guiState.onRefresh.areaDistribution = (radio:gui.Radio) {
@@ -994,6 +1027,7 @@ export setupGuiCallbacks :: () {
 		local distribution, dx,dy, angle, relative = ps.getEmissionArea!()
 		distribution  = cast(LG.AreaSpreadDistribution) radio.buttons[i].value
 		ps.setEmissionArea!(distribution, dx,dy, angle, relative)
+		markEdited(project)
 		gui.setActive(guiState, "areaParams", i > 1)
 		gui.refreshRecursively(guiState, "areaParams")
 	}
@@ -1008,6 +1042,7 @@ export setupGuiCallbacks :: () {
 		local ps      = project.systems[project.systemIndex].particles
 		local distribution, dx,dy, angle, relative = ps.getEmissionArea!()
 		ps.setEmissionArea!(distribution, dx,dy, direction.angle, relative)
+		markEdited(project)
 	}
 	guiState.onRefresh.areaDx = (slider:gui.Slider) {
 		local project = app.projects[app.currentProjectIndex]
@@ -1020,6 +1055,7 @@ export setupGuiCallbacks :: () {
 		local ps      = project.systems[project.systemIndex].particles
 		local distribution, dx,dy, angle, relative = ps.getEmissionArea!()
 		ps.setEmissionArea!(distribution, slider.value,dy, angle, relative)
+		markEdited(project)
 	}
 	guiState.onRefresh.areaDy = (slider:gui.Slider) {
 		local project = app.projects[app.currentProjectIndex]
@@ -1032,6 +1068,7 @@ export setupGuiCallbacks :: () {
 		local ps      = project.systems[project.systemIndex].particles
 		local distribution, dx,dy, angle, relative = ps.getEmissionArea!()
 		ps.setEmissionArea!(distribution, dx,slider.value, angle, relative)
+		markEdited(project)
 	}
 	guiState.onRefresh.areaRelative = (checkbox:gui.Checkbox) {
 		local project    = app.projects[app.currentProjectIndex]
@@ -1044,6 +1081,7 @@ export setupGuiCallbacks :: () {
 		local ps      = project.systems[project.systemIndex].particles
 		local distribution, dx,dy, angle, relative = ps.getEmissionArea!()
 		ps.setEmissionArea!(distribution, dx,dy, angle, checkbox.checked)
+		markEdited(project)
 	}
 
 	guiState.onRefresh.direction = (direction:gui.Direction) {
@@ -1055,6 +1093,7 @@ export setupGuiCallbacks :: () {
 		local project = app.projects[app.currentProjectIndex]
 		local ps      = project.systems[project.systemIndex].particles
 		ps.setDirection!(direction.angle)
+		markEdited(project)
 	}
 	guiState.onRefresh.directionSpread = (slider:gui.Slider) {
 		local project = app.projects[app.currentProjectIndex]
@@ -1065,6 +1104,7 @@ export setupGuiCallbacks :: () {
 		local project = app.projects[app.currentProjectIndex]
 		local ps      = project.systems[project.systemIndex].particles
 		ps.setSpread!(slider.value)
+		markEdited(project)
 	}
 
 	guiState.onRefresh.speedMin = (slider:gui.Slider) {
@@ -1078,6 +1118,7 @@ export setupGuiCallbacks :: () {
 		local ps       = project.systems[project.systemIndex].particles
 		local min, max = ps.getSpeed!()
 		ps.setSpeed!(slider.value, max)
+		markEdited(project)
 	}
 	guiState.onRefresh.speedMax = (slider:gui.Slider) {
 		local project  = app.projects[app.currentProjectIndex]
@@ -1090,6 +1131,7 @@ export setupGuiCallbacks :: () {
 		local ps       = project.systems[project.systemIndex].particles
 		local min, max = ps.getSpeed!()
 		ps.setSpeed!(min, slider.value)
+		markEdited(project)
 	}
 
 	guiState.onRefresh.accLinearXmin = (slider:gui.Slider) {
@@ -1103,6 +1145,7 @@ export setupGuiCallbacks :: () {
 		local ps      = project.systems[project.systemIndex].particles
 		local xmin,ymin, xmax,ymax = ps.getLinearAcceleration!()
 		ps.setLinearAcceleration!(slider.value,ymin, xmax,ymax)
+		markEdited(project)
 	}
 	guiState.onRefresh.accLinearXmax = (slider:gui.Slider) {
 		local project = app.projects[app.currentProjectIndex]
@@ -1115,6 +1158,7 @@ export setupGuiCallbacks :: () {
 		local ps      = project.systems[project.systemIndex].particles
 		local xmin,ymin, xmax,ymax = ps.getLinearAcceleration!()
 		ps.setLinearAcceleration!(xmin,ymin, slider.value,ymax)
+		markEdited(project)
 	}
 	guiState.onRefresh.accLinearYmin = (slider:gui.Slider) {
 		local project = app.projects[app.currentProjectIndex]
@@ -1127,6 +1171,7 @@ export setupGuiCallbacks :: () {
 		local ps      = project.systems[project.systemIndex].particles
 		local xmin,ymin, xmax,ymax = ps.getLinearAcceleration!()
 		ps.setLinearAcceleration!(xmin,slider.value, xmax,ymax)
+		markEdited(project)
 	}
 	guiState.onRefresh.accLinearYmax = (slider:gui.Slider) {
 		local project = app.projects[app.currentProjectIndex]
@@ -1139,6 +1184,7 @@ export setupGuiCallbacks :: () {
 		local ps      = project.systems[project.systemIndex].particles
 		local xmin,ymin, xmax,ymax = ps.getLinearAcceleration!()
 		ps.setLinearAcceleration!(xmin,ymin, xmax,slider.value)
+		markEdited(project)
 	}
 
 	guiState.onRefresh.radialAccelerationMin = (slider:gui.Slider) {
@@ -1152,6 +1198,7 @@ export setupGuiCallbacks :: () {
 		local ps      = project.systems[project.systemIndex].particles
 		local min, max = ps.getRadialAcceleration!()
 		ps.setRadialAcceleration!(slider.value, max)
+		markEdited(project)
 	}
 	guiState.onRefresh.radialAccelerationMax = (slider:gui.Slider) {
 		local project  = app.projects[app.currentProjectIndex]
@@ -1164,6 +1211,7 @@ export setupGuiCallbacks :: () {
 		local ps      = project.systems[project.systemIndex].particles
 		local min, max = ps.getRadialAcceleration!()
 		ps.setRadialAcceleration!(min, slider.value)
+		markEdited(project)
 	}
 
 	guiState.onRefresh.tangentialAccelerationMin = (slider:gui.Slider) {
@@ -1177,6 +1225,7 @@ export setupGuiCallbacks :: () {
 		local ps      = project.systems[project.systemIndex].particles
 		local min, max = ps.getTangentialAcceleration!()
 		ps.setTangentialAcceleration!(slider.value, max)
+		markEdited(project)
 	}
 	guiState.onRefresh.tangentialAccelerationMax = (slider:gui.Slider) {
 		local project  = app.projects[app.currentProjectIndex]
@@ -1189,6 +1238,7 @@ export setupGuiCallbacks :: () {
 		local ps      = project.systems[project.systemIndex].particles
 		local min, max = ps.getTangentialAcceleration!()
 		ps.setTangentialAcceleration!(min, slider.value)
+		markEdited(project)
 	}
 
 	guiState.onRefresh.linearDampingMin = (slider:gui.Slider) {
@@ -1202,6 +1252,7 @@ export setupGuiCallbacks :: () {
 		local ps      = project.systems[project.systemIndex].particles
 		local min, max = ps.getLinearDamping!()
 		ps.setLinearDamping!(slider.value, max)
+		markEdited(project)
 	}
 	guiState.onRefresh.linearDampingMax = (slider:gui.Slider) {
 		local project  = app.projects[app.currentProjectIndex]
@@ -1214,6 +1265,7 @@ export setupGuiCallbacks :: () {
 		local ps      = project.systems[project.systemIndex].particles
 		local min, max = ps.getLinearDamping!()
 		ps.setLinearDamping!(min, slider.value)
+		markEdited(project)
 	}
 
 	guiState.onRefresh.rotationMin = (direction:gui.Direction) {
@@ -1227,6 +1279,7 @@ export setupGuiCallbacks :: () {
 		local ps       = project.systems[project.systemIndex].particles
 		local min, max = ps.getRotation!()
 		ps.setRotation!(direction.angle, max)
+		markEdited(project)
 	}
 	guiState.onRefresh.rotationMax = (direction:gui.Direction) {
 		local project   = app.projects[app.currentProjectIndex]
@@ -1239,6 +1292,7 @@ export setupGuiCallbacks :: () {
 		local ps       = project.systems[project.systemIndex].particles
 		local min, max = ps.getRotation!()
 		ps.setRotation!(min, direction.angle)
+		markEdited(project)
 	}
 	guiState.onRefresh.rotationRelative = (checkbox:gui.Checkbox) {
 		local project    = app.projects[app.currentProjectIndex]
@@ -1249,6 +1303,7 @@ export setupGuiCallbacks :: () {
 		local project = app.projects[app.currentProjectIndex]
 		local ps      = project.systems[project.systemIndex].particles
 		ps.setRelativeRotation!(checkbox.checked)
+		markEdited(project)
 	}
 
 	guiState.onRefresh.spinMin = (slider:gui.Slider) {
@@ -1262,6 +1317,7 @@ export setupGuiCallbacks :: () {
 		local ps       = project.systems[project.systemIndex].particles
 		local min, max = ps.getSpin!()
 		ps.setSpin!(slider.value, max)
+		markEdited(project)
 	}
 	guiState.onRefresh.spinMax = (slider:gui.Slider) {
 		local project  = app.projects[app.currentProjectIndex]
@@ -1274,6 +1330,7 @@ export setupGuiCallbacks :: () {
 		local ps       = project.systems[project.systemIndex].particles
 		local min, max = ps.getSpin!()
 		ps.setSpin!(min, slider.value)
+		markEdited(project)
 	}
 	guiState.onRefresh.spinVariation = (slider:gui.Slider) {
 		local project = app.projects[app.currentProjectIndex]
@@ -1284,6 +1341,7 @@ export setupGuiCallbacks :: () {
 		local project = app.projects[app.currentProjectIndex]
 		local ps      = project.systems[project.systemIndex].particles
 		ps.setSpinVariation!(slider.value)
+		markEdited(project)
 	}
 
 	guiState.onRefresh.sizes = (slider:gui.Slider) {
@@ -1308,6 +1366,7 @@ export setupGuiCallbacks :: () {
 
 		insert(sizes, i, sizes[i])
 		ps.setSizes!(sizes)
+		markEdited(project)
 
 		for j = i, #sizes {
 			local name = format("sizeContainer%d", j)
@@ -1330,6 +1389,7 @@ export setupGuiCallbacks :: () {
 		}
 
 		ps.setSizes!(sizes)
+		markEdited(project)
 
 		for j = i, #sizes {
 			gui.refreshRecursively(guiState, format("sizeContainer%d", j))
@@ -1348,6 +1408,7 @@ export setupGuiCallbacks :: () {
 			local sizes   = {system.particles.getSizesAsVararg!()}
 			sizes[cast(int)slider.data] = slider.value
 			system.particles.setSizes!(sizes)
+			markEdited(project)
 		}
 	}
 
@@ -1382,6 +1443,7 @@ export setupGuiCallbacks :: () {
 		insert(colors, i1+2, v)
 		insert(colors, i1+3, a)
 
+		markEdited(project)
 		updateParticleColors(system)
 
 		for j = i, #colors//4 {
@@ -1413,6 +1475,7 @@ export setupGuiCallbacks :: () {
 			remove(colors, i1  )
 		}
 
+		markEdited(project)
 		updateParticleColors(system)
 
 		for j = i, #colors//4 {
@@ -1463,6 +1526,7 @@ export setupGuiCallbacks :: () {
 			local colors   = system.colors
 			local i1       = (4 * cast(int) colorEl.data) - 3
 			colors[i1+i-1] = colorEl.color[i]
+			markEdited(project)
 			updateParticleColors(system)
 		}
 	}
@@ -1485,6 +1549,7 @@ export setupGuiCallbacks :: () {
 		local system     = project.systems[project.systemIndex]
 		local blendMode  = cast(LG.BlendMode) radio.buttons[i].value
 		system.blendMode = blendMode
+		markEdited(project)
 		gui.getElement(guiState, "colorPreview", gui.ColorPreview).blendMode = blendMode
 	}
 
@@ -1925,6 +1990,7 @@ export setupGuiCallbacks :: () {
 		local project               = app.projects[app.currentProjectIndex]
 		input.value                 = Path(trim(input.value)).toString!()
 		project.exportBaseDirectory = input.value
+		markEdited(project)
 		gui.refreshRecursively(guiState, "exportProject_baseDirectoryResult")
 		gui.refreshRecursively(guiState, "exportProject_baseDirectoryResultInfo")
 		gui.refreshRecursively(guiState, "exportProject_particles_path")
@@ -1957,6 +2023,7 @@ export setupGuiCallbacks :: () {
 	guiState.onAction.exportProject_particles_writeFile = (checkbox:gui.Checkbox, _:int) {
 		local project           = app.projects[app.currentProjectIndex]
 		project.exportParticles = checkbox.checked
+		markEdited(project)
 		gui.refreshRecursively(guiState, "exportProject_particles_pathResult")
 		gui.refreshRecursively(guiState, "exportProject_particles_pathResultInfo")
 	}
@@ -1968,6 +2035,7 @@ export setupGuiCallbacks :: () {
 	guiState.onAction.exportProject_particles_overwrite = (checkbox:gui.Checkbox, _:int) {
 		local project                    = app.projects[app.currentProjectIndex]
 		project.exportParticlesOverwrite = checkbox.checked
+		markEdited(project)
 	}
 
 	guiState.onRefresh.exportProject_particles_path = (input:gui.InputText) {
@@ -1978,6 +2046,7 @@ export setupGuiCallbacks :: () {
 		local project               = app.projects[app.currentProjectIndex]
 		input.value                 = Path(trim(input.value)).toString!()
 		project.exportParticlesPath = input.value
+		markEdited(project)
 		gui.refreshRecursively(guiState, "exportProject_particles_pathResult")
 		gui.refreshRecursively(guiState, "exportProject_particles_pathResultInfo")
 	}
@@ -2010,6 +2079,7 @@ export setupGuiCallbacks :: () {
 		showTemplateDropdownMenu(buttons, (templateName:string) {
 			local project                   = app.projects[app.currentProjectIndex]
 			project.exportParticlesTemplate = templateName
+			markEdited(project)
 			gui.refreshRecursively(guiState, "exportProject_particles_template")
 		})
 	}
@@ -2041,6 +2111,7 @@ export setupGuiCallbacks :: () {
 	guiState.onAction.exportProject_textures_copyFiles = (checkbox:gui.Checkbox, _:int) {
 		local project          = app.projects[app.currentProjectIndex]
 		project.exportTextures = checkbox.checked
+		markEdited(project)
 		gui.refreshRecursively(guiState, "exportProject_textures_pathResults")
 		gui.refreshRecursively(guiState, "exportProject_textures_pathResultsInfo")
 	}
@@ -2052,6 +2123,7 @@ export setupGuiCallbacks :: () {
 	guiState.onAction.exportProject_textures_overwrite = (checkbox:gui.Checkbox, _:int) {
 		local project                   = app.projects[app.currentProjectIndex]
 		project.exportTexturesOverwrite = checkbox.checked
+		markEdited(project)
 	}
 
 	guiState.onRefresh.exportProject_textures_directory = (input:gui.InputText) {
@@ -2062,6 +2134,7 @@ export setupGuiCallbacks :: () {
 		local project                   = app.projects[app.currentProjectIndex]
 		input.value                     = Path(trim(input.value)).toString!()
 		project.exportTexturesDirectory = input.value
+		markEdited(project)
 		gui.refreshRecursively(guiState, "exportProject_textures_pathResults")
 		gui.refreshRecursively(guiState, "exportProject_textures_pathResultsInfo")
 	}
@@ -2449,6 +2522,7 @@ export setupGuiCallbacks :: () {
 		showTemplateDropdownMenu(buttons, (templateName:string) {
 			local project                   = app.projects[app.currentProjectIndex]
 			project.exportClipboardTemplate = templateName
+			markEdited(project)
 			gui.refreshRecursively(guiState, "exportProject_clipboard_template")
 		})
 	}

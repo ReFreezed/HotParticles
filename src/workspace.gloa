@@ -47,11 +47,12 @@ local writeValues :: (buffer:[]string, v1,v2:$T, eol=false) {
 	writeValue(buffer, v2, eol=eol)
 }
 
-local writeProject :: (buffer:[]string, project:Project, writePath:bool) {
+local writeProject :: (buffer:[]string, project:Project, isSavingWorkspace:bool) {
 	insert(buffer, ":project\n")
 
-	if writePath and project.path {
-		insert(buffer, "path") ; writeValue(buffer, eol=true, project.path)
+	if isSavingWorkspace {
+		if project.path   { insert(buffer, "path") ; writeValue(buffer, eol=true, project.path) }
+		if project.edited { insert(buffer, "edited\n") }
 	}
 
 	insert(buffer, "bgColor")          ; writeValue(buffer, eol=true, {project.bgColorH, project.bgColorS, project.bgColorV})
@@ -206,7 +207,7 @@ export saveWorkspace :: () {
 	insert(buffer, "bookmarkedFolders")   ; writeValue(buffer, eol=true, app.bookmarkedFolders)
 
 	for app.projects  if not it.preview {
-		writeProject(buffer, it, writePath=true)
+		writeProject(buffer, it, isSavingWorkspace=true)
 	}
 
 	local ok, err = LF.write("workspace", concatinate(buffer))
@@ -240,7 +241,7 @@ export saveProject :: (project:Project, overwrite=false) -> (success:bool, fileE
 	local buffer: []string
 	insert(buffer, format("%d\n", LAST_FILE_VERSION))
 
-	writeProject(buffer, project, writePath=false)
+	writeProject(buffer, project, isSavingWorkspace=false)
 
 	local ^ok, err = LF.write(filename, concatinate(buffer))
 	if not ok  return setErrorMessage(false, "Could not write project to file: %s", err)
@@ -249,6 +250,7 @@ export saveProject :: (project:Project, overwrite=false) -> (success:bool, fileE
 
 	project.fileIsSaved   = true
 	project.displayedName = filename
+	project.edited        = false
 
 	gui.refreshRecursively(guiState, "projects")
 	scheduleSaveWorkspace()
@@ -468,6 +470,10 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 
 						local ^ok, filename = Path.getFilename(savedPath)
 						if ok  project.displayedName = filename
+
+					case "edited":
+						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
+						project.edited = true
 
 					case "bgColor":
 						local ^ok, ^ptr, h = readFloat(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)

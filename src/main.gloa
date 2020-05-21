@@ -143,6 +143,8 @@ export Project :: struct {
 
 	path = "", -- Only save in workspace.
 
+	edited = false,
+
 	exportBaseDirectory      = "",
 	exportParticles          = true,
 	exportParticlesOverwrite = false,
@@ -204,6 +206,7 @@ export Project :: struct {
 			movementSpeed    = source.movementSpeed,
 			zoom             = source.zoom,
 			zoomTarget       = source.zoomTarget,
+			edited           = true,
 		}
 		_init(project)
 
@@ -1405,8 +1408,13 @@ export openProject :: (path:string, asPreview=false) -> (success:bool, project:P
 
 	updateParticles(project)
 
+	local currentProject = app.projects[app.currentProjectIndex]
+	if not (currentProject.edited or currentProject.path) {
+		remove(app.projects, app.currentProjectIndex)
+	}
+
 	gui.refreshRecursively(guiState, "projects")
-	setCurrentProject(#app.projects)
+	setCurrentProject(#app.projects, force=true)
 
 	return true, project
 }
@@ -1455,6 +1463,15 @@ export getTextureFullPath :: (project:Project, system:System) -> (success:bool, 
 	} else {
 		return false, "", true
 	}
+}
+
+
+
+export markEdited :: (project:Project) {
+	if project.edited  return
+
+	project.edited = true
+	gui.refreshRecursively(guiState, "projects")
 }
 
 
