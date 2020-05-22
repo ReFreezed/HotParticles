@@ -6,7 +6,6 @@
 --============================================================]]
 
 export MAX_BUFFER_SIZE      :: 16000 -- Default buffer size for ParticleSystem is 1000.  @Incomplete: Make this configurable.
-export EXTRA_BUFFER         :: 10
 export MAIN_PANEL_WIDTH     :: 450
 export DIALOG_WIDTH         :: 400
 export WORKSPACE_SAVE_DELAY :: 1.00
@@ -145,10 +144,6 @@ export Project :: struct {
 	movementScaleY = 1.0,
 	movementSpeed  = 1.0,
 
-	path = "", -- Only save in workspace.
-
-	edited = false,
-
 	exportBaseDirectory      = "",
 	exportParticles          = true,
 	exportParticlesOverwrite = false,
@@ -160,6 +155,9 @@ export Project :: struct {
 	exportClipboardTemplate  = "defaultLuaClipboard",
 
 	guiLimits: struct { !key:string, !value:float },
+
+	edited = false,
+	path   = "", -- Only save in workspace.
 
 	-- Runtime-only:
 	systemIndex = 1,
@@ -197,20 +195,31 @@ export Project :: struct {
 
 	clone :: (source:Project) -> Project {
 		local project: Project = {
-			bgColorH         = source.bgColorH,
-			bgColorS         = source.bgColorS,
-			bgColorV         = source.bgColorV,
-			bgChecker        = source.bgChecker,
-			pixelateWorld    = source.pixelateWorld,
-			pixelateTextures = source.pixelateTextures,
-			zoomLevel        = source.zoomLevel,
-			movementPreset   = source.movementPreset,
-			movementScaleX   = source.movementScaleX,
-			movementScaleY   = source.movementScaleY,
-			movementSpeed    = source.movementSpeed,
-			zoom             = source.zoom,
-			zoomTarget       = source.zoomTarget,
-			edited           = true,
+			bgColorH                 = source.bgColorH,
+			bgColorS                 = source.bgColorS,
+			bgColorV                 = source.bgColorV,
+			bgChecker                = source.bgChecker,
+			pixelateWorld            = source.pixelateWorld,
+			pixelateTextures         = source.pixelateTextures,
+			zoomLevel                = source.zoomLevel,
+			movementPreset           = source.movementPreset,
+			movementScaleX           = source.movementScaleX,
+			movementScaleY           = source.movementScaleY,
+			movementSpeed            = source.movementSpeed,
+			exportBaseDirectory      = source.exportBaseDirectory,
+			exportParticles          = source.exportParticles,
+			exportParticlesOverwrite = source.exportParticlesOverwrite,
+			exportParticlesPath      = source.exportParticlesPath,
+			exportParticlesTemplate  = source.exportParticlesTemplate,
+			exportTextures           = source.exportTextures,
+			exportTexturesOverwrite  = source.exportTexturesOverwrite,
+			exportTexturesDirectory  = source.exportTexturesDirectory,
+			exportClipboardTemplate  = source.exportClipboardTemplate,
+			guiLimits                = copyTable(source.guiLimits),
+			edited                   = true,
+
+			zoom       = source.zoom,
+			zoomTarget = source.zoomTarget,
 		}
 		_init(project)
 
@@ -225,8 +234,8 @@ export System :: struct {
 	-- Saved:
 	psDirection                 = 0.0,
 	psEmissionAreaDistribution  = LG.AreaSpreadDistribution.NONE,
-	psEmissionAreaDx            = 0.0,
-	psEmissionAreaDy            = 0.0,
+	psEmissionAreaDx            = 100.0,
+	psEmissionAreaDy            = 100.0,
 	psEmissionAreaAngle         = 0.0,
 	psEmissionAreaRelative      = false,
 	psEmissionRate              = 1.0,
@@ -264,6 +273,10 @@ export System :: struct {
 	offsetX     = .5,
 	offsetY     = .5,
 
+	scaleTime  = 1.0,
+	scaleSpace = 1.0,
+	scaleSize  = 1.0,
+
 	frames: []AnimationFrame,
 
 	gui: struct { !key:string, !value:string },
@@ -290,21 +303,54 @@ export System :: struct {
 
 	clone :: (source:System) -> System {
 		local system: System = {
-			particles   = source.particles.clone!(),
-			colors      = {unpack(source.colors)},
-			blendMode   = source.blendMode,
-			texturePath = source.texturePath,
-			textureName = source.textureName,
-			offsetX     = source.offsetX,
-			offsetY     = source.offsetY,
+			psDirection                 = source.psDirection,
+			psEmissionAreaDistribution  = source.psEmissionAreaDistribution,
+			psEmissionAreaDx            = source.psEmissionAreaDx,
+			psEmissionAreaDy            = source.psEmissionAreaDy,
+			psEmissionAreaAngle         = source.psEmissionAreaAngle,
+			psEmissionAreaRelative      = source.psEmissionAreaRelative,
+			psEmissionRate              = source.psEmissionRate,
+			psEmitterLifetime           = source.psEmitterLifetime,
+			psInsertMode                = source.psInsertMode,
+			psLinearAccelerationXmin    = source.psLinearAccelerationXmin,
+			psLinearAccelerationYmin    = source.psLinearAccelerationYmin,
+			psLinearAccelerationXmax    = source.psLinearAccelerationXmax,
+			psLinearAccelerationYmax    = source.psLinearAccelerationYmax,
+			psLinearDampingMin          = source.psLinearDampingMin,
+			psLinearDampingMax          = source.psLinearDampingMax,
+			psParticleLifetimeMin       = source.psParticleLifetimeMin,
+			psParticleLifetimeMax       = source.psParticleLifetimeMax,
+			psRadialAccelerationMin     = source.psRadialAccelerationMin,
+			psRadialAccelerationMax     = source.psRadialAccelerationMax,
+			psRelativeRotation          = source.psRelativeRotation,
+			psRotationMin               = source.psRotationMin,
+			psRotationMax               = source.psRotationMax,
+			psSizes                     = {unpack(source.psSizes)},
+			psSizeVariation             = source.psSizeVariation,
+			psSpeedMin                  = source.psSpeedMin,
+			psSpeedMax                  = source.psSpeedMax,
+			psSpinMin                   = source.psSpinMin,
+			psSpinMax                   = source.psSpinMax,
+			psSpinVariation             = source.psSpinVariation,
+			psSpread                    = source.psSpread,
+			psTangentialAccelerationMin = source.psTangentialAccelerationMin,
+			psTangentialAccelerationMax = source.psTangentialAccelerationMax,
+			colors                      = {unpack(source.colors)},
+			blendMode                   = source.blendMode,
+			texturePath                 = source.texturePath,
+			textureName                 = source.textureName,
+			offsetX                     = source.offsetX,
+			offsetY                     = source.offsetY,
+			scaleTime                   = source.scaleTime,
+			scaleSpace                  = source.scaleSpace,
+			scaleSize                   = source.scaleSize,
+			gui                         = copyTable(source.gui),
+
+			particles = source.particles.clone!(),
 		}
 
 		for source.frames {
 			system.frames[itIndex] = {x=it.x, y=it.y, w=it.w, h=it.h}
-		}
-
-		for cast(table) source.gui {
-			system.gui[cast(string) itIndex] = cast(string) it
 		}
 
 		return system
@@ -323,26 +369,34 @@ export updateParticles :: (project:Project) {
 	}
 }
 
-export updateParticleParams :: (system:System) {
-	local ps = system.particles
-	ps.setDirection!(system.psDirection)
-	ps.setEmissionArea!(system.psEmissionAreaDistribution, system.psEmissionAreaDx, system.psEmissionAreaDy, system.psEmissionAreaAngle, system.psEmissionAreaRelative)
-	ps.setEmissionRate!(system.psEmissionRate)
-	ps.setEmitterLifetime!(system.psEmitterLifetime ?: -1)
-	ps.setInsertMode!(system.psInsertMode)
-	ps.setLinearAcceleration!(system.psLinearAccelerationXmin, system.psLinearAccelerationYmin, system.psLinearAccelerationXmax, system.psLinearAccelerationYmax)
-	ps.setLinearDamping!(system.psLinearDampingMin, system.psLinearDampingMax)
-	ps.setParticleLifetime!(system.psParticleLifetimeMin, system.psParticleLifetimeMax)
-	ps.setRadialAcceleration!(system.psRadialAccelerationMin, system.psRadialAccelerationMax)
-	ps.setRelativeRotation!(system.psRelativeRotation)
-	ps.setRotation!(system.psRotationMin, system.psRotationMax)
-	ps.setSizes!(system.psSizes)
-	ps.setSizeVariation!(system.psSizeVariation)
-	ps.setSpeed!(system.psSpeedMin, system.psSpeedMax)
-	ps.setSpin!(system.psSpinMin, system.psSpinMax)
-	ps.setSpinVariation!(system.psSpinVariation)
-	ps.setSpread!(system.psSpread)
-	ps.setTangentialAcceleration!(system.psTangentialAccelerationMin, system.psTangentialAccelerationMax)
+export updateParticleParams :: (s:System) {
+	local ps = s.particles
+
+	local time  = s.scaleTime
+	local space = s.scaleSpace
+	local size  = s.scaleSize
+
+	local sizes: []float
+	for s.psSizes  insert(sizes, it*size)
+
+	ps.setDirection!(s.psDirection)
+	ps.setEmissionArea!(s.psEmissionAreaDistribution, s.psEmissionAreaDx*space, s.psEmissionAreaDy*space, s.psEmissionAreaAngle, s.psEmissionAreaRelative)
+	ps.setEmissionRate!(s.psEmissionRate*time)
+	ps.setEmitterLifetime!(s.psEmitterLifetime/time ?: -1)
+	ps.setInsertMode!(s.psInsertMode)
+	ps.setLinearAcceleration!(s.psLinearAccelerationXmin*space*time^2, s.psLinearAccelerationYmin*space*time^2, s.psLinearAccelerationXmax*space*time^2, s.psLinearAccelerationYmax*space*time^2)
+	ps.setLinearDamping!(s.psLinearDampingMin*time, s.psLinearDampingMax*time)
+	ps.setParticleLifetime!(s.psParticleLifetimeMin/time, s.psParticleLifetimeMax/time)
+	ps.setRadialAcceleration!(s.psRadialAccelerationMin*space*time^2, s.psRadialAccelerationMax*space*time^2)
+	ps.setRelativeRotation!(s.psRelativeRotation)
+	ps.setRotation!(s.psRotationMin, s.psRotationMax)
+	ps.setSizes!(sizes)
+	ps.setSizeVariation!(s.psSizeVariation)
+	ps.setSpeed!(s.psSpeedMin*space*time, s.psSpeedMax*space*time)
+	ps.setSpin!(s.psSpinMin*time, s.psSpinMax*time)
+	ps.setSpinVariation!(s.psSpinVariation)
+	ps.setSpread!(s.psSpread)
+	ps.setTangentialAcceleration!(s.psTangentialAccelerationMin*space*time^2, s.psTangentialAccelerationMax*space*time^2)
 }
 
 export updateParticleColors :: (system:System) {
@@ -908,7 +962,7 @@ local onUpdate :: (dt:float) {
 			local ps      = it.particles
 			systemsActive = systemsActive or ps.isActive!() or ps.getCount!() > 0
 
-			if ps.getCount!() > ps.getBufferSize!() - EXTRA_BUFFER {
+			if ps.getCount!() > 0.95 * ps.getBufferSize!() {
 				if updateBufferSize(ps)  setActionText("Increased buffer size")
 			}
 		}
@@ -1256,7 +1310,7 @@ local onDraw :: () {
 
 			drawStatsLine("ParticleCountTotal: ", "%d", particleCountTotal)
 
-			for project.systems  drawStatsLine("ParticleCount_", "%d: %d/%d (%d)", itIndex, it.particles.getCount!(), getOptimalBufferSize(it.particles, exact=true), it.particles.getBufferSize!())
+			for project.systems  drawStatsLine("ParticleCount_", "%d: %d/%d (%d)", itIndex, it.particles.getCount!(), getOptimalBufferSize(it.particles, moreExact=true), it.particles.getBufferSize!())
 
 			!if not DEV  drawStatsLine("(hide this with F1)", "")
 		}
@@ -1583,12 +1637,12 @@ export updateBufferSize :: (ps:LG.ParticleSystem) -> (gotUpdated:bool) {
 	return true
 }
 
-export getOptimalBufferSize :: (ps:LG.ParticleSystem, exact=false) -> int {
+export getOptimalBufferSize :: (ps:LG.ParticleSystem, moreExact=false) -> int {
 	local _, particleLifetime = ps.getParticleLifetime!() -- s
 	local emitterLifetime     = ps.getEmitterLifetime!()  -- s
 	local rate                = ps.getEmissionRate!()     -- n/s
 	local relevantTime        = emitterLifetime < 0 ? particleLifetime : math.min(particleLifetime, emitterLifetime)
-	local bufferSize          = math.ceil(rate * relevantTime + (exact ? 0 : EXTRA_BUFFER)) -- n/s * s  =  n
+	local bufferSize          = math.ceil(rate * relevantTime * (moreExact ? 1 : 1.05)) -- n/s * s  =  n
 	return math.min(bufferSize, MAX_BUFFER_SIZE)
 }
 

@@ -94,8 +94,9 @@ export setupGuiFrames :: () {
 					guiState.separator!({ thick=true }),
 
 					guiState.section!({ label="ScaleAll",
-						guiState.slider!({ name="scaleTime",  labelLeft="time",  min=0, max=8, limitName="scaleTime",  readoutMulti=100, readout="%d%%" }),
-						guiState.slider!({ name="scaleSpace", labelLeft="space", min=0, max=8, limitName="scaleSpace", readoutMulti=100, readout="%d%%" }),
+						guiState.slider!({ name="scaleTime",  labelLeft="time",  min=0, max=4, limitName="scaleTime",  readoutMulti=100, readout="%d%%" }),
+						guiState.slider!({ name="scaleSpace", labelLeft="space", min=0, max=4, limitName="scaleSpace", readoutMulti=100, readout="%d%%", linkMultiDrag={"scaleSize"} }),
+						guiState.slider!({ name="scaleSize",  labelLeft="size",  min=0, max=4, limitName="scaleSize",  readoutMulti=100, readout="%d%%", linkMultiDrag={"scaleSpace"} }),
 					}),
 
 					guiState.separator!({ thick=true }),
@@ -131,10 +132,10 @@ export setupGuiFrames :: () {
 							buttons = {
 								{value=LG.AreaSpreadDistribution.NONE,             label="none",    tooltip="None"},
 								{value=LG.AreaSpreadDistribution.ELLIPSE,          label="ellip",   tooltip="Ellipse"},
-								{value=LG.AreaSpreadDistribution.UNIFORM,          label="rect",    tooltip="Rectangle (uniform)"},
+								{value=LG.AreaSpreadDistribution.UNIFORM,          label="rect",    tooltip="Rectangle/uniform"},
 								{value=LG.AreaSpreadDistribution.BORDER_ELLIPSE,   label="b.ellip", tooltip="Border ellipse"},
 								{value=LG.AreaSpreadDistribution.BORDER_RECTANGLE, label="b.rect",  tooltip="Border rectangle"},
-								{value=LG.AreaSpreadDistribution.NORMAL,           label="norm",    tooltip="Normal"},
+								{value=LG.AreaSpreadDistribution.NORMAL,           label="norm",    tooltip="Normal distribution"},
 							},
 						}),
 						guiState.hbox!({ name="areaParams", active=false,
@@ -914,6 +915,40 @@ export setupGuiCallbacks :: () {
 		system.offsetY        = slider.value
 		markEdited(project)
 		updateParticleTextureOffset(system)
+	}
+
+	-- Scale all.
+	guiState.onRefresh.scaleTime = (slider:gui.Slider) {
+		local project, system = getCurrentProjectAndSystem()
+		slider.value          = system.scaleTime
+	}
+	guiState.onAction.scaleTime = (slider:gui.Slider) {
+		local project, system = getCurrentProjectAndSystem()
+		system.scaleTime      = slider.value
+		markEdited(project)
+		updateParticleParams(system)
+	}
+
+	guiState.onRefresh.scaleSpace = (slider:gui.Slider) {
+		local project, system = getCurrentProjectAndSystem()
+		slider.value          = system.scaleSpace
+	}
+	guiState.onAction.scaleSpace = (slider:gui.Slider) {
+		local project, system = getCurrentProjectAndSystem()
+		system.scaleSpace     = slider.value
+		markEdited(project)
+		updateParticleParams(system)
+	}
+
+	guiState.onRefresh.scaleSize = (slider:gui.Slider) {
+		local project, system = getCurrentProjectAndSystem()
+		slider.value          = system.scaleSize
+	}
+	guiState.onAction.scaleSize = (slider:gui.Slider) {
+		local project, system = getCurrentProjectAndSystem()
+		system.scaleSize      = slider.value
+		markEdited(project)
+		updateParticleParams(system)
 	}
 	--
 
@@ -2224,6 +2259,11 @@ export setupGuiCallbacks :: () {
 		local publicParticleSystems: []table
 
 		for system: project.systems {
+			-- Note: We use values from the ParticleSystem instead of the System object
+			-- whenever possible when exporting as those values are more representable
+			-- of what the user expects.
+			local ps = system.particles
+
 			local publicParticleSystem: table
 			insert(publicParticleSystems, publicParticleSystem)
 
@@ -2246,27 +2286,27 @@ export setupGuiCallbacks :: () {
 			}
 
 			publicParticleSystem.blendMode        = system.blendMode
-			publicParticleSystem.direction        = system.psDirection
-			publicParticleSystem.emissionRate     = system.psEmissionRate
-			publicParticleSystem.emitterLifetime  = system.psEmitterLifetime ?: -1
-			publicParticleSystem.insertMode       = system.psInsertMode
-			publicParticleSystem.relativeRotation = system.psRelativeRotation
-			publicParticleSystem.sizes            = cast([]float) { unpack(system.psSizes) }
-			publicParticleSystem.sizeVariation    = system.psSizeVariation
-			publicParticleSystem.spinVariation    = system.psSpinVariation
-			publicParticleSystem.spread           = system.psSpread
+			publicParticleSystem.direction        = ps.getDirection!()
+			publicParticleSystem.emissionRate     = ps.getEmissionRate!()
+			publicParticleSystem.emitterLifetime  = ps.getEmitterLifetime!()
+			publicParticleSystem.insertMode       = ps.getInsertMode!()
+			publicParticleSystem.relativeRotation = ps.hasRelativeRotation!()
+			publicParticleSystem.sizes            = cast([]float) { ps.getSizesAsVararg!() }
+			publicParticleSystem.sizeVariation    = ps.getSizeVariation!()
+			publicParticleSystem.spinVariation    = ps.getSpinVariation!()
+			publicParticleSystem.spread           = ps.getSpread!()
 
-			do { local min,max = system.particles.getOffset!()                                          ; publicParticleSystem.offset                 = cast(table) {min,max, min=min,max=max} }
-			do { local min,max = system.psLinearDampingMin,          system.psLinearDampingMax          ; publicParticleSystem.linearDamping          = cast(table) {min,max, min=min,max=max} }
-			do { local min,max = system.psParticleLifetimeMin,       system.psParticleLifetimeMax       ; publicParticleSystem.particleLifetime       = cast(table) {min,max, min=min,max=max} }
-			do { local min,max = system.psRadialAccelerationMin,     system.psRadialAccelerationMax     ; publicParticleSystem.radialAcceleration     = cast(table) {min,max, min=min,max=max} }
-			do { local min,max = system.psRotationMin,               system.psRotationMax               ; publicParticleSystem.rotation               = cast(table) {min,max, min=min,max=max} }
-			do { local min,max = system.psSpeedMin,                  system.psSpeedMax                  ; publicParticleSystem.speed                  = cast(table) {min,max, min=min,max=max} }
-			do { local min,max = system.psSpinMin,                   system.psSpinMax                   ; publicParticleSystem.spin                   = cast(table) {min,max, min=min,max=max} }
-			do { local min,max = system.psTangentialAccelerationMin, system.psTangentialAccelerationMax ; publicParticleSystem.tangentialAcceleration = cast(table) {min,max, min=min,max=max} }
+			do { local min,max = ps.getLinearDamping!()          ; publicParticleSystem.linearDamping          = cast(table) {min,max, min=min,max=max} }
+			do { local min,max = ps.getOffset!()                 ; publicParticleSystem.offset                 = cast(table) {min,max, min=min,max=max} }
+			do { local min,max = ps.getParticleLifetime!()       ; publicParticleSystem.particleLifetime       = cast(table) {min,max, min=min,max=max} }
+			do { local min,max = ps.getRadialAcceleration!()     ; publicParticleSystem.radialAcceleration     = cast(table) {min,max, min=min,max=max} }
+			do { local min,max = ps.getRotation!()               ; publicParticleSystem.rotation               = cast(table) {min,max, min=min,max=max} }
+			do { local min,max = ps.getSpeed!()                  ; publicParticleSystem.speed                  = cast(table) {min,max, min=min,max=max} }
+			do { local min,max = ps.getSpin!()                   ; publicParticleSystem.spin                   = cast(table) {min,max, min=min,max=max} }
+			do { local min,max = ps.getTangentialAcceleration!() ; publicParticleSystem.tangentialAcceleration = cast(table) {min,max, min=min,max=max} }
 
 			do {
-				local xmin, ymin, xmax, ymax = system.psLinearAccelerationXmin, system.psLinearAccelerationYmin, system.psLinearAccelerationXmax, system.psLinearAccelerationYmax
+				local xmin, ymin, xmax, ymax = ps.getLinearAcceleration!()
 				publicParticleSystem.linearAcceleration = cast(table) {
 					xmin, ymin, xmax, ymax,
 					xmin=xmin, ymin=ymin, xmax=xmax, ymax=ymax
@@ -2274,10 +2314,7 @@ export setupGuiCallbacks :: () {
 			}
 
 			do {
-				local distribution, dx, dy, angle, relative =
-					system.psEmissionAreaDistribution, system.psEmissionAreaDx, system.psEmissionAreaDy,
-					system.psEmissionAreaAngle, system.psEmissionAreaRelative
-
+				local distribution, dx, dy, angle, relative = ps.getEmissionArea!()
 				publicParticleSystem.emissionArea = cast(table) {
 					distribution, dx, dy, angle, relative,
 					distribution=distribution, dx=dx, dy=dy, angle=angle, relative=relative,
@@ -2285,15 +2322,13 @@ export setupGuiCallbacks :: () {
 			}
 
 			do {
-				local colors = system.colors
 				local publicColors: []float
 
-				for i = 1, #colors, 4 {
-					local r, g, b = hsvToRgb(colors[i], colors[i+1], colors[i+2])
-					insert(publicColors, r)
-					insert(publicColors, g)
-					insert(publicColors, b)
-					insert(publicColors, colors[i+3])
+				for {ps.getColorsAsVararg!()} {
+					insert(publicColors, it[1])
+					insert(publicColors, it[2])
+					insert(publicColors, it[3])
+					insert(publicColors, it[4])
 				}
 
 				publicParticleSystem.colors = publicColors
