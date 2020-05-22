@@ -755,7 +755,10 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 	for project: projects {
 		if not project.systems  return parsingError(path, 0, "Missing systems for at least one project.")
 
-		for project.systems  updateBufferSize(it.particles)
+		for project.systems {
+			updateParticleParams(it) -- Needed for updateBufferSize().
+			updateBufferSize(it.particles)
+		}
 	}
 
 	return true, false, app

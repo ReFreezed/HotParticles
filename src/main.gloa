@@ -1638,11 +1638,11 @@ export updateBufferSize :: (ps:LG.ParticleSystem) -> (gotUpdated:bool) {
 }
 
 export getOptimalBufferSize :: (ps:LG.ParticleSystem, moreExact=false) -> int {
-	local _, particleLifetime = ps.getParticleLifetime!() -- s
-	local emitterLifetime     = ps.getEmitterLifetime!()  -- s
-	local rate                = ps.getEmissionRate!()     -- n/s
-	local relevantTime        = emitterLifetime < 0 ? particleLifetime : math.min(particleLifetime, emitterLifetime)
-	local bufferSize          = math.ceil(rate * relevantTime * (moreExact ? 1 : 1.05)) -- n/s * s  =  n
+	local particleLifetime = math.max(ps.getParticleLifetime!()) -- s
+	local emitterLifetime  = ps.getEmitterLifetime!()            -- s
+	local rate             = ps.getEmissionRate!()               -- n/s
+	local relevantTime     = emitterLifetime < 0 ? particleLifetime : math.min(particleLifetime, emitterLifetime)
+	local bufferSize       = math.ceil(rate * relevantTime * (moreExact ? 1 : 1.05)) -- n/s * s  =  n
 	return math.min(bufferSize, MAX_BUFFER_SIZE)
 }
 
