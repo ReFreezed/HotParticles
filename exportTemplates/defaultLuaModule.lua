@@ -1,8 +1,8 @@
 Text [=[
 --[[
 module = {
-	{ system=particleSystem1, blendMode=blendMode1 },
-	{ system=particleSystem2, blendMode=blendMode2 },
+	{ system=particleSystem1, kickStartSteps=steps1, kickStartDt=dt1, emitAtStart=count1, blendMode=blendMode1 },
+	{ system=particleSystem2, kickStartSteps=steps2, kickStartDt=dt2, emitAtStart=count2, blendMode=blendMode2 },
 	...
 }
 ]]
@@ -78,7 +78,12 @@ for _, ps in ipairs(particleSystems) do
 		Text")\n"
 	end
 
-	Text"table.insert(particles, {system=ps, blendMode=" LuaCsv(ps.blendMode) Text"})\n"
+	Text"table.insert(particles, {system=ps"
+	Text", kickStartSteps=" LuaCsv(ps.kickStartSteps)
+	Text", kickStartDt="    LuaCsv(ps.kickStartDt)
+	Text", emitAtStart="    LuaCsv(ps.emitAtStart)
+	Text", blendMode="      LuaCsv(ps.blendMode)
+	Text"})\n"
 end
 
 Text"\n"

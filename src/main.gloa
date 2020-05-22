@@ -239,7 +239,8 @@ export System :: struct {
 	psEmissionAreaAngle         = 0.0,
 	psEmissionAreaRelative      = false,
 	psEmissionRate              = 1.0,
-	psEmitterLifetime           = 0.0, -- 0=infinite
+	psEmitterContinuous         = true,
+	psEmitterLifetime           = 0.0,
 	psInsertMode                = LG.ParticleInsertMode.TOP,
 	psLinearAccelerationXmin    = 0.0,
 	psLinearAccelerationYmin    = 0.0,
@@ -277,6 +278,9 @@ export System :: struct {
 	scaleSpace = 1.0,
 	scaleSize  = 1.0,
 
+	kickStartEmit  = 0,
+	kickStartSteps = 0,
+
 	frames: []AnimationFrame,
 
 	gui: struct { !key:string, !value:string },
@@ -296,7 +300,6 @@ export System :: struct {
 		system.currentImage     = particleImages    .light
 
 		system.particles = LG.newParticleSystem(system.currentImage)
-		system.particles.start!()
 
 		return system
 	},
@@ -310,6 +313,7 @@ export System :: struct {
 			psEmissionAreaAngle         = source.psEmissionAreaAngle,
 			psEmissionAreaRelative      = source.psEmissionAreaRelative,
 			psEmissionRate              = source.psEmissionRate,
+			psEmitterContinuous         = source.psEmitterContinuous,
 			psEmitterLifetime           = source.psEmitterLifetime,
 			psInsertMode                = source.psInsertMode,
 			psLinearAccelerationXmin    = source.psLinearAccelerationXmin,
@@ -344,6 +348,8 @@ export System :: struct {
 			scaleTime                   = source.scaleTime,
 			scaleSpace                  = source.scaleSpace,
 			scaleSize                   = source.scaleSize,
+			kickStartEmit               = source.kickStartEmit,
+			kickStartSteps              = source.kickStartSteps,
 			gui                         = copyTable(source.gui),
 
 			particles = source.particles.clone!(),
@@ -382,7 +388,7 @@ export updateParticleParams :: (s:System) {
 	ps.setDirection!(s.psDirection)
 	ps.setEmissionArea!(s.psEmissionAreaDistribution, s.psEmissionAreaDx*space, s.psEmissionAreaDy*space, s.psEmissionAreaAngle, s.psEmissionAreaRelative)
 	ps.setEmissionRate!(s.psEmissionRate*time)
-	ps.setEmitterLifetime!(s.psEmitterLifetime/time ?: -1)
+	ps.setEmitterLifetime!(s.psEmitterContinuous ? -1 : s.psEmitterLifetime/time)
 	ps.setInsertMode!(s.psInsertMode)
 	ps.setLinearAcceleration!(s.psLinearAccelerationXmin*space*time^2, s.psLinearAccelerationYmin*space*time^2, s.psLinearAccelerationXmax*space*time^2, s.psLinearAccelerationYmax*space*time^2)
 	ps.setLinearDamping!(s.psLinearDampingMin*time, s.psLinearDampingMax*time)
@@ -804,8 +810,8 @@ local onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool) 
 	if modAndKey == {
 		case "r":
 			for project.systems {
+				it.particles.stop!()
 				it.particles.reset!()
-				it.particles.start!()
 			}
 			return
 
@@ -963,12 +969,19 @@ local onUpdate :: (dt:float) {
 			systemsActive = systemsActive or ps.isActive!() or ps.getCount!() > 0
 
 			if ps.getCount!() > 0.95 * ps.getBufferSize!() {
-				if updateBufferSize(ps)  setActionText("Increased buffer size")
+				if updateBufferSize(it)  setActionText("Increased buffer size")
 			}
 		}
 
-		if not systemsActive {
-			for project.systems  it.particles.start!()
+		if not systemsActive  for project.systems {
+			it.particles.start!()
+
+			if it.kickStartSteps {
+				local kickStartDt = math.max(it.particles.getParticleLifetime!()) / it.kickStartSteps
+				for i = 1, it.kickStartSteps  it.particles.update!(kickStartDt)
+			}
+
+			it.particles.emit!(it.kickStartEmit)
 		}
 	}
 
@@ -1310,7 +1323,7 @@ local onDraw :: () {
 
 			drawStatsLine("ParticleCountTotal: ", "%d", particleCountTotal)
 
-			for project.systems  drawStatsLine("ParticleCount_", "%d: %d/%d (%d)", itIndex, it.particles.getCount!(), getOptimalBufferSize(it.particles, moreExact=true), it.particles.getBufferSize!())
+			for project.systems  drawStatsLine("ParticleCount_", "%d: %d/%d (%d)", itIndex, it.particles.getCount!(), getOptimalBufferSize(it, moreExact=true), it.particles.getBufferSize!())
 
 			!if not DEV  drawStatsLine("(hide this with F1)", "")
 		}
@@ -1624,10 +1637,11 @@ export markEdited :: (project:Project) {
 
 
 
-export updateBufferSize :: (ps:LG.ParticleSystem) -> (gotUpdated:bool) {
+export updateBufferSize :: (system:System) -> (gotUpdated:bool) {
+	local ps                = system.particles
 	local bufferSizeCurrent = ps.getBufferSize!()
 	local bufferSize        = bufferSizeCurrent
-	local optimalBufferSize = getOptimalBufferSize(ps)
+	local optimalBufferSize = getOptimalBufferSize(system)
 
 	while bufferSize < optimalBufferSize  bufferSize *= 2
 
@@ -1637,12 +1651,13 @@ export updateBufferSize :: (ps:LG.ParticleSystem) -> (gotUpdated:bool) {
 	return true
 }
 
-export getOptimalBufferSize :: (ps:LG.ParticleSystem, moreExact=false) -> int {
+export getOptimalBufferSize :: (system:System, moreExact=false) -> int {
+	local ps               = system.particles
 	local particleLifetime = math.max(ps.getParticleLifetime!()) -- s
 	local emitterLifetime  = ps.getEmitterLifetime!()            -- s
 	local rate             = ps.getEmissionRate!()               -- n/s
 	local relevantTime     = emitterLifetime < 0 ? particleLifetime : math.min(particleLifetime, emitterLifetime)
-	local bufferSize       = math.ceil(rate * relevantTime * (moreExact ? 1 : 1.05)) -- n/s * s  =  n
+	local bufferSize       = math.ceil(system.kickStartEmit + rate * relevantTime * (moreExact ? 1 : 1.05)) -- n/s * s  =  n
 	return math.min(bufferSize, MAX_BUFFER_SIZE)
 }
 

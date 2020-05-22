@@ -65,5 +65,17 @@ for _, ps in ipairs(particleSystems) do
 		Text")\n"
 	end
 
+	if ps.kickStartSteps > 0 or ps.emitAtStart > 0 then
+		Text"-- At start time:\n"
+		Text"ps:start()\n"
+		if ps.kickStartSteps > 0 then
+			Text"-- for step = 1, " LuaCsv(ps.kickStartSteps) Text"  ps:update(" LuaCsv(ps.kickStartDt) Text")  end\n"
+		end
+		if ps.emitAtStart > 0 then
+			Text"-- ps:emit(" LuaCsv(ps.emitAtStart) Text")\n"
+		end
+	end
+	Text"-- At draw time:\n"
 	Text"-- love.graphics.setBlendMode(" LuaCsv(ps.blendMode) Text")\n"
+	Text"-- love.graphics.draw(ps)\n"
 end

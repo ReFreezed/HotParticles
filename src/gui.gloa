@@ -354,6 +354,8 @@ export Slider :: struct {
 	readoutMulti = 1.0,
 	readout      = "",
 	readoutZero  = "",
+
+	isInt = false,
 	--
 }
 
@@ -461,10 +463,15 @@ export onKeyPressed :: (state:State, key:LK.KeyConstant, scancode:LK.Scancode, i
 			local slider = cast(Slider) widget
 
 			if (mod == ModifierKey.NONE or mod == ModifierKey.S or mod == ModifierKey.C) and (key == "left" or key == "right") {
-				local delta
-					= (slider.max - slider.min)
-					* getLimitMultiplier(slider)
-					/ ((mod == ModifierKey.S) ? 16 : (mod == ModifierKey.C) ? 1024 : 128)
+				local delta = (
+					slider.isInt
+					? ((mod == ModifierKey.S) ? 20 : (mod == ModifierKey.C) ? 1 : 5)
+					: (
+						(slider.max - slider.min)
+						* getLimitMultiplier(slider)
+						/ ((mod == ModifierKey.S) ? 16 : (mod == ModifierKey.C) ? 1024 : 128)
+					)
+				)
 
 				slider.value = math.clamp(
 					slider.value + delta * (key == "left" ? -1 : 1),
@@ -537,6 +544,7 @@ export onMousePressed :: (state:State, mx,my:int, mbutton:int, presses:int) -> (
 		if mbutton == 1 and state.hoveredId {
 			local el      = state.elementsById[state.hoveredId]
 			local buttons = cast(Buttons) el
+			local slider  = cast(Slider)  el
 
 			if el.type == Buttons and (buttons.style == Style.CONTEXT_MENU or buttons.style == Style.LIST) {
 				local handled = false
@@ -546,6 +554,9 @@ export onMousePressed :: (state:State, mx,my:int, mbutton:int, presses:int) -> (
 				if not handled {
 					triggerActionEvent(state, buttons, buttons.buttons[state.hoveredSubid].name, state.hoveredSubid, save=true)
 				}
+
+			} elseif el.type == Slider and presses % 2 == 0 and triggerDoublePressEvent(state, slider, "", 0, save=true) {
+				-- void
 
 			} else {
 				state.activeId      = state.hoveredId
@@ -683,6 +694,8 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int) {
 					applyLimitMultiplier(slider, slider.max),
 					math.clamp01(value)
 				)
+
+				if slider.isInt  value = math.round(value)
 
 				if value ~= slider.value {
 					slider.value = value
@@ -2743,7 +2756,9 @@ local drawSliderReadout :: (rightX:int, topY:int, height:int, handleX:int, value
 
 
 local applyLimitMultiplier :: (slider:Slider, value:float) -> float {
-	return (value - slider.limitCenter) * getLimitMultiplier(slider) + slider.limitCenter
+	value = (value - slider.limitCenter) * getLimitMultiplier(slider) + slider.limitCenter
+	if slider.isInt  value = math.round(value)
+	return value
 }
 
 local getLimitMultiplier :: (slider:Slider) -> float {

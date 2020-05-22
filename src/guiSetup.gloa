@@ -101,26 +101,24 @@ export setupGuiFrames :: () {
 
 					guiState.separator!({ thick=true }),
 
-					guiState.section!({ label="SpawnLayer",
-						guiState.radio!({ name="insertMode",
-							buttons = {
-								{value=LG.ParticleInsertMode.TOP,    label="front",  tooltip="Insert at top"},
-								{value=LG.ParticleInsertMode.BOTTOM, label="back",   tooltip="Insert at bottom"},
-								{value=LG.ParticleInsertMode.RANDOM, label="random", tooltip="Insert randomly"},
-							}
-						}),
+					guiState.section!({ label="Spawn",
+						guiState.radio!({ name="insertMode", labelLeft="layer", buttons={
+							{value=LG.ParticleInsertMode.TOP,    label="front",  tooltip="Insert at top"},
+							{value=LG.ParticleInsertMode.BOTTOM, label="back",   tooltip="Insert at bottom"},
+							{value=LG.ParticleInsertMode.RANDOM, label="random", tooltip="Insert randomly"},
+						}}),
+						guiState.slider!({ name="emissionRate",   labelLeft="rate",             min=0, max=512,              limitName="emissionRate",   readout="%.1f / sec" }),
+						guiState.slider!({ name="kickStartEmit",  labelLeft="emit at start",    min=0, max=1000, isInt=true, limitName="kickStartEmit",  readout="%.0f" }),
+						guiState.slider!({ name="kickStartSteps", labelLeft="kick-start steps", min=0, max=100,  isInt=true, limitName="kickStartSteps", readout="%.0f", readoutZero="no kick-start" }),
 					}),
 
-					guiState.separator!({ thick=false }),
-
-					guiState.section!({ label="SpawnRate",
-						guiState.slider!({ name="emissionRate", min=0, max=512, limitName="emissionRate", readout="%.1f / sec" }),
-					}),
-
-					guiState.separator!({ thick=false }),
+					guiState.separator!({ thick=true }),
 
 					guiState.section!({ label="Lifetime",
-						guiState.slider!({ name="emitterLifetime",     labelLeft="emitter",      min=0, max=16, limitName="emitterLifetime", readout="%.2f sec", readoutZero="∞" }),
+						guiState.hbox!({ labelLeft="emitter",
+							guiState.slider!({ name="emitterLifetime", min=0, max=16, limitName="emitterLifetime", readout="%.2f sec"--[[, readoutZero="∞"]], weight=1 }),
+							guiState.checkbox!({ name="emitterContinuous", label="continuous" }),
+						}),
 						guiState.slider!({ name="particleLifetimeMin", labelLeft="particle min", min=0, max=16, limitName="particleLifetime", readout="%.2f sec", linkMultiDrag={"particleLifetimeMax"} }),
 						guiState.slider!({ name="particleLifetimeMax", labelLeft="particle max", min=0, max=16, limitName="particleLifetime", readout="%.2f sec", linkMultiDrag={"particleLifetimeMin"} }),
 					}),
@@ -128,16 +126,14 @@ export setupGuiFrames :: () {
 					guiState.separator!({ thick=true }),
 
 					guiState.section!({ label="Area",
-						guiState.radio!({ name="areaDistribution", labelLeft="distribution",
-							buttons = {
-								{value=LG.AreaSpreadDistribution.NONE,             label="none",    tooltip="None"},
-								{value=LG.AreaSpreadDistribution.ELLIPSE,          label="ellip",   tooltip="Ellipse"},
-								{value=LG.AreaSpreadDistribution.UNIFORM,          label="rect",    tooltip="Rectangle/uniform"},
-								{value=LG.AreaSpreadDistribution.BORDER_ELLIPSE,   label="b.ellip", tooltip="Border ellipse"},
-								{value=LG.AreaSpreadDistribution.BORDER_RECTANGLE, label="b.rect",  tooltip="Border rectangle"},
-								{value=LG.AreaSpreadDistribution.NORMAL,           label="norm",    tooltip="Normal distribution"},
-							},
-						}),
+						guiState.radio!({ name="areaDistribution", labelLeft="distribution", buttons={
+							{value=LG.AreaSpreadDistribution.NONE,             label="none",    tooltip="None"},
+							{value=LG.AreaSpreadDistribution.ELLIPSE,          label="ellip",   tooltip="Ellipse"},
+							{value=LG.AreaSpreadDistribution.UNIFORM,          label="rect",    tooltip="Rectangle/uniform"},
+							{value=LG.AreaSpreadDistribution.BORDER_ELLIPSE,   label="b.ellip", tooltip="Border ellipse"},
+							{value=LG.AreaSpreadDistribution.BORDER_RECTANGLE, label="b.rect",  tooltip="Border rectangle"},
+							{value=LG.AreaSpreadDistribution.NORMAL,           label="norm",    tooltip="Normal distribution"},
+						}}),
 						guiState.hbox!({ name="areaParams", active=false,
 							guiState.direction!({ name="areaAngle", labelLeft="angle" }),
 							guiState.vbox!({ weight=1,
@@ -965,16 +961,30 @@ export setupGuiCallbacks :: () {
 		markEdited(project)
 	}
 
+	guiState.onRefresh.emitterContinuous = (checkbox:gui.Checkbox) {
+		local project, system = getCurrentProjectAndSystem()
+		checkbox.checked      = system.psEmitterContinuous
+	}
+	guiState.onAction.emitterContinuous = (checkbox:gui.Checkbox, _:int) {
+		local project, system      = getCurrentProjectAndSystem()
+		system.psEmitterContinuous = checkbox.checked
+		updateParticleParams(system)
+		markEdited(project)
+		if system.psEmitterContinuous  system.particles.start!()
+	}
+
 	guiState.onRefresh.emitterLifetime = (slider:gui.Slider) {
 		local project, system = getCurrentProjectAndSystem()
 		slider.value          = system.psEmitterLifetime
 	}
 	guiState.onAction.emitterLifetime = (slider:gui.Slider, i:int) {
-		local project, system    = getCurrentProjectAndSystem()
-		system.psEmitterLifetime = slider.value
+		local project, system      = getCurrentProjectAndSystem()
+		system.psEmitterLifetime   = slider.value
+		system.psEmitterContinuous = false
 		updateParticleParams(system)
 		markEdited(project)
-		if slider.value <= 0  system.particles.start!()
+		system.particles.start!()
+		gui.refreshRecursively(guiState, "emitterContinuous")
 	}
 	guiState.onRefresh.particleLifetimeMin = (slider:gui.Slider) {
 		local project, system = getCurrentProjectAndSystem()
@@ -1005,6 +1015,26 @@ export setupGuiCallbacks :: () {
 		local project, system = getCurrentProjectAndSystem()
 		system.psEmissionRate = slider.value
 		updateParticleParams(system)
+		markEdited(project)
+	}
+
+	guiState.onRefresh.kickStartEmit = (slider:gui.Slider) {
+		local project, system = getCurrentProjectAndSystem()
+		slider.value          = system.kickStartEmit
+	}
+	guiState.onAction.kickStartEmit = (slider:gui.Slider, i:int) {
+		local project, system = getCurrentProjectAndSystem()
+		system.kickStartEmit  = math.round(slider.value)
+		markEdited(project)
+	}
+
+	guiState.onRefresh.kickStartSteps = (slider:gui.Slider) {
+		local project, system = getCurrentProjectAndSystem()
+		slider.value          = system.kickStartSteps
+	}
+	guiState.onAction.kickStartSteps = (slider:gui.Slider, i:int) {
+		local project, system = getCurrentProjectAndSystem()
+		system.kickStartSteps = math.round(slider.value)
 		markEdited(project)
 	}
 
@@ -2281,20 +2311,23 @@ export setupGuiCallbacks :: () {
 				}
 
 				publicParticleSystem.texturePath   = texturePath
-				publicParticleSystem.texturePreset = system.textureName
-				publicParticleSystem.bufferSize    = getOptimalBufferSize(system.particles)
 			}
 
 			publicParticleSystem.blendMode        = system.blendMode
+			publicParticleSystem.bufferSize       = getOptimalBufferSize(system)
 			publicParticleSystem.direction        = ps.getDirection!()
 			publicParticleSystem.emissionRate     = ps.getEmissionRate!()
+			publicParticleSystem.emitAtStart      = system.kickStartEmit
 			publicParticleSystem.emitterLifetime  = ps.getEmitterLifetime!()
 			publicParticleSystem.insertMode       = ps.getInsertMode!()
+			publicParticleSystem.kickStartSteps   = system.kickStartSteps
+			publicParticleSystem.kickStartDt      = system.kickStartSteps ? (math.max(ps.getParticleLifetime!()) / system.kickStartSteps) : 0
 			publicParticleSystem.relativeRotation = ps.hasRelativeRotation!()
 			publicParticleSystem.sizes            = cast([]float) { ps.getSizesAsVararg!() }
 			publicParticleSystem.sizeVariation    = ps.getSizeVariation!()
 			publicParticleSystem.spinVariation    = ps.getSpinVariation!()
 			publicParticleSystem.spread           = ps.getSpread!()
+			publicParticleSystem.texturePreset    = system.textureName
 
 			do { local min,max = ps.getLinearDamping!()          ; publicParticleSystem.linearDamping          = cast(table) {min,max, min=min,max=max} }
 			do { local min,max = ps.getOffset!()                 ; publicParticleSystem.offset                 = cast(table) {min,max, min=min,max=max} }

@@ -14,7 +14,7 @@
 
 --============================================================]]
 
-local LAST_FILE_VERSION :: 3
+local LAST_FILE_VERSION :: 4
 
 
 
@@ -88,22 +88,25 @@ local writeProject :: (buffer:[]string, project:Project, isSavingWorkspace:bool)
 	for system: project.systems {
 		insert(buffer, ":system\n")
 
-		insert(buffer, "blendMode")        ; writeValue(buffer, eol=true, cast(string) system.blendMode)
-		insert(buffer, "colors")           ; writeValue(buffer, eol=true, system.colors)
-		insert(buffer, "direction")        ; writeValue(buffer, eol=true, system.psDirection)
-		insert(buffer, "emissionRate")     ; writeValue(buffer, eol=true, system.psEmissionRate)
-		insert(buffer, "emitterLifetime")  ; writeValue(buffer, eol=true, system.psEmitterLifetime)
-		insert(buffer, "insertMode")       ; writeValue(buffer, eol=true, cast(string) system.psInsertMode)
-		insert(buffer, "relativeRotation") ; writeValue(buffer, eol=true, system.psRelativeRotation)
-		insert(buffer, "sizes")            ; writeValue(buffer, eol=true, system.psSizes)
-		insert(buffer, "sizeVariation")    ; writeValue(buffer, eol=true, system.psSizeVariation)
-		insert(buffer, "spinVariation")    ; writeValue(buffer, eol=true, system.psSpinVariation)
-		insert(buffer, "spread")           ; writeValue(buffer, eol=true, system.psSpread)
-		insert(buffer, "texture")          ; writeValue(buffer, eol=true, system.textureName)
-		insert(buffer, "texturePath")      ; writeValue(buffer, eol=true, system.texturePath)
-		insert(buffer, "scaleTime")        ; writeValue(buffer, eol=true, system.scaleTime)
-		insert(buffer, "scaleSpace")       ; writeValue(buffer, eol=true, system.scaleSpace)
-		insert(buffer, "scaleSize")        ; writeValue(buffer, eol=true, system.scaleSize)
+		insert(buffer, "blendMode")         ; writeValue(buffer, eol=true, cast(string) system.blendMode)
+		insert(buffer, "colors")            ; writeValue(buffer, eol=true, system.colors)
+		insert(buffer, "direction")         ; writeValue(buffer, eol=true, system.psDirection)
+		insert(buffer, "emissionRate")      ; writeValue(buffer, eol=true, system.psEmissionRate)
+		insert(buffer, "emitterContinuous") ; writeValue(buffer, eol=true, system.psEmitterContinuous)
+		insert(buffer, "emitterLifetime")   ; writeValue(buffer, eol=true, system.psEmitterLifetime)
+		insert(buffer, "insertMode")        ; writeValue(buffer, eol=true, cast(string) system.psInsertMode)
+		insert(buffer, "kickStartEmit")     ; writeValue(buffer, eol=true, system.kickStartEmit)
+		insert(buffer, "kickStartSteps")    ; writeValue(buffer, eol=true, system.kickStartSteps)
+		insert(buffer, "relativeRotation")  ; writeValue(buffer, eol=true, system.psRelativeRotation)
+		insert(buffer, "scaleSize")         ; writeValue(buffer, eol=true, system.scaleSize)
+		insert(buffer, "scaleSpace")        ; writeValue(buffer, eol=true, system.scaleSpace)
+		insert(buffer, "scaleTime")         ; writeValue(buffer, eol=true, system.scaleTime)
+		insert(buffer, "sizes")             ; writeValue(buffer, eol=true, system.psSizes)
+		insert(buffer, "sizeVariation")     ; writeValue(buffer, eol=true, system.psSizeVariation)
+		insert(buffer, "spinVariation")     ; writeValue(buffer, eol=true, system.psSpinVariation)
+		insert(buffer, "spread")            ; writeValue(buffer, eol=true, system.psSpread)
+		insert(buffer, "texture")           ; writeValue(buffer, eol=true, system.textureName)
+		insert(buffer, "texturePath")       ; writeValue(buffer, eol=true, system.texturePath)
 
 		insert(buffer, "linearDamping")          ; writeValues(buffer, eol=true, system.psLinearDampingMin,          system.psLinearDampingMax)
 		insert(buffer, "offset")                 ; writeValues(buffer, eol=true, system.offsetX,                     system.offsetY)
@@ -582,10 +585,15 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
 						system.psEmissionRate = rate
 
+					case "emitterContinuous":
+						local ^ok, ^ptr, flag = readBool(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
+						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
+						system.psEmitterContinuous = flag
 					case "emitterLifetime":
 						local ^ok, ^ptr, lifetime = readFloat(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
 						system.psEmitterLifetime = lifetime
+						if version < 4  system.psEmitterContinuous = (lifetime == 0)
 
 					case "insertMode":
 						local ^ok, ^ptr, mode = readString(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
@@ -628,18 +636,27 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 						if not ok                 return parsingError(path, ln, "Bad value format: %s", line)
 						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
 						system.scaleTime = scale
-
 					case "scaleSpace":
 						local ^ok, ^ptr, scale = readFloat(version, line, cast(int)ptr)
 						if not ok                 return parsingError(path, ln, "Bad value format: %s", line)
 						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
 						system.scaleSpace = scale
-
 					case "scaleSize":
 						local ^ok, ^ptr, scale = readFloat(version, line, cast(int)ptr)
 						if not ok                 return parsingError(path, ln, "Bad value format: %s", line)
 						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
 						system.scaleSize = scale
+
+					case "kickStartEmit":
+						local ^ok, ^ptr, count = readInt(version, line, cast(int)ptr)
+						if not ok                 return parsingError(path, ln, "Bad value format: %s", line)
+						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
+						system.kickStartEmit = count
+					case "kickStartSteps":
+						local ^ok, ^ptr, steps = readInt(version, line, cast(int)ptr)
+						if not ok                 return parsingError(path, ln, "Bad value format: %s", line)
+						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
+						system.kickStartSteps = steps
 
 					case "linearDamping":
 						local ^ok, ^ptr, min = readFloat(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
@@ -756,8 +773,8 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 		if not project.systems  return parsingError(path, 0, "Missing systems for at least one project.")
 
 		for project.systems {
-			updateParticleParams(it) -- Needed for updateBufferSize().
-			updateBufferSize(it.particles)
+			updateParticleParams(it) -- Needed for updateBufferSize() to work properly.
+			updateBufferSize(it)
 		}
 	}
 
