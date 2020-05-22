@@ -676,7 +676,7 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int) {
 
 			if state.activeMod == ModifierKey.A {
 				if dy {
-					local limitMultiplier = math.clamp(getLimitMultiplier(slider) * 0.98 ^ dy, 1e-7, 1e+7)
+					local limitMultiplier = math.clamp(getLimitMultiplier(slider) * 0.99 ^ dy, 1e-7, 1e+7)
 					setLimitMultiplier(slider, limitMultiplier)
 				}
 

@@ -108,8 +108,8 @@ export setupGuiFrames :: () {
 							{value=LG.ParticleInsertMode.RANDOM, label="random", tooltip="Insert randomly"},
 						}}),
 						guiState.slider!({ name="emissionRate",   labelLeft="rate",             min=0, max=512,              limitName="emissionRate",   readout="%.1f / sec" }),
-						guiState.slider!({ name="kickStartEmit",  labelLeft="emit at start",    min=0, max=1000, isInt=true, limitName="kickStartEmit",  readout="%.0f" }),
-						guiState.slider!({ name="kickStartSteps", labelLeft="kick-start steps", min=0, max=100,  isInt=true, limitName="kickStartSteps", readout="%.0f", readoutZero="no kick-start" }),
+						guiState.slider!({ name="kickStartEmit",  labelLeft="emit at start",    min=0, max=1024, isInt=true, limitName="kickStartEmit",  readout="%.0f" }),
+						guiState.slider!({ name="kickStartSteps", labelLeft="kick-start steps", min=0, max=128,  isInt=true, limitName="kickStartSteps", readout="%.0f", readoutZero="no kick-start" }),
 					}),
 
 					guiState.separator!({ thick=true }),
@@ -2321,7 +2321,7 @@ export setupGuiCallbacks :: () {
 			publicParticleSystem.emitterLifetime  = ps.getEmitterLifetime!()
 			publicParticleSystem.insertMode       = ps.getInsertMode!()
 			publicParticleSystem.kickStartSteps   = system.kickStartSteps
-			publicParticleSystem.kickStartDt      = system.kickStartSteps ? (math.max(ps.getParticleLifetime!()) / system.kickStartSteps) : 0
+			publicParticleSystem.kickStartDt      = getKickStartDt(system)
 			publicParticleSystem.relativeRotation = ps.hasRelativeRotation!()
 			publicParticleSystem.sizes            = cast([]float) { ps.getSizesAsVararg!() }
 			publicParticleSystem.sizeVariation    = ps.getSizeVariation!()

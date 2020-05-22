@@ -300,6 +300,7 @@ export System :: struct {
 		system.currentImage     = particleImages    .light
 
 		system.particles = LG.newParticleSystem(system.currentImage)
+		system.particles.stop!() -- Needed for initial kick-start to work.
 
 		return system
 	},
@@ -359,6 +360,7 @@ export System :: struct {
 			system.frames[itIndex] = {x=it.x, y=it.y, w=it.w, h=it.h}
 		}
 
+		system.particles.stop!()
 		return system
 	},
 }
@@ -964,24 +966,26 @@ local onUpdate :: (dt:float) {
 			}
 		}
 
-		for project.systems {
-			local ps      = it.particles
+		for system: project.systems {
+			local ps      = system.particles
 			systemsActive = systemsActive or ps.isActive!() or ps.getCount!() > 0
 
 			if ps.getCount!() > 0.95 * ps.getBufferSize!() {
-				if updateBufferSize(it)  setActionText("Increased buffer size")
+				if updateBufferSize(system)  setActionText("Increased buffer size")
 			}
 		}
 
-		if not systemsActive  for project.systems {
-			it.particles.start!()
+		if not systemsActive  for system: project.systems {
+			system.particles.start!()
 
-			if it.kickStartSteps {
-				local kickStartDt = math.max(it.particles.getParticleLifetime!()) / it.kickStartSteps
-				for i = 1, it.kickStartSteps  it.particles.update!(kickStartDt)
+			-- Note: Kick-starting may make things look a bit weird if the
+			-- emitter has a too short lifetime compared to the particles.
+			if system.kickStartSteps {
+				local kickStartDt = getKickStartDt(system)
+				for i = 1, system.kickStartSteps  system.particles.update!(kickStartDt)
 			}
 
-			it.particles.emit!(it.kickStartEmit)
+			system.particles.emit!(system.kickStartEmit)
 		}
 	}
 
@@ -1674,6 +1678,21 @@ export getCurrentProjectAndSystem :: () -> Project, System {
 	local project = app.projects[app.currentProjectIndex]
 	local system  = project.systems[project.systemIndex]
 	return project, system
+}
+
+
+
+export getKickStartDt :: (system:System) -> float {
+	if not system.kickStartSteps  return 0
+
+	local ps = system.particles
+	return (
+		math.min(
+			ps.getEmitterLifetime!() < 0 ? math.HUGE : ps.getEmitterLifetime!(),
+			math.max(ps.getParticleLifetime!())
+		)
+		/ system.kickStartSteps
+	)
 }
 
 
