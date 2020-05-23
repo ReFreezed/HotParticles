@@ -71,6 +71,10 @@ local writeProject :: (buffer:[]string, project:Project, isSavingWorkspace:bool)
 	insert(buffer, "exportTexturesDirectory")  ; writeValue(buffer, eol=true, project.exportTexturesDirectory)
 	insert(buffer, "exportClipboardTemplate")  ; writeValue(buffer, eol=true, project.exportClipboardTemplate)
 
+	insert(buffer, "scaleGlobalTime")  ; writeValue(buffer, eol=true, project.scaleGlobalTime)
+	insert(buffer, "scaleGlobalSpace") ; writeValue(buffer, eol=true, project.scaleGlobalSpace)
+	insert(buffer, "scaleGlobalSize")  ; writeValue(buffer, eol=true, project.scaleGlobalSize)
+
 	insert(buffer, "movement")
 	writeValue(buffer, cast(int) project.movementPreset)
 	writeValue(buffer, project.movementScaleX)
@@ -531,6 +535,22 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
 						project.exportClipboardTemplate = name
 
+					case "scaleGlobalTime":
+						local ^ok, ^ptr, scale = readFloat(version, line, cast(int)ptr)
+						if not ok                 return parsingError(path, ln, "Bad value format: %s", line)
+						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
+						project.scaleGlobalTime = scale
+					case "scaleGlobalSpace":
+						local ^ok, ^ptr, scale = readFloat(version, line, cast(int)ptr)
+						if not ok                 return parsingError(path, ln, "Bad value format: %s", line)
+						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
+						project.scaleGlobalSpace = scale
+					case "scaleGlobalSize":
+						local ^ok, ^ptr, scale = readFloat(version, line, cast(int)ptr)
+						if not ok                 return parsingError(path, ln, "Bad value format: %s", line)
+						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
+						project.scaleGlobalSize = scale
+
 					case "movement":
 						local ^ok, ^ptr, preset = readInt  (version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 						local ^ok, ^ptr, sx     = readFloat(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
@@ -784,7 +804,7 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 		if not project.systems  return parsingError(path, 0, "Missing systems for at least one project.")
 
 		for project.systems {
-			updateParticleParams(it) -- Needed for updateBufferSize() to work properly.
+			updateParticleParams(project, it) -- Needed for updateBufferSize() to work properly.
 			updateBufferSize(it)
 		}
 	}

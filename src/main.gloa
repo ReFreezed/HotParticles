@@ -166,6 +166,10 @@ export Project :: struct {
 	exportTexturesDirectory  = "",
 	exportClipboardTemplate  = "defaultLuaClipboard",
 
+	scaleGlobalTime  = 1.0,
+	scaleGlobalSpace = 1.0,
+	scaleGlobalSize  = 1.0,
+
 	guiLimits: struct { !key:string, !value:float },
 
 	edited = false,
@@ -227,6 +231,9 @@ export Project :: struct {
 			exportTexturesOverwrite  = source.exportTexturesOverwrite,
 			exportTexturesDirectory  = source.exportTexturesDirectory,
 			exportClipboardTemplate  = source.exportClipboardTemplate,
+			scaleGlobalTime          = source.scaleGlobalTime,
+			scaleGlobalSpace         = source.scaleGlobalSpace,
+			scaleGlobalSize          = source.scaleGlobalSize,
 			guiLimits                = copyTable(source.guiLimits),
 			edited                   = true,
 
@@ -385,17 +392,17 @@ export updateParticles :: (project:Project) {
 	for project.systems  updateParticles(project, it)
 }
 export updateParticles :: (project:Project, system:System) {
-	updateParticleParams(system)
+	updateParticleParams(project, system)
 	updateParticleColors(system)
 	updateParticleTexture(project, system)
 }
 
-export updateParticleParams :: (s:System) {
+export updateParticleParams :: (project:Project, s:System) {
 	local ps = s.particles
 
-	local time  = s.scaleTime
-	local space = s.scaleSpace
-	local size  = s.scaleSize
+	local time  = s.scaleTime  * project.scaleGlobalTime
+	local space = s.scaleSpace * project.scaleGlobalSpace
+	local size  = s.scaleSize  * project.scaleGlobalSize
 
 	local sizes: []float
 	for s.psSizes  insert(sizes, it*size)
@@ -548,7 +555,7 @@ export addNewSystem :: (project:Project, showcase=false) {
 		system.psSpread              = .05*math.TAU
 		system.colors                = {0,0,1,0, 0,0,1,1, 0,0,1,.5, 0,0,1,0}
 	}
-	updateParticleParams(system)
+	updateParticleParams(project, system)
 	updateParticleColors(system)
 
 	if project.systems[2] ~= NULL {

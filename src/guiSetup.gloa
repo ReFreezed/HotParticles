@@ -70,6 +70,14 @@ export setupGuiFrames :: () {
 						guiState.slider!({ name="emitterMovementSpeed", labelLeft="speed", inset=40, min=-8, max=8, limitName="emitterMovementSpeed", readoutMulti=100, readout="%d%%", weight=1.5 }),
 					}),
 				}),
+
+				guiState.separator!({ thick=false }),
+
+				guiState.section!({ name="scaleGlobalSection", label="ScaleGlobal", icon16="scale",
+					guiState.slider!({ name="scaleGlobalTime",  labelLeft="time",  min=0, max=4, limitName="scaleGlobalTime",  readoutMulti=100, readout="%d%%" }),
+					guiState.slider!({ name="scaleGlobalSpace", labelLeft="space", min=0, max=4, limitName="scaleGlobalSpace", readoutMulti=100, readout="%d%%", linkMultiDrag={"scaleGlobalSize"} }),
+					guiState.slider!({ name="scaleGlobalSize",  labelLeft="size",  min=0, max=4, limitName="scaleGlobalSize",  readoutMulti=100, readout="%d%%", linkMultiDrag={"scaleGlobalSpace"} }),
+				}),
 			}),
 
 			guiState.separator!({ thick=true }),
@@ -117,7 +125,7 @@ export setupGuiFrames :: () {
 					guiState.section!({ name="lifetimeSection", label="Lifetime", icon16="time",
 						guiState.hbox!({ labelLeft="emitter",
 							guiState.slider!({ name="emitterLifetime", min=0, max=16, limitName="emitterLifetime", readout="%.2f sec"--[[, readoutZero="∞"]], weight=1 }),
-							guiState.checkbox!({ name="emitterContinuous", label="continuous" }),
+							guiState.checkbox!({ name="emitterContinuous", label="continuous", tooltip="Infinite lifetime" }),
 						}),
 						guiState.slider!({ name="particleLifetimeMin", labelLeft="particle min", min=0, max=16, limitName="particleLifetime", readout="%.2f sec", linkMultiDrag={"particleLifetimeMax"} }),
 						guiState.slider!({ name="particleLifetimeMax", labelLeft="particle max", min=0, max=16, limitName="particleLifetime", readout="%.2f sec", linkMultiDrag={"particleLifetimeMin"} }),
@@ -749,6 +757,40 @@ export setupGuiCallbacks :: () {
 		markEdited(project)
 	}
 
+	-- Scale global.
+	guiState.onRefresh.scaleGlobalTime = (slider:gui.Slider) {
+		local project = app.projects[app.currentProjectIndex]
+		slider.value  = project.scaleGlobalTime
+	}
+	guiState.onAction.scaleGlobalTime = (slider:gui.Slider) {
+		local project           = app.projects[app.currentProjectIndex]
+		project.scaleGlobalTime = slider.value
+		markEdited(project)
+		for project.systems  updateParticleParams(project, it)
+	}
+
+	guiState.onRefresh.scaleGlobalSpace = (slider:gui.Slider) {
+		local project = app.projects[app.currentProjectIndex]
+		slider.value  = project.scaleGlobalSpace
+	}
+	guiState.onAction.scaleGlobalSpace = (slider:gui.Slider) {
+		local project            = app.projects[app.currentProjectIndex]
+		project.scaleGlobalSpace = slider.value
+		markEdited(project)
+		for project.systems  updateParticleParams(project, it)
+	}
+
+	guiState.onRefresh.scaleGlobalSize = (slider:gui.Slider) {
+		local project = app.projects[app.currentProjectIndex]
+		slider.value  = project.scaleGlobalSize
+	}
+	guiState.onAction.scaleGlobalSize = (slider:gui.Slider) {
+		local project           = app.projects[app.currentProjectIndex]
+		project.scaleGlobalSize = slider.value
+		markEdited(project)
+		for project.systems  updateParticleParams(project, it)
+	}
+
 	-- Systems.
 	guiState.onRefresh.systems = (tabs:gui.Tabs) {
 		local project = app.projects[app.currentProjectIndex]
@@ -898,7 +940,7 @@ export setupGuiCallbacks :: () {
 		local project, system = getCurrentProjectAndSystem()
 		system.scaleTime      = slider.value
 		markEdited(project)
-		updateParticleParams(system)
+		updateParticleParams(project, system)
 	}
 
 	guiState.onRefresh.scaleSpace = (slider:gui.Slider) {
@@ -909,7 +951,7 @@ export setupGuiCallbacks :: () {
 		local project, system = getCurrentProjectAndSystem()
 		system.scaleSpace     = slider.value
 		markEdited(project)
-		updateParticleParams(system)
+		updateParticleParams(project, system)
 	}
 
 	guiState.onRefresh.scaleSize = (slider:gui.Slider) {
@@ -920,7 +962,7 @@ export setupGuiCallbacks :: () {
 		local project, system = getCurrentProjectAndSystem()
 		system.scaleSize      = slider.value
 		markEdited(project)
-		updateParticleParams(system)
+		updateParticleParams(project, system)
 	}
 	--
 
@@ -933,7 +975,7 @@ export setupGuiCallbacks :: () {
 	guiState.onAction.insertMode = (radio:gui.Radio, i:int) {
 		local project, system = getCurrentProjectAndSystem()
 		system.psInsertMode   = cast(LG.ParticleInsertMode) radio.buttons[i].value
-		updateParticleParams(system)
+		updateParticleParams(project, system)
 		markEdited(project)
 	}
 
@@ -944,7 +986,7 @@ export setupGuiCallbacks :: () {
 	guiState.onAction.emitterContinuous = (checkbox:gui.Checkbox, _:int) {
 		local project, system      = getCurrentProjectAndSystem()
 		system.psEmitterContinuous = checkbox.checked
-		updateParticleParams(system)
+		updateParticleParams(project, system)
 		markEdited(project)
 		if system.psEmitterContinuous  system.particles.start!()
 	}
@@ -957,7 +999,7 @@ export setupGuiCallbacks :: () {
 		local project, system      = getCurrentProjectAndSystem()
 		system.psEmitterLifetime   = slider.value
 		system.psEmitterContinuous = false
-		updateParticleParams(system)
+		updateParticleParams(project, system)
 		markEdited(project)
 		system.particles.start!()
 		gui.refreshRecursively(guiState, "emitterContinuous")
@@ -969,7 +1011,7 @@ export setupGuiCallbacks :: () {
 	guiState.onAction.particleLifetimeMin = (slider:gui.Slider, i:int) {
 		local project, system        = getCurrentProjectAndSystem()
 		system.psParticleLifetimeMin = slider.value
-		updateParticleParams(system)
+		updateParticleParams(project, system)
 		markEdited(project)
 	}
 	guiState.onRefresh.particleLifetimeMax = (slider:gui.Slider) {
@@ -979,7 +1021,7 @@ export setupGuiCallbacks :: () {
 	guiState.onAction.particleLifetimeMax = (slider:gui.Slider, i:int) {
 		local project, system        = getCurrentProjectAndSystem()
 		system.psParticleLifetimeMax = slider.value
-		updateParticleParams(system)
+		updateParticleParams(project, system)
 		markEdited(project)
 	}
 
@@ -990,7 +1032,7 @@ export setupGuiCallbacks :: () {
 	guiState.onAction.emissionRate = (slider:gui.Slider, i:int) {
 		local project, system = getCurrentProjectAndSystem()
 		system.psEmissionRate = slider.value
-		updateParticleParams(system)
+		updateParticleParams(project, system)
 		markEdited(project)
 	}
 
@@ -1024,7 +1066,7 @@ export setupGuiCallbacks :: () {
 	guiState.onAction.areaDistribution = (radio:gui.Radio, i:int) {
 		local project, system             = getCurrentProjectAndSystem()
 		system.psEmissionAreaDistribution = cast(LG.AreaSpreadDistribution) radio.buttons[i].value
-		updateParticleParams(system)
+		updateParticleParams(project, system)
 		markEdited(project)
 		gui.setActive(guiState, "areaParams", i > 1)
 		gui.refreshRecursively(guiState, "areaParams")
@@ -1036,7 +1078,7 @@ export setupGuiCallbacks :: () {
 	guiState.onAction.areaAngle = (direction:gui.Direction, i:int) {
 		local project, system      = getCurrentProjectAndSystem()
 		system.psEmissionAreaAngle = direction.angle
-		updateParticleParams(system)
+		updateParticleParams(project, system)
 		markEdited(project)
 	}
 	guiState.onRefresh.areaDx = (slider:gui.Slider) {
@@ -1046,7 +1088,7 @@ export setupGuiCallbacks :: () {
 	guiState.onAction.areaDx = (slider:gui.Slider, i:int) {
 		local project, system   = getCurrentProjectAndSystem()
 		system.psEmissionAreaDx = slider.value
-		updateParticleParams(system)
+		updateParticleParams(project, system)
 		markEdited(project)
 	}
 	guiState.onRefresh.areaDy = (slider:gui.Slider) {
@@ -1056,7 +1098,7 @@ export setupGuiCallbacks :: () {
 	guiState.onAction.areaDy = (slider:gui.Slider, i:int) {
 		local project, system   = getCurrentProjectAndSystem()
 		system.psEmissionAreaDy = slider.value
-		updateParticleParams(system)
+		updateParticleParams(project, system)
 		markEdited(project)
 	}
 	guiState.onRefresh.areaRelative = (checkbox:gui.Checkbox) {
@@ -1066,7 +1108,7 @@ export setupGuiCallbacks :: () {
 	guiState.onAction.areaRelative = (checkbox:gui.Checkbox, i:int) {
 		local project, system         = getCurrentProjectAndSystem()
 		system.psEmissionAreaRelative = checkbox.checked
-		updateParticleParams(system)
+		updateParticleParams(project, system)
 		markEdited(project)
 	}
 
@@ -1077,7 +1119,7 @@ export setupGuiCallbacks :: () {
 	guiState.onAction.direction = (direction:gui.Direction, i:int) {
 		local project, system = getCurrentProjectAndSystem()
 		system.psDirection    = direction.angle
-		updateParticleParams(system)
+		updateParticleParams(project, system)
 		markEdited(project)
 	}
 	guiState.onRefresh.directionSpread = (slider:gui.Slider) {
@@ -1087,7 +1129,7 @@ export setupGuiCallbacks :: () {
 	guiState.onAction.directionSpread = (slider:gui.Slider, i:int) {
 		local project, system = getCurrentProjectAndSystem()
 		system.psSpread       = slider.value
-		updateParticleParams(system)
+		updateParticleParams(project, system)
 		markEdited(project)
 	}
 
@@ -1098,7 +1140,7 @@ export setupGuiCallbacks :: () {
 	guiState.onAction.speedMin = (slider:gui.Slider, i:int) {
 		local project, system = getCurrentProjectAndSystem()
 		system.psSpeedMin     = slider.value
-		updateParticleParams(system)
+		updateParticleParams(project, system)
 		markEdited(project)
 	}
 	guiState.onRefresh.speedMax = (slider:gui.Slider) {
@@ -1108,7 +1150,7 @@ export setupGuiCallbacks :: () {
 	guiState.onAction.speedMax = (slider:gui.Slider, i:int) {
 		local project, system = getCurrentProjectAndSystem()
 		system.psSpeedMax     = slider.value
-		updateParticleParams(system)
+		updateParticleParams(project, system)
 		markEdited(project)
 	}
 
@@ -1119,7 +1161,7 @@ export setupGuiCallbacks :: () {
 	guiState.onAction.accLinearXmin = (slider:gui.Slider, i:int) {
 		local project, system           = getCurrentProjectAndSystem()
 		system.psLinearAccelerationXmin = slider.value
-		updateParticleParams(system)
+		updateParticleParams(project, system)
 		markEdited(project)
 	}
 	guiState.onRefresh.accLinearXmax = (slider:gui.Slider) {
@@ -1129,7 +1171,7 @@ export setupGuiCallbacks :: () {
 	guiState.onAction.accLinearXmax = (slider:gui.Slider, i:int) {
 		local project, system           = getCurrentProjectAndSystem()
 		system.psLinearAccelerationXmax = slider.value
-		updateParticleParams(system)
+		updateParticleParams(project, system)
 		markEdited(project)
 	}
 	guiState.onRefresh.accLinearYmin = (slider:gui.Slider) {
@@ -1139,7 +1181,7 @@ export setupGuiCallbacks :: () {
 	guiState.onAction.accLinearYmin = (slider:gui.Slider, i:int) {
 		local project, system           = getCurrentProjectAndSystem()
 		system.psLinearAccelerationYmin = slider.value
-		updateParticleParams(system)
+		updateParticleParams(project, system)
 		markEdited(project)
 	}
 	guiState.onRefresh.accLinearYmax = (slider:gui.Slider) {
@@ -1149,7 +1191,7 @@ export setupGuiCallbacks :: () {
 	guiState.onAction.accLinearYmax = (slider:gui.Slider, i:int) {
 		local project, system           = getCurrentProjectAndSystem()
 		system.psLinearAccelerationYmax = slider.value
-		updateParticleParams(system)
+		updateParticleParams(project, system)
 		markEdited(project)
 	}
 
@@ -1160,7 +1202,7 @@ export setupGuiCallbacks :: () {
 	guiState.onAction.radialAccelerationMin = (slider:gui.Slider, i:int) {
 		local project, system          = getCurrentProjectAndSystem()
 		system.psRadialAccelerationMin = slider.value
-		updateParticleParams(system)
+		updateParticleParams(project, system)
 		markEdited(project)
 	}
 	guiState.onRefresh.radialAccelerationMax = (slider:gui.Slider) {
@@ -1170,7 +1212,7 @@ export setupGuiCallbacks :: () {
 	guiState.onAction.radialAccelerationMax = (slider:gui.Slider, i:int) {
 		local project, system          = getCurrentProjectAndSystem()
 		system.psRadialAccelerationMax = slider.value
-		updateParticleParams(system)
+		updateParticleParams(project, system)
 		markEdited(project)
 	}
 
@@ -1181,7 +1223,7 @@ export setupGuiCallbacks :: () {
 	guiState.onAction.tangentialAccelerationMin = (slider:gui.Slider, i:int) {
 		local project, system              = getCurrentProjectAndSystem()
 		system.psTangentialAccelerationMin = slider.value
-		updateParticleParams(system)
+		updateParticleParams(project, system)
 		markEdited(project)
 	}
 	guiState.onRefresh.tangentialAccelerationMax = (slider:gui.Slider) {
@@ -1191,7 +1233,7 @@ export setupGuiCallbacks :: () {
 	guiState.onAction.tangentialAccelerationMax = (slider:gui.Slider, i:int) {
 		local project, system              = getCurrentProjectAndSystem()
 		system.psTangentialAccelerationMax = slider.value
-		updateParticleParams(system)
+		updateParticleParams(project, system)
 		markEdited(project)
 	}
 
@@ -1202,7 +1244,7 @@ export setupGuiCallbacks :: () {
 	guiState.onAction.linearDampingMin = (slider:gui.Slider, i:int) {
 		local project, system     = getCurrentProjectAndSystem()
 		system.psLinearDampingMin = slider.value
-		updateParticleParams(system)
+		updateParticleParams(project, system)
 		markEdited(project)
 	}
 	guiState.onRefresh.linearDampingMax = (slider:gui.Slider) {
@@ -1212,7 +1254,7 @@ export setupGuiCallbacks :: () {
 	guiState.onAction.linearDampingMax = (slider:gui.Slider, i:int) {
 		local project, system     = getCurrentProjectAndSystem()
 		system.psLinearDampingMax = slider.value
-		updateParticleParams(system)
+		updateParticleParams(project, system)
 		markEdited(project)
 	}
 
@@ -1223,7 +1265,7 @@ export setupGuiCallbacks :: () {
 	guiState.onAction.rotationMin = (direction:gui.Direction, i:int) {
 		local project, system = getCurrentProjectAndSystem()
 		system.psRotationMin  = direction.angle
-		updateParticleParams(system)
+		updateParticleParams(project, system)
 		markEdited(project)
 	}
 	guiState.onRefresh.rotationMax = (direction:gui.Direction) {
@@ -1233,7 +1275,7 @@ export setupGuiCallbacks :: () {
 	guiState.onAction.rotationMax = (direction:gui.Direction, i:int) {
 		local project, system = getCurrentProjectAndSystem()
 		system.psRotationMax  = direction.angle
-		updateParticleParams(system)
+		updateParticleParams(project, system)
 		markEdited(project)
 	}
 	guiState.onRefresh.rotationRelative = (checkbox:gui.Checkbox) {
@@ -1243,7 +1285,7 @@ export setupGuiCallbacks :: () {
 	guiState.onAction.rotationRelative = (checkbox:gui.Checkbox, i:int) {
 		local project, system     = getCurrentProjectAndSystem()
 		system.psRelativeRotation = checkbox.checked
-		updateParticleParams(system)
+		updateParticleParams(project, system)
 		markEdited(project)
 	}
 
@@ -1254,7 +1296,7 @@ export setupGuiCallbacks :: () {
 	guiState.onAction.spinMin = (slider:gui.Slider, i:int) {
 		local project, system = getCurrentProjectAndSystem()
 		system.psSpinMin      = slider.value
-		updateParticleParams(system)
+		updateParticleParams(project, system)
 		markEdited(project)
 	}
 	guiState.onRefresh.spinMax = (slider:gui.Slider) {
@@ -1264,7 +1306,7 @@ export setupGuiCallbacks :: () {
 	guiState.onAction.spinMax = (slider:gui.Slider, i:int) {
 		local project, system = getCurrentProjectAndSystem()
 		system.psSpinMax      = slider.value
-		updateParticleParams(system)
+		updateParticleParams(project, system)
 		markEdited(project)
 	}
 	guiState.onRefresh.spinVariation = (slider:gui.Slider) {
@@ -1274,7 +1316,7 @@ export setupGuiCallbacks :: () {
 	guiState.onAction.spinVariation = (slider:gui.Slider, i:int) {
 		local project, system  = getCurrentProjectAndSystem()
 		system.psSpinVariation = slider.value
-		updateParticleParams(system)
+		updateParticleParams(project, system)
 		markEdited(project)
 	}
 
@@ -1294,7 +1336,7 @@ export setupGuiCallbacks :: () {
 		}
 
 		insert(sizes, i, sizes[i])
-		updateParticleParams(system)
+		updateParticleParams(project, system)
 		markEdited(project)
 
 		for j = i, #sizes {
@@ -1316,7 +1358,7 @@ export setupGuiCallbacks :: () {
 			remove(sizes, i)
 		}
 
-		updateParticleParams(system)
+		updateParticleParams(project, system)
 		markEdited(project)
 
 		for j = i, #sizes {
@@ -1331,7 +1373,7 @@ export setupGuiCallbacks :: () {
 		guiState.onAction[format("size%d", i)] = (slider:gui.Slider, i:int) {
 			local project, system                = getCurrentProjectAndSystem()
 			system.psSizes[cast(int)slider.data] = slider.value
-			updateParticleParams(system)
+			updateParticleParams(project, system)
 			markEdited(project)
 		}
 	}
