@@ -415,8 +415,8 @@ export onKeyPressed :: (state:State, key:LK.KeyConstant, scancode:LK.Scancode, i
 	}
 	if state.activeId  return true
 
-	if key == "escape" and state.contextMenu ~= NULL {
-		hideContextMenu(state)
+	if state.contextMenu ~= NULL {
+		if key == "escape"  hideContextMenu(state)
 		return true
 	}
 
@@ -1703,7 +1703,11 @@ local drawElement :: (state:State, el:Element) {
 			}
 
 			-- Particle previews.
-			-- @Cleanup: All this is a bit misplaced in the GUI. Maybe provide an onDraw event for elements so systems and projects can stay outside this file. (Update: We now have gui.Canvas!)
+			--
+			-- @Cleanup: All this is a bit misplaced in the GUI. Maybe provide an onDraw
+			-- event for elements so systems and projects can stay outside this file.
+			-- (Update: We now have gui.Canvas! Except this is on a Button...)
+			--
 			local PREVIEW_SCALE :: 2.5
 			local project = app.projects[app.currentProjectIndex]
 			local scale   = PREVIEW_SCALE * BUTTON_IMAGE_MAX_SIZE / math.min(LG.getWidth() - MAIN_PANEL_WIDTH, LG.getHeight()) * project.zoom

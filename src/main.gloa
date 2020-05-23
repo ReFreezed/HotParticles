@@ -98,8 +98,10 @@ local defaultSearchPaths: []string = NULL
 export app: App
 export guiState: gui.State
 
-local freezeDtThisFrame      = false
+local freezeDtThisFrame = false
+
 local forcePixelatedTextures = false
+local forceParticleUpdates   = false
 
 local zoomTime = -9999.00
 
@@ -370,11 +372,12 @@ export AnimationFrame :: struct { x=0.0, y=0.0, w=0.0, h=0.0 }
 
 
 export updateParticles :: (project:Project) {
-	for project.systems {
-		updateParticleParams(it)
-		updateParticleColors(it)
-		updateParticleTexture(project, it)
-	}
+	for project.systems  updateParticles(project, it)
+}
+export updateParticles :: (project:Project, system:System) {
+	updateParticleParams(system)
+	updateParticleColors(system)
+	updateParticleTexture(project, system)
 }
 
 export updateParticleParams :: (s:System) {
@@ -769,6 +772,7 @@ local onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool) 
 	local mod       = getModifierKey()
 	local modAndKey = combineKeyAndModifier(mod, key)
 	local project   = app.projects[app.currentProjectIndex]
+	local system    = project.systems[project.systemIndex]
 
 	-- Global keys.
 	if not LM.isGrabbed()  if modAndKey == {
@@ -845,9 +849,19 @@ local onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool) 
 		case "c-tab":   setCurrentProject((app.currentProjectIndex - 0) % #app.projects    + 1)
 		case "c-s-tab": setCurrentProject((app.currentProjectIndex - 2) % #app.projects    + 1)
 
-		case "h": local system = project.systems[project.systemIndex] ; system.visible = not system.visible
+		case "h": system.visible = not system.visible
 
 		case "p": gui.setActive(guiState, "main", not gui.getElement(guiState, "main").active)
+
+		case "c-delete": confirmDeleteSystem(project.systemIndex)
+
+		case "c-d":
+			system = system.clone!()
+			insert(project.systems, project.systemIndex+1, system)
+
+			markEdited(project)
+			gui.refreshRecursively(guiState, "systems")
+			setCurrentSystem(project.systemIndex+1, force=true)
 	}
 }
 
@@ -915,7 +929,7 @@ local onMouseWheel :: (dx,dy:int) {
 	if not showWorld  return
 
 	local mx, my = LM.getPosition()
-	if gui.isOverGui(guiState, mx, my)  return
+	if gui.getTopmostActiveModal(guiState) ~= NULL or gui.isOverGui(guiState, mx, my)  return
 
 	local mod = getModifierKey()
 	if mod ~= ModifierKey.NONE  return
@@ -952,7 +966,7 @@ local onUpdate :: (dt:float) {
 
 	local project = app.projects[app.currentProjectIndex]
 
-	if gui.getTopmostActiveModal(guiState) == NULL {
+	if forceParticleUpdates or gui.getTopmostActiveModal(guiState) == NULL {
 		local systemsActive = false
 
 		local time = LT.getTime()
@@ -975,17 +989,25 @@ local onUpdate :: (dt:float) {
 			}
 		}
 
-		if not systemsActive  for system: project.systems {
-			system.particles.start!()
-
-			-- Note: Kick-starting may make things look a bit weird if the
-			-- emitter has a too short lifetime compared to the particles.
-			if system.kickStartSteps {
-				local kickStartDt = getKickStartDt(system)
-				for i = 1, system.kickStartSteps  system.particles.update!(kickStartDt)
+		if systemsActive {
+			-- Make sure continuous emitters are always active.
+			for system: project.systems {
+				if system.psEmitterContinuous  system.particles.start!()
 			}
 
-			system.particles.emit!(system.kickStartEmit)
+		} else {
+			for system: project.systems {
+				system.particles.start!()
+
+				-- Note: Kick-starting may make things look a bit weird if the
+				-- emitter has a too short lifetime compared to the particles.
+				if system.kickStartSteps {
+					local kickStartDt = getKickStartDt(system)
+					for i = 1, system.kickStartSteps  system.particles.update!(kickStartDt)
+				}
+
+				system.particles.emit!(system.kickStartEmit)
+			}
 		}
 	}
 
@@ -1276,8 +1298,12 @@ local onDraw :: () {
 
 		-- Stats.
 		if app.showStats {
-			local particleCountTotal = 0
-			for project.systems  particleCountTotal += it.particles.getCount!()
+			local particleCountTotal        = 0
+			local particleCountTotalOptimal = 0
+			for project.systems {
+				particleCountTotal        += it.particles.getCount!()
+				particleCountTotalOptimal += getOptimalBufferSize(it, moreExact=true)
+			}
 
 			local fontH = fontNormal.getHeight!()
 
@@ -1325,7 +1351,7 @@ local onDraw :: () {
 				drawStatsLine("LoveGraphicsPresentTime: ", "%.3f ms (%.2f x framerate)",   1000*presentTime, ratio)
 			}
 
-			drawStatsLine("ParticleCountTotal: ", "%d", particleCountTotal)
+			drawStatsLine("ParticleCountTotal: ", "%d/%d", particleCountTotal, particleCountTotalOptimal)
 
 			for project.systems  drawStatsLine("ParticleCount_", "%d: %d/%d (%d)", itIndex, it.particles.getCount!(), getOptimalBufferSize(it, moreExact=true), it.particles.getBufferSize!())
 
@@ -1580,6 +1606,65 @@ export confirmCloseProject :: (projectIndex:int) {
 	} else {
 		closeProject(projectIndex)
 	}
+}
+
+
+
+export confirmDeleteSystem :: (systemIndexToDelete:int) {
+	-- @UX: Don't confirm if the system has no modifications.
+	local BUTTONS: []gui.Button : {{label="Delete"},{label="Cancel"}}
+
+	local psCanvas = guiState.canvas!({ name="temp_deleteSystemPreview", width=DIALOG_WIDTH-40, height=200 })
+
+	guiState.onDraw.temp_deleteSystemPreview = [systemIndexToDelete] (canvasEl:gui.Canvas, cw,ch:int) {
+		local project = app.projects[app.currentProjectIndex]
+		local system  = project.systems[systemIndexToDelete]
+		local scale   = ch / LG.getHeight() * project.zoom
+		local r, g, b = hsvToRgb(project.bgColorH, project.bgColorS, project.bgColorV)
+		local emitterX, emitterY: float
+
+		if project.movementPreset == Movement.NONE {
+			emitterX, emitterY = system.particles.getPosition!()
+		}
+
+		LG.setColor(1, 1, 1)
+
+		LG.clear(r, g, b)
+		LG.setBlendMode(system.blendMode)
+
+		LG.draw(system.particles,
+			cw/2 - emitterX*scale,
+			ch/2 - emitterY*scale,
+			0, scale
+		)
+
+		LG.setBlendMode(LG.BlendMode.ALPHA)
+	}
+
+	forceParticleUpdates = true
+
+	pushTempChoiceDialog("Confirm delete", "Delete this particle system?", BUTTONS, submitIndex=1, extraContent=psCanvas, [systemIndexToDelete] (i:int) {
+		guiState.onDraw.temp_deleteSystemPreview = nil
+		forceParticleUpdates                     = false
+
+		if i ~= 1  return
+
+		local project   = app.projects[app.currentProjectIndex]
+		local isCurrent = systemIndexToDelete == project.systemIndex
+
+		remove(project.systems, systemIndexToDelete)
+
+		if project.systems[1] == NULL
+			addNewSystem(project)
+		elseif systemIndexToDelete < project.systemIndex
+			project.systemIndex -= 1
+		else
+			project.systemIndex = math.min(project.systemIndex, #project.systems)
+
+		markEdited(project)
+		gui.refreshRecursively(guiState, "systems")
+		if isCurrent  setCurrentSystem(project.systemIndex, force=true)
+	})
 }
 
 
