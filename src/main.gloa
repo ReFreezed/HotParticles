@@ -63,6 +63,7 @@ export fontLarge:  LG.Font = NULL
 export imageBoxGradient: LG.Image = NULL
 export imageChecker:     LG.Image = NULL
 export imageGradient:    LG.Image = NULL
+export imageNormal:      LG.Image = NULL
 export imagePixel:       LG.Image = NULL
 export imageRainbow:     LG.Image = NULL
 
@@ -711,6 +712,7 @@ local onLoad :: (args:[]string, argsRaw:[]string) {
 	imageBoxGradient = LG.newImage("gfx/boxGradient.png")
 	imageChecker     = LG.newImage("gfx/checker.png") ; imageChecker.setWrap!(LG.WrapMode.REPEAT, LG.WrapMode.REPEAT) ; imageChecker.setFilter!(LG.FilterMode.NEAREST, LG.FilterMode.NEAREST)
 	imageGradient    = LG.newImage("gfx/gradient.png")
+	imageNormal      = LG.newImage("gfx/normal.png")
 	imagePixel       = LG.newImage("gfx/pixel.png")
 	imageRainbow     = LG.newImage("gfx/rainbow.png")
 
@@ -879,7 +881,7 @@ local onMousePressed :: (mx,my:int, mbutton:int, isTouch:bool, presses:int) {
 
 	if gui.onMousePressed(guiState, mx, my, mbutton, presses)  return
 
-	local showTextureOffset, showAnimationFrames, showWorld = getVisibilityFlags()
+	local showWorld = getVisibilityFlags()
 	if not showWorld  return
 
 	if mbutton == 1 {
@@ -925,7 +927,7 @@ local onMouseWheel :: (dx,dy:int) {
 	if gui.onMouseWheel(guiState, dx, dy)  return
 	if not dy                              return
 
-	local showTextureOffset, showAnimationFrames, showWorld = getVisibilityFlags()
+	local showWorld = getVisibilityFlags()
 	if not showWorld  return
 
 	local mx, my = LM.getPosition()
@@ -1103,22 +1105,35 @@ local onUpdate :: (dt:float) {
 
 
 
-local getVisibilityFlags :: () -> bool, bool, bool {
-	static wasHoveringTextureOffset = false
-	static textureOffsetHoverTime   = -9999.00
+local getVisibilityFlags :: () -> bool, bool, bool, bool {
+	static wasHoveringTextureOffset    = false
+	static wasHoveringAreaDistribution = false
+	static hoverTimeTextureOffset      = -9999.00
+	static hoverTimeAreaDistribution   = -9999.00
 
 	local isHoveringTextureOffset
 		=  math.max(guiState.activeId, guiState.hoveredId) == gui.getElement(guiState, "textureOffsetX").id
 		or math.max(guiState.activeId, guiState.hoveredId) == gui.getElement(guiState, "textureOffsetY").id
 
+	local isHoveringAreaDistribution
+		=  math.max(guiState.activeId, guiState.hoveredId) == gui.getElement(guiState, "areaDistribution").id
+		or math.max(guiState.activeId, guiState.hoveredId) == gui.getElement(guiState, "areaDx").id
+		or math.max(guiState.activeId, guiState.hoveredId) == gui.getElement(guiState, "areaDy").id
+
 	if isHoveringTextureOffset ~= wasHoveringTextureOffset {
 		wasHoveringTextureOffset = isHoveringTextureOffset
-		textureOffsetHoverTime   = LT.getTime()
+		hoverTimeTextureOffset   = LT.getTime()
+	}
+	if isHoveringAreaDistribution ~= wasHoveringAreaDistribution {
+		wasHoveringAreaDistribution = isHoveringAreaDistribution
+		hoverTimeAreaDistribution   = LT.getTime()
 	}
 
-	local showTextureOffset   = (isHoveringTextureOffset and LT.getTime() - textureOffsetHoverTime > 4/60)
-	local showAnimationFrames = gui.getElement(guiState, "animation").active
-	local showWorld           = not (showTextureOffset or showAnimationFrames)
+	local DELAY :: 4/60
+	local showTextureOffset    = (isHoveringTextureOffset    and LT.getTime() - hoverTimeTextureOffset    > DELAY)
+	local showAreaDistribution = (isHoveringAreaDistribution and LT.getTime() - hoverTimeAreaDistribution > DELAY)
+	local showAnimationFrames  = gui.getElement(guiState, "animation").active
+	local showWorld            = not (showTextureOffset or showAnimationFrames)
 
 	static didShowWorld = true
 
@@ -1128,7 +1143,7 @@ local getVisibilityFlags :: () -> bool, bool, bool {
 		updateParticleImageFilters()
 	}
 
-	return showTextureOffset, showAnimationFrames, showWorld
+	return showWorld, showTextureOffset, showAreaDistribution, showAnimationFrames
 }
 
 local onDraw :: () {
@@ -1138,7 +1153,7 @@ local onDraw :: () {
 	local ww, wh  = LG.getDimensions()
 	local project = app.projects[app.currentProjectIndex]
 
-	local showTextureOffset, showAnimationFrames, showWorld = getVisibilityFlags()
+	local showWorld, showTextureOffset, showAreaDistribution, showAnimationFrames = getVisibilityFlags()
 
 	LG.reset()
 
@@ -1173,6 +1188,46 @@ local onDraw :: () {
 
 			particleDrawTime = LT.getTime()-time -- Not sure how accurate this actually is. This value is still very low even while the actual FPS is tanking a lot.
 			-- !if DEV  LG.getStats(statsWorld)
+
+			LG.setBlendMode(LG.BlendMode.ALPHA)
+
+			if showAreaDistribution {
+				local system = project.systems[project.systemIndex]
+				local x,  y  = system.particles.getPosition!()
+				local dx     = system.psEmissionAreaDx * system.scaleSpace
+				local dy     = system.psEmissionAreaDy * system.scaleSpace
+
+				using system.psEmissionAreaDistribution
+
+				LG.setColor(1, 0, 0, .6)
+				LG.setLineWidth(math.max(8/project.zoom, (project.pixelateWorld ? 1 : 0)))
+
+				if !complete system.psEmissionAreaDistribution == {
+					case NONE:
+						-- void
+
+					case ELLIPSE:
+						LG.ellipse(LG.DrawMode.FILL, x,y, dx,dy, 64)
+
+					case UNIFORM:
+						LG.rectangle(LG.DrawMode.FILL, x-dx,y-dy, 2*dx, 2*dy)
+
+					case BORDER_ELLIPSE:
+						LG.ellipse(LG.DrawMode.LINE, x,y, dx,dy, 64)
+
+					case BORDER_RECTANGLE:
+						LG.rectangle(LG.DrawMode.LINE, x-dx,y-dy, 2*dx,2*dy)
+
+					case NORMAL:
+						local STDDEV_IN_IMAGE :: .1411132813
+						local iw, ih = imageNormal.getDimensions!()
+						local sx     = dx / (iw * STDDEV_IN_IMAGE)
+						local sy     = dy / (ih * STDDEV_IN_IMAGE)
+						LG.draw(imageNormal, x,y, 0, sx,sy, iw/2,ih/2)
+				}
+
+				LG.setLineWidth(1)
+			}
 
 			--[[ DEBUG
 			LG.setColor(1, 1, 1, .15)
