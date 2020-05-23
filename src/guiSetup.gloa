@@ -32,7 +32,7 @@ export setupGuiFrames :: () {
 			}),
 
 			guiState.vbox!({ name="projectSettings",
-				guiState.separator!({ thick=false }),
+				guiState.separator!({ thick=true }),
 
 				guiState.section!({ label="Pixelate",
 					guiState.hbox!({
@@ -43,17 +43,17 @@ export setupGuiFrames :: () {
 
 				guiState.separator!({ thick=false }),
 
-				guiState.section!({ label="Background",
+				guiState.section!({ name="backgroundSection", label="Background", icon16="background",
 					guiState.hbox!({
 						guiState.color!({ name="bgColor", alpha=false, weight=1 }),
 						guiState.colorPreview!({ linkColors={"bgColor"} }),
 					}),
-					guiState.slider!({ name="bgChecker", labelLeft="checker opacity", min=-1, max=1, readoutMulti=100, readout="%d%%" }),
+					guiState.slider!({ name="bgChecker", labelLeft="pattern", min=-1, max=1, readoutMulti=100, readout="%d%%" }),
 				}),
 
 				guiState.separator!({ thick=false }),
 
-				guiState.section!({ label="EmitterMovem.",
+				guiState.section!({ name="emitterMovementSection", label="EmitterMovem.", icon16="movement",
 					guiState.radio!({ name="emitterMovement",
 						buttons = {
 							{value=Movement.NONE,      label="none",      tooltip="No movement"},
@@ -78,7 +78,7 @@ export setupGuiFrames :: () {
 				guiState.tabs!({ name="systems", specialLastTab=true }),
 
 				guiState.scrollable!({
-					guiState.section!({ label="Texture",
+					guiState.section!({ name="textureSection", label="Texture", icon16="texture",
 						guiState.radio!({ name="textureName", labelLeft="preset" }),
 						guiState.hbox!({
 							guiState.inputText!({ name="texturePath", labelLeft="path", tooltip="Absolute path, or relative to the saved .hotparticles file", weight=1 }),
@@ -93,7 +93,7 @@ export setupGuiFrames :: () {
 
 					guiState.separator!({ thick=true }),
 
-					guiState.section!({ label="ScaleAll",
+					guiState.section!({ name="scaleAllSection", label="ScaleAll", icon16="scale",
 						guiState.slider!({ name="scaleTime",  labelLeft="time",  min=0, max=4, limitName="scaleTime",  readoutMulti=100, readout="%d%%" }),
 						guiState.slider!({ name="scaleSpace", labelLeft="space", min=0, max=4, limitName="scaleSpace", readoutMulti=100, readout="%d%%", linkMultiDrag={"scaleSize"} }),
 						guiState.slider!({ name="scaleSize",  labelLeft="size",  min=0, max=4, limitName="scaleSize",  readoutMulti=100, readout="%d%%", linkMultiDrag={"scaleSpace"} }),
@@ -101,7 +101,7 @@ export setupGuiFrames :: () {
 
 					guiState.separator!({ thick=true }),
 
-					guiState.section!({ label="Spawn",
+					guiState.section!({ name="spawnSection", label="Spawn", icon16="spawn",
 						guiState.radio!({ name="insertMode", labelLeft="layer", buttons={
 							{value=LG.ParticleInsertMode.TOP,    label="front",  tooltip="Insert at top"},
 							{value=LG.ParticleInsertMode.BOTTOM, label="back",   tooltip="Insert at bottom"},
@@ -114,7 +114,7 @@ export setupGuiFrames :: () {
 
 					guiState.separator!({ thick=true }),
 
-					guiState.section!({ label="Lifetime",
+					guiState.section!({ name="lifetimeSection", label="Lifetime", icon16="time",
 						guiState.hbox!({ labelLeft="emitter",
 							guiState.slider!({ name="emitterLifetime", min=0, max=16, limitName="emitterLifetime", readout="%.2f sec"--[[, readoutZero="∞"]], weight=1 }),
 							guiState.checkbox!({ name="emitterContinuous", label="continuous" }),
@@ -125,7 +125,7 @@ export setupGuiFrames :: () {
 
 					guiState.separator!({ thick=true }),
 
-					guiState.section!({ label="Area",
+					guiState.section!({ name="areaSection", label="Area", icon16="areaSize",
 						guiState.radio!({ name="areaDistribution", labelLeft="distribution", buttons={
 							{value=LG.AreaSpreadDistribution.NONE,             label="none",    tooltip="None"},
 							{value=LG.AreaSpreadDistribution.ELLIPSE,          label="ellip",   tooltip="Ellipse"},
@@ -146,7 +146,7 @@ export setupGuiFrames :: () {
 
 					guiState.separator!({ thick=false }),
 
-					guiState.section!({ label="Direction",
+					guiState.section!({ name="directionSection", label="Direction", icon16="direction",
 						guiState.hbox!({
 							guiState.direction!({ name="direction", linkSpread="directionSpread" }),
 							guiState.slider!({ name="directionSpread", labelLeft="spread", min=0, max=math.TAU, readoutMulti=360/math.TAU, readout="%d°", weight=1, inset=50 }),
@@ -155,14 +155,14 @@ export setupGuiFrames :: () {
 
 					guiState.separator!({ thick=true }),
 
-					guiState.section!({ label="Speed",
+					guiState.section!({ name="speedSection", label="Speed", icon16="speed",
 						guiState.slider!({ name="speedMin", labelLeft="min", min=-2000, max=2000, limitName="speed", readout="%.0f / sec", linkMultiDrag={"speedMax"} }),
 						guiState.slider!({ name="speedMax", labelLeft="max", min=-2000, max=2000, limitName="speed", readout="%.0f / sec", linkMultiDrag={"speedMin"} }),
 					}),
 
 					guiState.separator!({ thick=false }),
 
-					guiState.section!({ label="AccLinear",
+					guiState.section!({ name="accelerationLinearSection", label="AccLinear", icon16="accelerationLinear",
 						guiState.slider!({ name="accLinearXmin", labelLeft="xmin", min=-5000, max=5000, limitName="accLinear", readout="%.0f / sec²", linkMultiDrag={"accLinearXmax"} }),
 						guiState.slider!({ name="accLinearXmax", labelLeft="xmax", min=-5000, max=5000, limitName="accLinear", readout="%.0f / sec²", linkMultiDrag={"accLinearXmin"} }),
 						guiState.slider!({ name="accLinearYmin", labelLeft="ymin", min=-5000, max=5000, limitName="accLinear", readout="%.0f / sec²", linkMultiDrag={"accLinearYmax"} }),
@@ -171,28 +171,28 @@ export setupGuiFrames :: () {
 
 					guiState.separator!({ thick=false }),
 
-					guiState.section!({ label="AccRadial",
+					guiState.section!({ name="accelerationRadialSection", label="AccRadial", icon16="accelerationRadial",
 						guiState.slider!({ name="radialAccelerationMin", labelLeft="min", min=-10000, max=10000, limitName="radialAcceleration", readout="%.0f / sec²", linkMultiDrag={"radialAccelerationMax"} }),
 						guiState.slider!({ name="radialAccelerationMax", labelLeft="max", min=-10000, max=10000, limitName="radialAcceleration", readout="%.0f / sec²", linkMultiDrag={"radialAccelerationMin"} }),
 					}),
 
 					guiState.separator!({ thick=false }),
 
-					guiState.section!({ label="AccTangent",
+					guiState.section!({ name="accelerationTangentSection", label="AccTangent", icon16="accelerationTangent",
 						guiState.slider!({ name="tangentialAccelerationMin", labelLeft="min", min=-10000, max=10000, limitName="tangentialAcceleration", readout="%.0f / sec²", linkMultiDrag={"tangentialAccelerationMax"} }),
 						guiState.slider!({ name="tangentialAccelerationMax", labelLeft="max", min=-10000, max=10000, limitName="tangentialAcceleration", readout="%.0f / sec²", linkMultiDrag={"tangentialAccelerationMin"} }),
 					}),
 
 					guiState.separator!({ thick=false }),
 
-					guiState.section!({ label="Damping",
+					guiState.section!({ name="dampingSection", label="Damping", icon16="damping",
 						guiState.slider!({ name="linearDampingMin", labelLeft="min", min=-20, max=20, limitName="linearDamping", readout="%.2f", linkMultiDrag={"linearDampingMax"} }),
 						guiState.slider!({ name="linearDampingMax", labelLeft="max", min=-20, max=20, limitName="linearDamping", readout="%.2f", linkMultiDrag={"linearDampingMin"} }),
 					}),
 
 					guiState.separator!({ thick=true }),
 
-					guiState.section!({ label="Rotation",
+					guiState.section!({ name="rotationSection", label="Rotation", icon16="rotation",
 						guiState.hbox!({
 							guiState.direction!({ name="rotationMin", linkOther="rotationMax", linkMultiDrag={"rotationMax"}, labelLeft="min/max" }),
 							guiState.direction!({ name="rotationMax", linkOther="rotationMin", linkMultiDrag={"rotationMin"}, }),
@@ -202,7 +202,7 @@ export setupGuiFrames :: () {
 
 					guiState.separator!({ thick=false }),
 
-					guiState.section!({ label="Spin",
+					guiState.section!({ name="spinSection", label="Spin", icon16="spin",
 						guiState.slider!({ name="spinMin", labelLeft="at start", min=-8*math.TAU, max=8*math.TAU, limitName="spin", readoutMulti=1/math.TAU, readout="%.2f turns / sec", linkMultiDrag={"spinMax"} }),
 						guiState.slider!({ name="spinMax", labelLeft="at end",   min=-8*math.TAU, max=8*math.TAU, limitName="spin", readoutMulti=1/math.TAU, readout="%.2f turns / sec", linkMultiDrag={"spinMin"} }),
 						guiState.slider!({ name="spinVariation", labelLeft="variation", min=0, max=1, readoutMulti=100, readout="%d%%" }),
@@ -210,7 +210,7 @@ export setupGuiFrames :: () {
 
 					guiState.separator!({ thick=true }),
 
-					guiState.section!({ name="sizes", label="Size",
+					guiState.section!({ name="sizesSection", label="Size", icon16="size",
 						guiState.hbox!({ name="sizeContainer1", data=1, labelLeft="#1",
 							guiState.buttons!({ data=1, buttons={{name="sizeRemove",image="iconDelete",tooltip="Remove size"},{name="sizeAdd",image="iconAdd",tooltip="Add/duplicate size"}} }),
 							guiState.slider!({ name="size1", data=1, min=0, max=8, limitName="size", readout="%.2f", weight=1 }),
@@ -248,7 +248,7 @@ export setupGuiFrames :: () {
 
 					guiState.separator!({ thick=true }),
 
-					guiState.section!({ label="Color",
+					guiState.section!({ name="colorSection", label="Color", icon16="brush",
 						guiState.hbox!({
 							guiState.vbox!({ name="colors", weight=1,
 								guiState.hbox!({ name="colorContainer1", labelLeft="#1",
@@ -377,7 +377,7 @@ export setupGuiFrames :: () {
 			guiState.text!({ text="Export", large=true }),
 
 			guiState.separator!({ thick=false }),
-			guiState.section!({ label="Base folder",
+			guiState.section!({ name="exportProject_baseDirectorySection", label="Base folder", icon16="folder",
 				guiState.inputText!({ name="exportProject_baseDirectory", tooltip="Absolute path, or relative to the .hotparticles file" }),
 				guiState.hbox!({ labelLeft="resulting path",
 					guiState.text!({ name="exportProject_baseDirectoryResult", weight=1 }),
@@ -386,7 +386,7 @@ export setupGuiFrames :: () {
 			}),
 
 			guiState.separator!({ thick=true }),
-			guiState.section!({ label="Particles",
+			guiState.section!({ name="exportProject_particlesSection", label="Particles", icon16="particles",
 				guiState.hbox!({
 					guiState.checkbox!({ name="exportProject_particles_writeFile", label="export particle systems" }),
 					guiState.checkbox!({ name="exportProject_particles_overwrite", label="overwrite existing", tooltip="Overwrite existing files without confirmation" }),
@@ -402,7 +402,7 @@ export setupGuiFrames :: () {
 			}),
 
 			guiState.separator!({ thick=true }),
-			guiState.section!({ label="Textures",
+			guiState.section!({ name="exportProject_texturesSection", label="Textures", icon16="texture",
 				guiState.hbox!({
 					guiState.checkbox!({ name="exportProject_textures_copyFiles", label="copy texture files" }),
 					guiState.checkbox!({ name="exportProject_textures_overwrite", label="overwrite existing", tooltip="Overwrite existing files without confirmation" }),
@@ -415,7 +415,7 @@ export setupGuiFrames :: () {
 			}),
 
 			guiState.separator!({ thick=true }),
-			guiState.section!({ label="Clipboard",
+			guiState.section!({ name="exportProject_clipboardSection", label="Clipboard", icon16="clipboard",
 				guiState.buttons!({ align=gui.Alignment.LEFT, buttonMinHeight=MEDIUM_BUTTON_HEIGHT, buttons={{name="exportProject_clipboard_export",label="Export to clipboard"}}}),
 				guiState.buttons!({ name="exportProject_clipboard_template", labelLeft="template", align=gui.Alignment.LEFT, buttonMinHeight=MEDIUM_BUTTON_HEIGHT,
 					buttons={{image="iconDown",label="defaultLuaClipboard"}},
@@ -434,7 +434,7 @@ export setupGuiFrames :: () {
 			guiState.separator!({ thick=true }),
 			guiState.buttons!({ buttons={{name="animation_empty",label="Remove all frames"}} }),
 			guiState.separator!({ thick=true }),
-			guiState.section!({ label="Sequence",
+			guiState.section!({ label="Sequence", icon16="sequence",
 				guiState.hbox!({
 					guiState.inputText!({ name="animation_sequence_areaPosition", labelLeft="area x/y",  value="0 0", inset=15, weight=1, tooltip="Top/left corner of first frame. Negative means offset from bottom/right corner of texture. Format: [x y]" }),
 					guiState.inputText!({ name="animation_sequence_areaSize",     labelLeft="area size", value="0 0", inset=50, weight=1, tooltip="Size of area containing frames. Non-positive means offset from bottom/right corner of texture. Format: [width height] or [size]" }),
@@ -1278,7 +1278,7 @@ export setupGuiCallbacks :: () {
 		markEdited(project)
 	}
 
-	guiState.onRefresh.sizes = (slider:gui.Slider) {
+	guiState.onRefresh.sizesSection = (slider:gui.Slider) {
 		local project, system = getCurrentProjectAndSystem()
 		for 1, 8  gui.setActive(guiState, format("sizeContainer%d", it), (system.psSizes[it] ~= NULL))
 	}

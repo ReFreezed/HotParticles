@@ -248,7 +248,9 @@ export Scrollable :: struct {
 }
 
 export Section :: struct {
-	using Element,
+	using Widget,
+
+	icon16 = "",
 }
 
 local Box :: struct {
@@ -906,6 +908,19 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int) {
 			case Color:  !through
 			case Direction:
 				scheduleSaveWorkspace()
+
+			case Section:
+				if state.hoveredId {
+					local section = cast(Section) widget
+
+					if app.hiddenSections[section.name]
+						app.hiddenSections[section.name] = NULL
+					else
+						app.hiddenSections[section.name] = true
+
+					scheduleSaveWorkspace()
+					state.layoutNeedsUpdate = true
+				}
 		}
 	}
 
@@ -1099,17 +1114,28 @@ local calculateNaturalSize :: (state:State, el:Element) {
 			}
 
 		case Section:
-			local section  = cast(Section) el
-			local contentW = 0
-			local contentH = 0
+			local section = cast(Section) el
 
-			for section  if it.active {
-				contentW  = math.max(contentW, it.layoutWidth)
-				contentH += it.layoutHeight + SPACING
+			if app.hiddenSections[section.name] {
+				section.layoutWidth  = SECTION_LABEL_WIDTH + (section.icon16 ? 16 : 0)
+				section.layoutHeight = math.max(fontNormal.getHeight!(), (section.icon16 ? 16 : 0))
+
+			} else {
+				local contentW = 0
+				local contentH = 0
+
+				if not app.hiddenSections[section.name] {
+					for section  if it.active {
+						contentW  = math.max(contentW, it.layoutWidth)
+						contentH += it.layoutHeight + SPACING
+					}
+				}
+
+				local sectionSideHeight = (section.label ? fontNormal.getHeight!() : 0) + (section.icon16 ? 16+SPACING : 0)
+
+				section.layoutWidth  = SECTION_LABEL_WIDTH + contentW
+				section.layoutHeight = math.max(contentH-SPACING, sectionSideHeight)
 			}
-
-			section.layoutWidth  = SECTION_LABEL_WIDTH + contentW
-			section.layoutHeight = contentH - SPACING
 
 		case Hbox:
 			local hbox     = cast(Hbox) el
@@ -1306,7 +1332,7 @@ local positionAndFit :: (state:State, el:Element, x,y,w,h:int) {
 			x += SECTION_LABEL_WIDTH
 			w -= SECTION_LABEL_WIDTH
 
-			positionAndFitChildrenV(state, section, x, y, w, h)
+			if not app.hiddenSections[section.name]  positionAndFitChildrenV(state, section, x, y, w, h)
 
 		case Hbox:
 			local hbox         = cast(Hbox) el
@@ -1563,13 +1589,36 @@ local drawElement :: (state:State, el:Element) {
 
 		case Section:
 			local section = cast(Section) el
+			local hidden  = app.hiddenSections[section.name]
+
+			if section.id == state.hoveredId {
+				local x = section.layoutX - SPACING
+				local y = section.layoutY - BUTTON_PADDING_Y
+				local w = fontNormal.getWidth!(section.label) + 2*SPACING
+				local h = fontNormal.getHeight!() + 2*BUTTON_PADDING_Y
+				LG.setColor(1, 1, 1, .45)
+				LG.rectangle(LG.DrawMode.FILL, x, y, w, h, BUTTON_RADIUS)
+			}
+
+			if section.icon16 {
+				local x, y: int
+				if hidden {
+					x = section.layoutX + SECTION_LABEL_WIDTH
+					y = section.layoutY
+				} else {
+					x = section.layoutX
+					y = section.layoutY + section.layoutHeight - 16
+				}
+				LG.setColor(1, 1, 1, .15)
+				LG.draw(imageIcons16, icon16Quads[section.icon16], x, y)
+			}
 
 			if section.label {
 				LG.setColor(1, 1, 1, TEXT_OPACITY)
 				LG.print(section.label, section.layoutX, section.layoutY)
 			}
 
-			drawChildren(state, section)
+			if not hidden  drawChildren(state, section)
 
 		case Hbox:
 			local hbox = cast(Hbox) el
@@ -2227,9 +2276,11 @@ export getElementAt :: (state:State, x,y:int) -> (found:bool, el:Element) {
 
 			if el.type == Scrollable  y -= math.round((cast(Scrollable)el).scroll)
 
-			for < el {
-				local subEl = helper(state, it, x, y)
-				if subEl ~= NULL  return subEl
+			if not (el.type == Section and app.hiddenSections[el.name]) {
+				for < el {
+					local subEl = helper(state, it, x, y)
+					if subEl ~= NULL  return subEl
+				}
 			}
 
 			return el
@@ -2260,6 +2311,14 @@ export getWidgetAt :: (state:State, x,y:int) -> (found:bool, widget:Widget) {
 
 		case Scrollable:
 			if x < widget.layoutX + widget.layoutWidth - SCROLLBAR_WIDTH  return false, NULL
+			return true, cast(Widget)widget
+
+		case Section:
+			local section = cast(Section) widget
+			if not section.name   return false, NULL
+			if not section.label  return false, NULL
+			if y >= widget.layoutY + fontNormal.getHeight!() + getScrollOffset(section)  return false, NULL
+			if x >= widget.layoutX + fontNormal.getWidth!(section.label)                 return false, NULL
 			return true, cast(Widget)widget
 
 		case:

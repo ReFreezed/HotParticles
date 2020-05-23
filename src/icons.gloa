@@ -150,4 +150,49 @@ export generateIcons :: () {
 		"            ",
 		"            ",
 	})
+
+	local createQuads :: (image:LG.Image, qw,qh:int, names:[]string) -> QuadTable {
+		local iw, ih = image.getDimensions!()
+		local cols   = iw // qw
+		local quads: QuadTable
+
+		for names  if it {
+			local qx = qw * ((itIndex-1) %  cols)
+			local qy = qh * ((itIndex-1) // cols)
+			quads[it] = LG.newQuad(qx,qy, qw,qh, iw,ih)
+		}
+
+		return quads
+	}
+
+	icon16Quads = createQuads(imageIcons16, 16, 16, {
+		-- 1
+		"pixelate",
+		"background",
+		"movement",
+		"texture",
+		"scale",
+		"spawn",
+		"time",
+		"areaSize",
+		-- 2
+		"direction",
+		"speed",
+		"accelerationLinear",
+		"accelerationRadial",
+		"accelerationTangent",
+		"damping",
+		"rotation",
+		"spin",
+		-- 3
+		"size",
+		"brush",
+		"folder",
+		"particles",
+		"clipboard",
+		"sequence",
+		"",
+		"",
+		-- 4
+	})
 }

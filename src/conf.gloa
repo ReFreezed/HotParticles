@@ -5,6 +5,7 @@ local main :: () {
 		identity         = "Hot Particles"
 
 		window.title     = "Hot Particles"
+		window.icon      = "gfx/appIcon16.png"
 		window.width     = 1400
 		window.height    = 800
 		window.resizable = true

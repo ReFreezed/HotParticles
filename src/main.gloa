@@ -63,6 +63,7 @@ export fontLarge:  LG.Font = NULL
 export imageBoxGradient: LG.Image = NULL
 export imageChecker:     LG.Image = NULL
 export imageGradient:    LG.Image = NULL
+export imageIcons16:     LG.Image = NULL
 export imageNormal:      LG.Image = NULL
 export imagePixel:       LG.Image = NULL
 export imageRainbow:     LG.Image = NULL
@@ -71,6 +72,8 @@ export particleImageNames: []string
 export particleImageDatas: struct { !key:string, !value:LF.FileData } -- FileData, not ImageData! The latter is problematic when we export textures.
 export particleImages:     struct { !key:string, !value:LG.Image    }
 export guiImages:          struct { !key:string, !value:LG.Image    }
+
+export icon16Quads: QuadTable = NULL
 
 local canvasGui:   LG.Canvas = NULL
 local canvasWorld: LG.Canvas = NULL
@@ -108,6 +111,10 @@ local zoomTime = -9999.00
 
 
 
+export QuadTable :: struct { !key:string, !value:LG.Quad }
+
+
+
 export App :: struct {
 	-- Saved workspace data:
 
@@ -122,6 +129,8 @@ export App :: struct {
 	recentFolders: []string,
 
 	bookmarkedFolders: []string,
+
+	hiddenSections: struct { !key:string, !value:bool },
 }
 
 
@@ -712,6 +721,7 @@ local onLoad :: (args:[]string, argsRaw:[]string) {
 	imageBoxGradient = LG.newImage("gfx/boxGradient.png")
 	imageChecker     = LG.newImage("gfx/checker.png") ; imageChecker.setWrap!(LG.WrapMode.REPEAT, LG.WrapMode.REPEAT) ; imageChecker.setFilter!(LG.FilterMode.NEAREST, LG.FilterMode.NEAREST)
 	imageGradient    = LG.newImage("gfx/gradient.png")
+	imageIcons16     = LG.newImage("gfx/icons.png")
 	imageNormal      = LG.newImage("gfx/normal.png")
 	imagePixel       = LG.newImage("gfx/pixel.png")
 	imageRainbow     = LG.newImage("gfx/rainbow.png")

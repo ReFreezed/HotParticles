@@ -184,6 +184,12 @@ export saveWorkspace :: () {
 	insert(buffer, "recentFolders")       ; writeValue(buffer, eol=true, app.recentFolders)
 	insert(buffer, "bookmarkedFolders")   ; writeValue(buffer, eol=true, app.bookmarkedFolders)
 
+	insert(buffer, "hiddenSections")
+	for cast(table) app.hiddenSections  if it == true {
+		writeValue(buffer, cast(string) itIndex)
+	}
+	insert(buffer, "\n")
+
 	for app.projects  if not it.preview {
 		writeProject(buffer, it, isSavingWorkspace=true)
 	}
@@ -430,6 +436,11 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 						local ^ok, ^ptr, paths = readStringArray(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
 						app.bookmarkedFolders = paths
+
+					case "hiddenSections":
+						local ^ok, ^ptr, names = readStringArray(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
+						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
+						for names  app.hiddenSections[it] = true
 
 					case:
 						return parsingError(path, ln, "Unknown program parameter '%s'.", param)
