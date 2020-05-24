@@ -36,7 +36,7 @@
 	pressButton
 	refresh, refreshRecursively, refreshAll
 	setActive
-	showContextMenu, hideContextMenu
+	showContextMenu, showContextMenuWithInput, hideContextMenu
 
 --============================================================]]
 
@@ -418,12 +418,7 @@ export onKeyPressed :: (state:State, key:LK.KeyConstant, scancode:LK.Scancode, i
 	}
 	if state.activeId  return true
 
-	if state.contextMenu ~= NULL {
-		if key == "escape"  hideContextMenu(state)
-		return true
-	}
-
-	-- Key events for inputs.
+	-- Key events for inputs (which may be in a context menu).
 	if state.focusId {
 		local input = cast(InputText) state.elementsById[state.focusId]
 		if key == "escape" {
@@ -434,6 +429,12 @@ export onKeyPressed :: (state:State, key:LK.KeyConstant, scancode:LK.Scancode, i
 		} else {
 			input.field.keypressed!(key, scancode, isRepeat)
 		}
+		return true
+	}
+
+	-- Context menu.
+	if state.contextMenu ~= NULL {
+		if key == "escape"  hideContextMenu(state)
 		return true
 	}
 
@@ -956,39 +957,49 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int) {
 				case Direction:
 					local direction = cast(Direction) widget
 
-					showContextMenu(guiState, {"Copy angle","Paste angle"}, [state,direction] (i:int) {
-						if i == {
-							case 1:
-								clipboardAngle    = direction.angle
-								hasClipboardAngle = true
+					showContextMenuWithInput(guiState, toString(direction.angle*360/math.TAU), {"Copy angle","Paste angle"},
+						[state,direction] (i:int) {
+							if i == {
+								case 1:
+									clipboardAngle    = direction.angle
+									hasClipboardAngle = true
 
-							case 2:
-								if not hasClipboardAngle  return
+								case 2:
+									if not hasClipboardAngle  return
 
-								direction.angle = clipboardAngle
-								triggerActionEvent(state, direction, "", 0)
+									direction.angle = clipboardAngle
+									triggerActionEvent(state, direction, "", 0)
+							}
+						},
+						[state,direction] (text:string) {
+							commitValueFromInput(state, direction, text)
 						}
-					})
+					)
 
 				case Slider:
 					local slider = cast(Slider) widget
 
-					showContextMenu(guiState, {"Copy value","Paste value"--[[,"Reset value"@Incomplete]],"Reset min/max limits"}, [state,slider] (i:int) {
-						if i == {
-							case 1:
-								clipboardScalar    = slider.value
-								hasClipboardScalar = true
+					showContextMenuWithInput(guiState, toString(slider.value*slider.readoutMulti), {"Copy value","Paste value"--[[,"Reset value"@Incomplete]],"Reset min/max limits"},
+						[state,slider] (i:int) {
+							if i == {
+								case 1:
+									clipboardScalar    = slider.value
+									hasClipboardScalar = true
 
-							case 2:
-								if not hasClipboardScalar  return
+								case 2:
+									if not hasClipboardScalar  return
 
-								slider.value = clipboardScalar
-								triggerActionEvent(state, slider, "", 0)
+									slider.value = clipboardScalar
+									triggerActionEvent(state, slider, "", 0)
 
-							case 3:
-								forgetLimitMultiplier(slider)
+								case 3:
+									forgetLimitMultiplier(slider)
+							}
+						},
+						[state,slider] (text:string) {
+							commitValueFromInput(state, slider, text)
 						}
-					})
+					)
 
 				case Color:
 					local COMPONENT_TITLES: Table(int, string) : {
@@ -1000,6 +1011,7 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int) {
 
 					local colorEl   = cast(Color) widget
 					local component = state.hoveredSubid
+					local valueStr  = toString(colorEl.color[component] * (component == 1 ? 360 : 100))
 
 					local items = {
 						"Copy "..COMPONENT_TITLES[component],
@@ -1008,31 +1020,36 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int) {
 						"Paste color",
 					}
 
-					showContextMenu(guiState, items, [state,colorEl,component] (i:int) {
-						if i == {
-							case 1:
-								clipboardScalar    = colorEl.color[component]
-								hasClipboardScalar = true
+					showContextMenuWithInput(guiState, valueStr, items,
+						[state,colorEl,component] (i:int) {
+							if i == {
+								case 1:
+									clipboardScalar    = colorEl.color[component]
+									hasClipboardScalar = true
 
-							case 2:
-								for 1, 4  clipboardColor[it] = colorEl.color[it]
-								hasClipboardColor = true
+								case 2:
+									for 1, 4  clipboardColor[it] = colorEl.color[it]
+									hasClipboardColor = true
 
-							case 3:
-								if not hasClipboardScalar  return
+								case 3:
+									if not hasClipboardScalar  return
 
-								colorEl.color[component] = clipboardScalar
-								triggerActionEvent(state, colorEl, "", component)
+									colorEl.color[component] = clipboardScalar
+									triggerActionEvent(state, colorEl, "", component)
 
-							case 4:
-								if not hasClipboardColor  return
+								case 4:
+									if not hasClipboardColor  return
 
-								for 1, 4 {
-									colorEl.color[it] = clipboardColor[it]
-									triggerActionEvent(state, colorEl, "", it)
-								}
+									for 1, 4 {
+										colorEl.color[it] = clipboardColor[it]
+										triggerActionEvent(state, colorEl, "", it)
+									}
+							}
+						},
+						[state,colorEl,component] (text:string) {
+							commitValueFromInput(state, colorEl, component, text)
 						}
-					})
+					)
 			}
 		}
 	}
@@ -1881,7 +1898,7 @@ local drawElement :: (state:State, el:Element) {
 			local valueX = x + SPACING
 
 			-- Background.
-			LG.setColor(0, 0, 0, .5)
+			LG.setColor(0, 0, 0, (input.style == Style.CONTEXT_MENU ? .8 : .5))
 			LG.rectangle(LG.DrawMode.FILL, x, y, w, h, BUTTON_RADIUS)
 
 			LG.pushAll()
@@ -2737,6 +2754,67 @@ export showContextMenu :: (state:State, x,y:int, items:[]string, cb:(i:int)) {
 	}
 }
 
+export showContextMenuWithInput :: (state:State, value:string, items:[]string, cb:(i:int), cbInput:(text:string)) {
+	local mx, my = LM.getPosition()
+	showContextMenuWithInput(state, mx, my, value, items, cb, cbInput)
+}
+export showContextMenuWithInput :: (state:State, x,y:int, value:string, items:[]string, cb:(i:int), cbInput:(text:string)) {
+	hideContextMenu(state)
+
+	local buttonList: []Button
+	for items {
+		local ok, label, shortcut = matchPattern(it, "^(.*)\t(.*)$")
+		if ok
+			insert(buttonList, cast(Button){ label=cast(string)label, shortcut=cast(string)shortcut })
+		else
+			insert(buttonList, cast(Button){ label=it })
+	}
+
+	local input = guiState.inputText!({ name="__contextMenuInput", value=value, style=Style.CONTEXT_MENU })
+
+	local contextMenu = state.frame!({ data=cb, x=x, y=y, minWidth=CONTEXT_MENU_MIN_WIDTH, layout=Layout.FLOATING, style=Style.CONTEXT_MENU,
+		input,
+		guiState.buttons!({ name="__contextMenuButtons", vertical=true, align=Alignment.LEFT, style=Style.CONTEXT_MENU, buttonMinHeight=16,
+			buttons = {unpack(buttonList)},
+		}),
+	})
+
+	state.contextMenu = contextMenu
+	insert(state.frames, contextMenu)
+
+	state.layoutNeedsUpdate = true
+	updateLayoutIfNeeded(state)
+
+	x       = contextMenu.layoutX
+	y       = contextMenu.layoutY
+	local w = contextMenu.layoutWidth
+	local h = contextMenu.layoutHeight
+
+	if x   > LG.getWidth()-w  state.layoutNeedsUpdate, contextMenu.x = true, math.max(LG.getWidth()-w, 0)
+	if y+h > LG.getHeight()   state.layoutNeedsUpdate, contextMenu.y = true, y - h
+
+	state.onAction.__contextMenuInput = [cbInput] (input:InputText) {
+		cbInput(input.value)
+		scheduleSaveWorkspace()
+	}
+	state.onSubmit.__contextMenuInput = [state,cb] (input:InputText) {
+		state.contextMenu.data = NULL
+		hideContextMenu(state)
+		cb(0)
+		scheduleSaveWorkspace()
+	}
+
+	state.onAction.__contextMenuButtons = [state,cb] (buttons:Buttons, i:int) {
+		state.contextMenu.data = NULL
+		hideContextMenu(state)
+		cb(i)
+		scheduleSaveWorkspace()
+	}
+
+	gui.setFocus(state, input)
+	input.field.selectAll!()
+}
+
 export hideContextMenu :: (state:State) -> (success:bool) {
 	local contextMenu = state.contextMenu
 	if contextMenu == NULL  return false
@@ -2861,6 +2939,51 @@ local applyExponential :: (slider:Slider, value01:float, exponent:float) -> floa
 	value01 = math.powKeepSign((value01 - zero01) / rangeOnSide, exponent) * rangeOnSide + zero01
 
 	return value01
+}
+
+
+
+local commitValueFromInput :: (state:State, slider:Slider, text:string) {
+	local ok, n = stringToFloat(text)
+	if not ok  return
+
+	n = n / slider.readoutMulti
+
+	if slider.isInt  n = math.round(n)
+
+	if n < 0 and slider.min == 0 and slider.limitCenter == 0 {
+		n = 0
+	}
+
+	if n == slider.value  return
+
+	slider.value = n
+	triggerActionEvent(state, slider, "", 0)
+}
+
+local commitValueFromInput :: (state:State, direction:Direction, text:string) {
+	local ok, angle = stringToFloat(text)
+	if not ok  return
+
+	angle = angle / 360 * math.TAU
+
+	if angle == direction.angle  return
+
+	direction.angle = angle
+	triggerActionEvent(state, direction, "", 0)
+}
+
+local commitValueFromInput :: (state:State, colorEl:Color, component:int, text:string) {
+	local ok, value = stringToFloat(text)
+	if not ok  return
+
+	value = value / (component == 1 ? 360 : 100)
+	value = math.clamp01(value)
+
+	if value == colorEl.color[component]  return
+
+	colorEl.color[component] = value
+	triggerActionEvent(state, colorEl, "", component)
 }
 
 
