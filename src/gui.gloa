@@ -357,7 +357,8 @@ export Slider :: struct {
 	readout      = "",
 	readoutZero  = "",
 
-	isInt = false,
+	isInt       = false,
+	exponential = false,
 	--
 }
 
@@ -683,18 +684,19 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int) {
 				}
 
 			} else {
-				local x1    = slider.layoutX +                      SLIDER_MIN_WIDTH // 2
-				local x2    = slider.layoutX + slider.layoutWidth - SLIDER_MIN_WIDTH // 2
-				local value = (mx-x1) / (x2-x1)
+				local x1      = slider.layoutX +                      SLIDER_MIN_WIDTH // 2
+				local x2      = slider.layoutX + slider.layoutWidth - SLIDER_MIN_WIDTH // 2
+				local value01 = (mx-x1) / (x2-x1)
+				value01       = applyExponential(slider, value01, 2)
 
 				if mod == ModifierKey.C or mod == ModifierKey.CS {
-					value = math.round(value * slider.steps) / slider.steps
+					value01 = math.round(value01 * slider.steps) / slider.steps
 				}
 
-				value = math.lerp(
+				local value = math.lerp(
 					applyLimitMultiplier(slider, slider.min),
 					applyLimitMultiplier(slider, slider.max),
-					math.clamp01(value)
+					math.clamp01(value01)
 				)
 
 				if slider.isInt  value = math.round(value)
@@ -1922,6 +1924,7 @@ local drawElement :: (state:State, el:Element) {
 			local x2      = slider.layoutX + slider.layoutWidth - SLIDER_MIN_WIDTH // 2
 			local w       = x2 - x1
 			local value01 = math.clamp01((slider.value - applyLimitMultiplier(slider, slider.min)) / (applyLimitMultiplier(slider, slider.max) - applyLimitMultiplier(slider, slider.min)))
+			value01       = applyExponential(slider, value01, .5)
 			local handleX = x1 + math.round(value01 * w)
 			local y       = slider.layoutY + slider.layoutHeight // 2
 
@@ -1938,18 +1941,18 @@ local drawElement :: (state:State, el:Element) {
 			LG.rectangle(LG.DrawMode.FILL, x1, y-1, w, 2)
 
 			-- Guides.
-			LG.setColor(1, 1, 1, .1)
+			LG.setColor(1, 1, 1, .12)
 			LG.rectangle(LG.DrawMode.FILL, x1, y-3, +1, 6)
 			LG.rectangle(LG.DrawMode.FILL, x2, y-3, -1, 6)
 			if w >= 50 {
-				LG.rectangle(LG.DrawMode.FILL, math.round(x1+1/4*w), y-3, 1, 6)
-				LG.rectangle(LG.DrawMode.FILL, math.round(x1+2/4*w), y-3, 1, 6)
-				LG.rectangle(LG.DrawMode.FILL, math.round(x1+3/4*w), y-3, 1, 6)
+				LG.rectangle(LG.DrawMode.FILL, math.round(x1+applyExponential(slider,1/4,.5)*w), y-3, 1, 6)
+				LG.rectangle(LG.DrawMode.FILL, math.round(x1+applyExponential(slider,2/4,.5)*w), y-3, 1, 6)
+				LG.rectangle(LG.DrawMode.FILL, math.round(x1+applyExponential(slider,3/4,.5)*w), y-3, 1, 6)
 				if w >= 200 {
-					LG.rectangle(LG.DrawMode.FILL, math.round(x1+1/8*w), y-1, 1, 2)
-					LG.rectangle(LG.DrawMode.FILL, math.round(x1+3/8*w), y-1, 1, 2)
-					LG.rectangle(LG.DrawMode.FILL, math.round(x1+5/8*w), y-1, 1, 2)
-					LG.rectangle(LG.DrawMode.FILL, math.round(x1+7/8*w), y-1, 1, 2)
+					LG.rectangle(LG.DrawMode.FILL, math.round(x1+applyExponential(slider,1/8,.5)*w), y-1, 1, 2)
+					LG.rectangle(LG.DrawMode.FILL, math.round(x1+applyExponential(slider,3/8,.5)*w), y-1, 1, 2)
+					LG.rectangle(LG.DrawMode.FILL, math.round(x1+applyExponential(slider,5/8,.5)*w), y-1, 1, 2)
+					LG.rectangle(LG.DrawMode.FILL, math.round(x1+applyExponential(slider,7/8,.5)*w), y-1, 1, 2)
 				}
 			}
 
@@ -1957,7 +1960,6 @@ local drawElement :: (state:State, el:Element) {
 			local grey = (highlight ? .8 : .65)
 			LG.setColor(grey, grey, grey)
 			LG.rectangle(LG.DrawMode.FILL, handleX-1, y-SLIDER_MIN_WIDTH/2, 2, SLIDER_MIN_WIDTH)
-			-- LG.circle(LG.DrawMode.FILL, handleX, y, 3, 16)
 
 			-- Readout.
 			local COLOR_TEXT:   love.Color: {1,1,1,.8*TEXT_OPACITY}
@@ -2846,6 +2848,19 @@ local forgetLimitMultiplier :: (slider:Slider) {
 	project.guiLimits[slider.limitName] = NULL
 
 	-- Note: We're not calling scheduleSaveWorkspace() here - that's the caller's responsibility!
+}
+
+
+
+local applyExponential :: (slider:Slider, value01:float, exponent:float) -> float {
+	if not slider.exponential  return value01
+
+	local zero01      = slider.min / (slider.min - slider.max)
+	local rangeOnSide = (value01 < zero01) ? zero01 : 1-zero01
+
+	value01 = math.powKeepSign((value01 - zero01) / rangeOnSide, exponent) * rangeOnSide + zero01
+
+	return value01
 }
 
 
