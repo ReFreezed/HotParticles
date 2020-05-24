@@ -558,7 +558,7 @@ export setupGuiCallbacks :: () {
 			local label = (it.edited ? format("%s •", it.displayedName) : it.displayedName)
 			insert(tabs.buttons, cast(gui.Button){ label=label, tooltip=it.path, draggable=true })
 		}
-		insert(tabs.buttons, cast(gui.Button){ image="iconAdd", tooltip="New project" })
+		insert(tabs.buttons, cast(gui.Button){ image="iconAdd", tooltip="New project (Ctrl+N)" })
 
 		tabs.index = app.currentProjectIndex
 	}
@@ -576,6 +576,8 @@ export setupGuiCallbacks :: () {
 		setCurrentProject(#app.projects)
 	}
 	guiState.onOption.projects = (tabs:gui.Tabs, projectIndex:int) {
+		if projectIndex == #tabs.buttons  return
+
 		gui.showContextMenu(guiState, {"Close\tCtrl+W","Duplicate"}, [projectIndex] (i:int) {
 			if i == {
 				case 1:
@@ -826,6 +828,8 @@ export setupGuiCallbacks :: () {
 		setCurrentSystem(#project.systems)
 	}
 	guiState.onOption.systems = (tabs:gui.Tabs, systemIndex:int) {
+		if systemIndex == #tabs.buttons  return
+
 		gui.showContextMenu(guiState, {"Delete\tCtrl+Delete","Duplicate\tCtrl+D"}, [systemIndex] (i:int) {
 			if i == {
 				case 1:
@@ -2347,14 +2351,14 @@ export setupGuiCallbacks :: () {
 			publicParticleSystem.spread           = ps.getSpread!()
 			publicParticleSystem.texturePreset    = system.textureName
 
-			do { local min,max = ps.getLinearDamping!()          ; publicParticleSystem.linearDamping          = cast(table) {min,max, min=min,max=max} }
-			do { local min,max = ps.getOffset!()                 ; publicParticleSystem.offset                 = cast(table) {min,max, min=min,max=max} }
-			do { local min,max = ps.getParticleLifetime!()       ; publicParticleSystem.particleLifetime       = cast(table) {min,max, min=min,max=max} }
-			do { local min,max = ps.getRadialAcceleration!()     ; publicParticleSystem.radialAcceleration     = cast(table) {min,max, min=min,max=max} }
-			do { local min,max = ps.getRotation!()               ; publicParticleSystem.rotation               = cast(table) {min,max, min=min,max=max} }
-			do { local min,max = ps.getSpeed!()                  ; publicParticleSystem.speed                  = cast(table) {min,max, min=min,max=max} }
-			do { local min,max = ps.getSpin!()                   ; publicParticleSystem.spin                   = cast(table) {min,max, min=min,max=max} }
-			do { local min,max = ps.getTangentialAcceleration!() ; publicParticleSystem.tangentialAcceleration = cast(table) {min,max, min=min,max=max} }
+			do { local min,max   = ps.getLinearDamping!()          ; publicParticleSystem.linearDamping          = cast(table) {min,max, min=min,max=max} }
+			do { local min,max   = ps.getParticleLifetime!()       ; publicParticleSystem.particleLifetime       = cast(table) {min,max, min=min,max=max} }
+			do { local min,max   = ps.getRadialAcceleration!()     ; publicParticleSystem.radialAcceleration     = cast(table) {min,max, min=min,max=max} }
+			do { local min,max   = ps.getRotation!()               ; publicParticleSystem.rotation               = cast(table) {min,max, min=min,max=max} }
+			do { local min,max   = ps.getSpeed!()                  ; publicParticleSystem.speed                  = cast(table) {min,max, min=min,max=max} }
+			do { local min,max   = ps.getTangentialAcceleration!() ; publicParticleSystem.tangentialAcceleration = cast(table) {min,max, min=min,max=max} }
+			do { local start,end = ps.getSpin!()                   ; publicParticleSystem.spin                   = cast(table) {start,end, atStart=start,atEnd=end} }
+			do { local x,y       = ps.getOffset!()                 ; publicParticleSystem.offset                 = cast(table) {x,y, x=x,y=y} }
 
 			do {
 				local xmin, ymin, xmax, ymax = ps.getLinearAcceleration!()
@@ -2412,10 +2416,15 @@ export setupGuiCallbacks :: () {
 				case BOOLEAN: !through
 				case NIL:     !through
 				case NUMBER:
-					insert(buffer, format("%s", cast(string)v)) -- The type we cast to doesn't matter.
+					if     v == 0           insert(buffer, "0") -- Avoid writing "-0".
+					elseif v == math.HUGE   insert(buffer, "math.huge")
+					elseif v == -math.HUGE  insert(buffer, "(-math.huge)")
+					elseif v ~= v           insert(buffer, "(0/0)")
+					else                    insert(buffer, format("%s", cast(string)v)) -- The type we cast to doesn't matter here.
 
 				case STRING:
-					insert(buffer, format("%q", cast(string)v))
+					local s = replace(format("%q", cast(string)v), "\\\n", "\\n")
+					insert(buffer, s)
 
 				case TABLE: -- Assume it's an array.
 					insert(buffer, "{")

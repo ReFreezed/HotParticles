@@ -1,0 +1,143 @@
+Hot Particles - a particle editor for LÖVE
+Developed by Marcus 'ReFreezed' Thunström
+
+1. Info and controls
+2. Shortcuts
+3. Exporting
+4. Template API
+
+
+1. Info and controls
+------------------------------------------------------------------------------
+
+The program operates using "projects". Projects are saved in *.hotparticles
+files. Each project contains one or more particle systems that are rendered
+together.
+
+Particle systems have your standard LÖVE particle system parameters, like
+texture, speed and rotation. The program comes with some simple textures to
+choose from, but you can also specify your own. There are some additional
+parameters, like "ScaleAll" which affects multiple standard parameters, and
+"kick-start steps" which fast-forwards the particle systems at start time
+which is handy for continous particle effects (like rain or fire).
+
+Press the particle viewing area to move the particle emitter.
+
+Right-click on controls to show the context menu.
+Middle-click tabs to close them.
+
+Hold ctrl while dragging controls to snap the value.
+Hold shift to drag related controls together (like min and max speed).
+Hold alt to change the min/max limits of sliders.
+
+
+2. Shortcuts
+------------------------------------------------------------------------------
+
+F               Fast-forward particles (hold)
+R               Reset particles
+
+H               Show/hide current particle system
+F1              Show/hide stats
+F2              Show/hide panel numbers
+
+Tab             Next particle system
+Shift+Tab       Previous particle system
+
+Ctrl+Tab        Next project
+Ctrl+Shift+Tab  Previous project
+
+Ctrl+S          Save project
+Ctrl+Shift+S    Save new project
+Ctrl+O          Open project
+Ctrl+Shift+O    Open folder for current project
+Ctrl+E          Export project
+
+Ctrl+N          New project
+Ctrl+W          Close project
+Ctrl+Shift+T    Open last project
+
+Ctrl+D          Duplicate particle system
+Ctrl+Delete     Delete particle system
+
+Ctrl+Q          Quit
+
+
+3. Exporting
+------------------------------------------------------------------------------
+
+It's possible to export particle system information and textures (the original
+files are copied). You can export to files or to the clipboard.
+
+Any question marks ("?") in the file/folder paths will be replaced with the
+name of the project file (without the file extension).
+
+Exporting happens using Lua scripts in the "exportTemplates" folder. You can
+edit existing scripts or make completely new ones to fit your game (see the
+"Template API" section).
+
+
+4. Template API
+------------------------------------------------------------------------------
+
+Templates are normal Lua scripts in the "exportTemplates" folder. Some of the
+standard Lua globals and modules are available, but not all. Note that trying
+to set globals will result in an error.
+
+Functions:
+
+    Lua( value )
+        Output a value as a Lua literal. The type of the value can be nil,
+        boolean, number, string or table (including nested tables). All tables
+        are assumed to be arrays.
+
+    LuaCsv( value )
+        If the value is an array (or a table, rather), output all items as Lua
+        literals separated by commas (Comma-Separated Values). If it's not a
+        table, output the value as a Lua literal (just like the Lua()
+        function).
+
+    Text( string )
+        Output a string. This function can be used to output anything,
+        including binary data.
+
+Values:
+
+    particleSystems
+        Array of tables with these fields:
+
+        blendMode               string   The blend mode for drawing.
+        bufferSize              number   An appropriate buffer size.
+        colors                  table    Sequence of red/green/blue/alpha values, like this: {r1,g1,b1,a1, r2,g2,b2,a2, ...}
+        direction               number   The particle direction.
+        emissionArea            table    Table with these fields: distribution (string), dx (number), dy (number), angle (number), relative (boolean). Is also an array.
+        emissionRate            number   Particle spawning rate.
+        emitAtStart             number   How many particles should emit when the particle system starts.
+        emitterLifetime         number   Lifetime of the emitter. Is -1 if the emitter is continous.
+        insertMode              string   Particle insert mode.
+        kickStartDt             number   Delta time for when updating the emitter when the particle system starts.
+        kickStartSteps          number   How many times the emitter should update when the particle system starts. May be 0.
+        linearAcceleration      table    Table with these numeric fields: xmin, ymin, xmax, ymax. Is also an array.
+        linearDamping           table    Table with these numeric fields: min, max. Is also an array.
+        offset                  table    Texture offset for the particles. It's a table with these numeric fields: x, y. Is also an array.
+        particleLifetime        table    Table with these numeric fields: min, max. Is also an array.
+        quads                   table    Sequence of frames used for particle animation. Is empty if there's no animation. Each item is a table with these fields: x, y, width, height. The items are also arrays with additional values for texture width and height.
+        radialAcceleration      table    Table with these numeric fields: min, max. Is also an array.
+        relativeRotation        boolean  True if relative rotation is enabled, false otherwise
+        rotation                table    Table with these numeric fields: min, max. Is also an array.
+        sizes                   table    Sequence of sizes.
+        sizeVariation           number   How varied the sizes are. The value is between 0 and 1.
+        speed                   table    Table with these numeric fields: min, max. Is also an array.
+        spin                    table    Table with these numeric fields: atStart, atEnd. Is also an array.
+        spinVariation           number   How varied the spinning is. The value is between 0 and 1.
+        spread                  number   Angle. How spread out the particles are from their initial direction.
+        tangentialAcceleration  table    Table with these numeric fields: min, max. Is also an array.
+        textureHeight           number   Height of the particle texture.
+        texturePath             string   Path to the texture relative to the specified base folder. Is empty if no path value is available.
+        texturePreset           string   Fallback for when texturePath is empty.
+        textureWidth            number   Width of the particle texture.
+
+    pixelateTextures
+        Boolean. True if textures are set to be pixelated (i.e. use nearest
+        neighbor filtering), false otherwise (linear filtering).
+

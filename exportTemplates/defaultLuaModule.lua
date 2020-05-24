@@ -19,7 +19,7 @@ local imageN                    = 0
 
 for _, ps in ipairs(particleSystems) do
 	local imageIdentByKey = ps.texturePath ~= "" and imageIdentByTexturePath or imageIdentByTexturePreset
-	local key             = ps.texturePath ~= "" and ps.texturePath           or ps.texturePreset
+	local key             = ps.texturePath ~= "" and ps.texturePath          or ps.texturePreset
 	local imageIdent      = imageIdentByKey[key]
 
 	if not imageIdent then
