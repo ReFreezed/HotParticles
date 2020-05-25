@@ -1840,6 +1840,18 @@ export setupGuiCallbacks :: () {
 
 			project.preview = false -- In case the project was already opened as a preview (which it probably always is).
 			popPanel()
+
+			local _, dir = pathObj.getDirectory!()
+			addRecent(app.recentFolders, dir,  MAX_RECENT_FOLDERS)
+			addRecent(app.recentFiles,   path, MAX_RECENT_FILES)
+
+			-- Make sure the loaded project replaces any single empty project.
+			if #app.projects == 2 and isProjectEmpty(app.projects[1]) {
+				remove(app.projects, 1)
+
+				gui.refreshRecursively(guiState, "projects")
+				setCurrentProject(1)
+			}
 		}
 	}
 
@@ -1903,51 +1915,130 @@ export setupGuiCallbacks :: () {
 		return true, pathObj.toString!()
 	}
 	local resolveTextureOuputPath :: (project:Project, system:System) -> (success:bool, path:string, sameAsInput:bool) {
-		local pathObj = Path(system.texturePath ?: system.textureName..".png")
+		local pathObj = Path(system.texturePath ?: format("%s/gfx/particles/%s.png", getAppDirectory(), system.textureName))
 
-		if not pathObj.isAbsolute  pathObj.prepend!(replaceQuestionMarks(project, project.exportTexturesDirectory))
-
+		-- Resolve to current path.
 		if not pathObj.isAbsolute {
-			-- Prepend base directory.
-			local baseDirObj = Path(replaceQuestionMarks(project, project.exportBaseDirectory))
+			local ok, dir = Path(project.path).getDirectory!()
+			if ok  pathObj.prepend!(dir)
+		}
 
-			if not baseDirObj.isAbsolute {
-				local ok, dir = Path(project.path).getDirectory!()
-				if not ok  return false, NULL, NULL
-				baseDirObj.prepend!(dir)
-			}
+		local hasBaseDir, baseDir = resolveBaseOuputPath(project)
 
-			pathObj.prepend!(baseDirObj)
+		if hasBaseDir {
+			local baseDirObj = Path(baseDir)
+			assert(baseDirObj.isAbsolute)
 
 			if not baseDirObj.contains!(pathObj) {
 				pathObj = Path(pathObj.path[#pathObj.path])
-				pathObj.prepend!(replaceQuestionMarks(project, project.exportTexturesDirectory))
-				pathObj.prepend!(baseDirObj)
 			}
+		}
 
-		} elseif project.exportBaseDirectory {
-			-- Check if target path is in base directory.
-			local baseDirObj = Path(replaceQuestionMarks(project, project.exportBaseDirectory))
+		-- Resolve to generated path or the current path isn't in the base directory.
+		if not pathObj.isAbsolute {
+			pathObj.prepend!(replaceQuestionMarks(project, project.exportTexturesDirectory))
 
-			if not baseDirObj.isAbsolute and project.path {
-				local _, dir = Path(project.path).getDirectory!()
-				baseDirObj.prepend!(dir)
-			}
+			if not pathObj.isAbsolute and hasBaseDir  pathObj.prepend!(baseDir)
 
-			if baseDirObj.isAbsolute and not baseDirObj.contains!(pathObj) {
-				pathObj = Path(pathObj.path[#pathObj.path])
-				pathObj.prepend!(replaceQuestionMarks(project, project.exportTexturesDirectory))
-				pathObj.prepend!(baseDirObj)
-			}
+			if not pathObj.isAbsolute  return false, NULL, NULL
 		}
 
 		local ok, inputPath = getTextureFullPath(project, system)
 		if not ok  inputPath = ""
 
 		local path = pathObj.toString!()
-		-- printf("%-40s  %-40s  %-40s  %s", system.texturePath ?: system.textureName..".png", inputPath, path, toString(path == inputPath)) -- DEBUG
+
+		--[[ DEBUG
+		printf(
+			"%-40s  %-40s  %-40s  %s",
+			(system.texturePath ?: format("%s/gfx/particles/%s.png", getAppDirectory(), system.textureName)),
+			inputPath, path, toString(path == inputPath)
+		)
+		--]]
 
 		return true, path, (path == inputPath)
+	}
+	!if 1==0  !run {
+		local Test :: struct {
+			project: Project,
+			expectedBaseDirectory: string,
+			expectedParticlesPath: string,
+			expectedTexturePaths:  []string,
+		}
+
+		local TESTS: []Test : {
+			{
+				project = {
+					path                    = "C:/MyProject/particles/cool.hotparticles",
+					exportBaseDirectory     = "..",
+					exportParticlesPath     = "data/particles_?.lua",
+					exportTexturesDirectory = "gfxOutput",
+					systems                 = {{texturePath="../gfx/cool.png"},{textureName="star"}},
+				},
+				expectedBaseDirectory = "C:/MyProject",
+				expectedParticlesPath = "C:/MyProject/data/particles_cool.lua",
+				expectedTexturePaths  = {"C:/MyProject/gfx/cool.png","C:/MyProject/gfxOutput/star.png"},
+			},
+			{
+				project = {
+					path                    = "C:/TheFoo/my.hotparticles",
+					exportBaseDirectory     = "",
+					exportParticlesPath     = "",
+					exportTexturesDirectory = "C:/TheFoo",
+					systems                 = {{texturePath="gfx/cat.jpg"},{texturePath="D:/Dogs/Good boy.jpg"}},
+				},
+				expectedBaseDirectory = "C:/TheFoo",
+				expectedParticlesPath = "C:/TheFoo/my.lua",
+				expectedTexturePaths  = {"C:/TheFoo/gfx/cat.jpg","C:/TheFoo/Good boy.jpg"},
+			},
+			{
+				project = {
+					path                    = "C:/Place1/very.hotparticles",
+					exportBaseDirectory     = "D:/Place2",
+					exportParticlesPath     = "E:/Place3/?.lua",
+					exportTexturesDirectory = "F:/Place4",
+					systems                 = {{texturePath="G:/Place5/the.png"}},
+				},
+				expectedBaseDirectory = "D:/Place2",
+				expectedParticlesPath = "E:/Place3/very.lua",
+				expectedTexturePaths  = {"F:/Place4/the.png"},
+			},
+		}
+
+		for test: TESTS {
+			local project = test.project
+			print()
+			print(project.path)
+
+			print("exportBaseDirectory")
+			print("  HAS   ", project.exportBaseDirectory)
+			print("  EXPECT", test.expectedBaseDirectory)
+			local ok, dir = resolveBaseOuputPath(project)
+			assert(ok, "not ok")
+			print("  GOT   ", dir)
+			assert(dir == test.expectedBaseDirectory, "no match")
+
+			print("exportParticlesPath")
+			print("  HAS   ", project.exportParticlesPath)
+			print("  EXPECT", test.expectedParticlesPath)
+			local ^ok, path = resolveParticlesOuputPath(project)
+			assert(ok, "not ok")
+			print("  GOT   ", path)
+			assert(path == test.expectedParticlesPath, "no match")
+
+			for system: project.systems {
+				print("texturePath")
+				print("  HAS   ", system.texturePath, "|", system.textureName..".png")
+				print("  EXPECT", test.expectedTexturePaths[itIndex])
+				ok, path = resolveTextureOuputPath(project, system)
+				assert(ok, "not ok")
+				print("  GOT   ", path)
+				assert(path == test.expectedTexturePaths[itIndex], "no match")
+			}
+		}
+
+		print("All tests passed!")
+		!import"os".exit(2)
 	}
 
 	guiState.onRefresh.exportProject_baseDirectory = (input:gui.InputText) {
@@ -2332,7 +2423,7 @@ export setupGuiCallbacks :: () {
 					texturePath = ""
 				}
 
-				publicParticleSystem.texturePath   = texturePath
+				publicParticleSystem.texturePath = texturePath
 			}
 
 			publicParticleSystem.blendMode        = system.blendMode

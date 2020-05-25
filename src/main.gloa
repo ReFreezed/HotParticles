@@ -5,6 +5,17 @@
 --=
 --============================================================]]
 
+!preload compiletime [[
+	-- For testing:
+	_G.love = love or {
+		filesystem = {
+			getSourceBaseDirectory = function()  return require"local.forTests".sourceBaseDirectory  end,
+		},
+	}
+]]
+
+export APP_VERSION_STRING :: "1.0.0"
+
 export MAX_BUFFER_SIZE      :: 16000 -- Default buffer size for ParticleSystem is 1000.  @Incomplete: Make this configurable.
 export MAIN_PANEL_WIDTH     :: 450
 export DIALOG_WIDTH         :: 400
@@ -12,7 +23,7 @@ export WORKSPACE_SAVE_DELAY :: 1.00
 export MAX_RECENT_FILES     :: 15
 export MAX_RECENT_FOLDERS   :: 4
 
-export WINDOW_TITLE :: !run (DEV ? "Hot Particles [DEBUG]" : "Hot Particles")
+export WINDOW_TITLE :: !run format("Hot Particles %s%s", APP_VERSION_STRING, (DEV ? " [DEBUG]" : ""))
 
 
 
@@ -1612,7 +1623,7 @@ export openProject :: (path:string, asPreview=false) -> (success:bool, project:P
 	}
 	defer disconnectFromRemoteDirectory()
 
-	addRecent(app.recentFolders, dir, MAX_RECENT_FOLDERS)
+	if not asPreview  addRecent(app.recentFolders, dir, MAX_RECENT_FOLDERS)
 
 	local ^ok, gotError, _app = loadWorkspace(filename)
 	if not ok {
@@ -1627,7 +1638,7 @@ export openProject :: (path:string, asPreview=false) -> (success:bool, project:P
 		return false, NULL, NULL
 	}
 
-	addRecent(app.recentFiles, path, MAX_RECENT_FILES)
+	if not asPreview  addRecent(app.recentFiles, path, MAX_RECENT_FILES)
 
 	project.path          = path
 	project.displayedName = filename
@@ -1638,7 +1649,7 @@ export openProject :: (path:string, asPreview=false) -> (success:bool, project:P
 	updateParticles(project)
 
 	local currentProject = app.projects[app.currentProjectIndex]
-	if not (currentProject.edited or currentProject.path) {
+	if not asPreview and isProjectEmpty(currentProject) {
 		remove(app.projects, app.currentProjectIndex)
 	}
 
@@ -1850,6 +1861,12 @@ export getKickStartDt :: (system:System) -> float {
 		)
 		/ system.kickStartSteps
 	)
+}
+
+
+
+export isProjectEmpty :: (project:Project) -> bool {
+	return not (project.edited or project.path)
 }
 
 
