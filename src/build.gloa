@@ -1,0 +1,88 @@
+!import "basic"
+!import "compiler"
+!import "string"
+!import "utils"
+local io :: !import "io"
+local os :: !import "os"
+
+!run {
+	local options      = getBuildOptions()
+	options.outputType = BuildOutputType.NONE
+	setBuildOptions(options)
+
+	compile("src/main.gloa")
+	compile("src/conf.gloa")
+
+	local dev = indexOf(getProgramArguments(), "--dev")
+	if not dev  doRelease()
+}
+
+local doRelease :: () {
+	local pathMagick = ""
+	local pathCrush  = ""
+
+	for line in io.eachLine"local/build.txt"  if line {
+		local ok, k, v = matchPattern(line, "^([%w_]+)%s*=%s*(.*)$")
+		assert(ok, line)
+		if cast(string) k == {
+			case "pathMagick": pathMagick = cast(string) v
+			case "pathCrush":  pathCrush  = cast(string) v
+			case:              error(cast(string) k)
+		}
+	}
+
+	assert(pathMagick ~= "", "pathMagick")
+	assert(pathCrush  ~= "", "pathCrush")
+
+	executeRequired("IF NOT EXIST temp  mkdir temp")
+
+	do {
+		print("Creating icons...")
+
+		-- Create missing icon sizes.
+		for {--[[16,]]24,32,48,64,128--[[,256]]} {
+			executeRequired(pathMagick, {
+				"gfx/appIcon256.png",
+				"-resize", format("%dx%d", it, it),
+				format("gfx/appIcon%d.png", it),
+			})
+		}
+
+		-- Crush PNGs.
+		for {16,24,32,48,64,128,256} {
+			executeRequired(pathCrush, {
+				"-ow",          -- Overwrite (must be first).
+				"-rem", "alla", -- Remove unnecessary chunks.
+				"-reduce",      -- Lossless color reduction.
+				"-warn",        -- No spam!
+				format("gfx/appIcon%d.png", it),
+			})
+		}
+
+		-- Create .ico.
+		local ok, err = io.writeEntireFile("temp/icons.txt", "\z
+			gfx/appIcon16.png\n\z
+			gfx/appIcon24.png\n\z
+			gfx/appIcon32.png\n\z
+			gfx/appIcon48.png\n\z
+			gfx/appIcon64.png\n\z
+			gfx/appIcon128.png\n\z
+		")
+		assert(ok, err)
+
+		executeRequired(pathMagick, {
+			"@temp/icons.txt",
+			"gfx/appIcon.ico",
+		})
+	}
+
+	-- os.exit(1) -- DEBUG
+}
+
+local executeRequired :: (command:string) {
+	assert((os.execute(command) == 0), command)
+}
+local executeRequired :: (program:string, arguments:[]string) {
+	local ok, err, code, cmd = os.execute(program, arguments)
+	assert((ok and code == 0), cmd)
+}

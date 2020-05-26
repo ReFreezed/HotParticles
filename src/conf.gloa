@@ -1,11 +1,11 @@
-!import "loveRevised/event"
+!import "love/config"
 
 local main :: () {
-	setConfigHandler((using conf:Config) {
+	config((using t:Config) {
 		identity         = "Hot Particles"
 
 		window.title     = "Hot Particles"
-		window.icon      = "gfx/appIcon16.png"
+		window.icon      = "gfx/appIcon32.png"
 		window.width     = 1400
 		window.height    = 800
 		window.resizable = true

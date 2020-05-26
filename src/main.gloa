@@ -60,11 +60,6 @@ export !load "src/workspace"
 export gui :: !load "src/gui"
 !load "src/guiSetup"
 
-!run {
-	!import "compiler"
-	compile("src/conf.gloa")
-}
-
 
 
 export fontSmall:  LG.Font = NULL
