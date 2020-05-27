@@ -111,7 +111,8 @@ local doRelease :: () {
 			})
 		}
 
-		-- Crush PNGs.
+		-- Crush icon PNGs.
+		-- @Incomplete: Crush all PNGs for release version!
 		for {16,24,32,48,64,128,256} {
 			executeRequired(pathPngCrush, {
 				"-ow",          -- Overwrite (must be first).

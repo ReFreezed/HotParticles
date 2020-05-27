@@ -14,7 +14,7 @@
 
 --============================================================]]
 
-local LAST_FILE_VERSION :: 4
+local LAST_FILE_VERSION :: 5
 
 
 
@@ -361,23 +361,23 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 	local app: App !shadow
 	local projects = app.projects
 
+	local ln   = 0
+	local iter = (cast(LF.File)file).lines!()
+
+	local version: int
+	do {
+		local line1 = iter(nil, nil)
+		if line1 == nil  return parsingError(path, ln, "Missing file version.")
+
+		local ok, ^version = stringToInt(cast(string) line1)
+		if not ok                       return parsingError(path, ln, "Invalid version line format.")
+		if version < 1                  return parsingError(path, ln, "Invalid version number '%d'.", version)
+		if version > LAST_FILE_VERSION  return parsingError(path, ln, "Unsupported version number '%d'.", version)
+	}
+
 	do {
 		local project: Project = NULL
 		local system:  System  = NULL
-
-		local ln   = 0
-		local iter = (cast(LF.File)file).lines!()
-
-		local version: int
-		do {
-			local line1 = iter(nil, nil)
-			if line1 == nil  return parsingError(path, ln, "Missing file version.")
-
-			local ok, ^version = stringToInt(cast(string) line1)
-			if not ok                       return parsingError(path, ln, "Invalid version line format.")
-			if version < 1                  return parsingError(path, ln, "Invalid version number '%d'.", version)
-			if version > LAST_FILE_VERSION  return parsingError(path, ln, "Unsupported version number '%d'.", version)
-		}
 
 		for line in iter, nil, nil {
 			ln += 1
@@ -798,6 +798,21 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 		}
 
 		if not projects  return parsingError(path, ln, "No projects.")
+	}
+
+	if version < 5 {
+		-- Light texture size and name changes.
+		for project: projects  for system: project.systems {
+			if not system.texturePath {
+				if system.textureName == {
+					case "light":  for 1, #system.psSizes  system.psSizes[it] *= 64/188
+					case "light2": for 1, #system.psSizes  system.psSizes[it] *= 64/128
+				}
+			}
+			if system.textureName == {
+				case "light2": system.textureName = "lightBlur"
+			}
+		}
 	}
 
 	for project: projects {
