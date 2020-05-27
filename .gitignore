@@ -5,6 +5,7 @@ local/
 /*.lua
 /*.sublime-*
 /.run
+/output/
 /temp/
 
 /gfx/appIcon*.*
