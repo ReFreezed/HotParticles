@@ -82,6 +82,11 @@ local writeProject :: (buffer:[]string, project:Project, isSavingWorkspace:bool)
 	writeValue(buffer, project.movementSpeed)
 	insert(buffer, "\n")
 
+	do {
+		local x, y = project.systems[1].particles.getPosition!()
+		insert(buffer, "emitterPosition") ; writeValues(buffer, eol=true, x, y)
+	}
+
 	for cast(table) project.guiLimits {
 		insert(buffer, "guiLimit")
 		writeValue(buffer, cast(string) itIndex)
@@ -193,6 +198,27 @@ export saveWorkspace :: () {
 		writeValue(buffer, cast(string) itIndex)
 	}
 	insert(buffer, "\n")
+
+	do {
+		local w, h, flags = LW.getMode()
+		local maximized   = LW.isMaximized()
+
+		if not maximized {
+			app.windowX      = cast(int) flags.x
+			app.windowY      = cast(int) flags.y
+			app.windowWidth  = w
+			app.windowHeight = h
+		}
+		app.windowMaximized = maximized
+
+		insert(buffer, "window")
+		writeValue(buffer, app.windowX)
+		writeValue(buffer, app.windowY)
+		writeValue(buffer, app.windowWidth)
+		writeValue(buffer, app.windowHeight)
+		writeValue(buffer, app.windowMaximized)
+		insert(buffer, "\n")
+	}
 
 	for app.projects  if not it.preview {
 		writeProject(buffer, it, isSavingWorkspace=true)
@@ -379,6 +405,10 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 		local project: Project = NULL
 		local system:  System  = NULL
 
+		local gotEmitterPosition = false
+		local emitterX: float
+		local emitterY: float
+
 		for line in iter, nil, nil {
 			ln += 1
 			if line == ""  continue
@@ -390,11 +420,15 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 					case "project":
 						project = Project()
 						system  = NULL
+
+						gotEmitterPosition = false
+
 						insert(projects, project)
 
 					case "system":
 						if project == NULL  return parsingError(path, ln, "Unexpected 'system' label.")
 						system = System()
+						if gotEmitterPosition  system.particles.setPosition!(emitterX, emitterY)
 						insert(project.systems, system)
 
 					case:
@@ -445,6 +479,20 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 						local ^ok, ^ptr, names = readStringArray(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
 						for names  app.hiddenSections[it] = true
+
+					case "window":
+						local ^ok, ^ptr, x         = readInt (version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
+						local ^ok, ^ptr, y         = readInt (version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
+						local ^ok, ^ptr, w         = readInt (version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
+						local ^ok, ^ptr, h         = readInt (version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
+						local ^ok, ^ptr, maximized = readBool(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
+						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
+						app.gotWindowInfo   = true
+						app.windowX         = x
+						app.windowY         = y
+						app.windowWidth     = w
+						app.windowHeight    = h
+						app.windowMaximized = maximized
 
 					case:
 						return parsingError(path, ln, "Unknown program parameter '%s'.", param)
@@ -561,6 +609,14 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 						project.movementScaleX = sx
 						project.movementScaleY = sy
 						project.movementSpeed  = speed
+
+					case "emitterPosition":
+						local ^ok, ^ptr, x = readFloat(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
+						local ^ok, ^ptr, y = readFloat(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
+						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
+						gotEmitterPosition = true
+						emitterX           = x
+						emitterY           = y
 
 					case "guiLimit":
 						local ^ok, ^ptr, name  = readString(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)

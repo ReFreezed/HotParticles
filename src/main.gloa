@@ -52,6 +52,7 @@ export LI :: love.image
 export LK :: love.keyboard
 export LM :: love.mouse
 export LT :: love.timer
+export LW :: love.window
 local  LE :: love.event
 
 export !self
@@ -137,6 +138,13 @@ export App :: struct {
 	bookmarkedFolders: []string,
 
 	hiddenSections: struct { !key:string, !value:bool },
+
+	gotWindowInfo   = false, -- Load-time only.
+	windowX         = 0,
+	windowY         = 0,
+	windowWidth     = 0,
+	windowHeight    = 0,
+	windowMaximized = false,
 }
 
 
@@ -178,8 +186,11 @@ export Project :: struct {
 
 	guiLimits: struct { !key:string, !value:float },
 
-	edited = false,
-	path   = "", -- Only save in workspace.
+	emitterX: int, -- Load-time only.
+	emitterY: int, -- Load-time only.
+
+	edited = false, -- Only saved in workspace.
+	path   = "",    -- Only saved in workspace.
 
 	-- Runtime-only:
 	systemIndex = 1,
@@ -562,6 +573,7 @@ export addNewSystem :: (project:Project, showcase=false) {
 		system.psSpeedMax            = 100
 		system.psSpread              = .05*math.TAU
 		system.colors                = {0,0,1,0, 0,0,1,1, 0,0,1,.5, 0,0,1,0}
+		system.psSizes               = {.4}
 	}
 	updateParticleParams(project, system)
 	updateParticleColors(system)
@@ -707,7 +719,22 @@ local onLoad :: (args:[]string, argsRaw:[]string) {
 	io.disableBuffering(io.STDERR)
 
 	print("Running Hot Particles")
-	love.window.setTitle(WINDOW_TITLE)
+	LW.setTitle(WINDOW_TITLE)
+
+	fontSmall  = LG.newFont(10)
+	fontNormal = LG.newFont(12)
+	fontLarge  = LG.newFont(16)
+
+	do {
+		local TEXT :: "Loading..."
+		LG.clear(1, 1, 1, 1)
+		LG.setFont(fontLarge)
+		LG.setColor(0, 0, 0)
+		LG.print(TEXT, (LG.getWidth()-fontLarge.getWidth!(TEXT))//2, (LG.getHeight()-fontLarge.getHeight!())//2)
+		LG.present()
+		LG.reset()
+		-- LT.sleep(1) -- DEBUG
+	}
 
 	local projectsToOpen: []string
 
@@ -728,10 +755,6 @@ local onLoad :: (args:[]string, argsRaw:[]string) {
 	defaultSearchPaths = physfs.getSearchPaths()
 
 	LF.createDirectory("projects")
-
-	fontSmall  = LG.newFont(10)
-	fontNormal = LG.newFont(12)
-	fontLarge  = LG.newFont(16)
 
 	imageBoxGradient = LG.newImage("gfx/boxGradient.png")
 	imageChecker     = LG.newImage("gfx/checker.png") ; imageChecker.setWrap!(LG.WrapMode.REPEAT, LG.WrapMode.REPEAT) ; imageChecker.setFilter!(LG.FilterMode.NEAREST, LG.FilterMode.NEAREST)
@@ -771,9 +794,41 @@ local onLoad :: (args:[]string, argsRaw:[]string) {
 		}
 
 		for app.projects  updateParticles(it)
+
+		local w = app.windowWidth  ?: 1400
+		local h = app.windowHeight ?: 800
+
+		local _, _, flags = LW.getMode()
+		flags.resizable   = true
+		local maximized   = false
+
+		if ok and app.gotWindowInfo {
+			flags.x   = app.windowX      ?: cast(int) flags.x
+			flags.y   = app.windowY      ?: cast(int) flags.y
+			w         = app.windowWidth  ?: w
+			h         = app.windowHeight ?: h
+			maximized = app.windowMaximized
+
+			flags.centered = not (app.windowX or app.windowY)
+			if flags.centered {
+				flags.x = nil
+				flags.y = nil
+			}
+
+		} else {
+			flags.x        = nil
+			flags.y        = nil
+			flags.centered = true
+		}
+
+		app.windowWidth  = w
+		app.windowHeight = h
+
+		LW.updateMode(w, h, flags)
+		if maximized  LW.maximize()
 	}
 
-	love.window.setVSync(app.showStats ? 0 : 1)
+	LW.setVSync(app.showStats ? 0 : 1)
 
 	setupGuiFrames()
 	setupGuiCallbacks()
@@ -814,7 +869,7 @@ local onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool) 
 
 		case "f1":
 			app.showStats = not app.showStats
-			love.window.setVSync(app.showStats ? 0 : 1)
+			LW.setVSync(app.showStats ? 0 : 1)
 			scheduleSaveWorkspace()
 			return
 
@@ -989,6 +1044,11 @@ local onUpdate :: (dt:float) {
 	if freezeDtThisFrame {
 		dt                = 0
 		freezeDtThisFrame = false
+	} else {
+		local _, _, flags = LW.getMode()
+		-- This will make things go *really* slow if it's the performance that's
+		-- making dt high. It's probably not that much of an issue though.
+		if flags.refreshrate and dt > 1/10  dt = 1/flags.refreshrate
 	}
 
 	local project = app.projects[app.currentProjectIndex]
@@ -1359,7 +1419,7 @@ local onDraw :: () {
 
 				local mx, my = LM.getPosition()
 
-				if love.window.hasMouseFocus() and not (guiState.activeId or gui.isOverGui(guiState, mx, my)) {
+				if LW.hasMouseFocus() and not (guiState.activeId or gui.isOverGui(guiState, mx, my)) {
 					local text = format(
 						"[%d, %d]",
 						math.clamp(math.floor((mx-x0)/scale), 0, iw),
@@ -1403,8 +1463,8 @@ local onDraw :: () {
 				y += fontH+1
 			}
 
-			local _, _, windowMode = love.window.getMode()
-			local ratio            = 1 / presentTime / windowMode.refreshrate
+			local _, _, flags = LW.getMode()
+			local ratio       = 1 / presentTime / flags.refreshrate
 
 			drawStatsLine("FPS: ", "%d", LT.getFPS())
 
@@ -1421,7 +1481,7 @@ local onDraw :: () {
 			drawStatsLine("ParticleSystemUpdateTime: ", "%.3f ms", 1000*particleUpdateTime)
 			drawStatsLine("ParticleSystemDrawTime: ",   "%.3f ms", 1000*particleDrawTime)
 
-			if not windowMode.refreshrate {
+			if not flags.refreshrate {
 				drawStatsLine("LoveGraphicsPresentTime: ", "%.3f ms", 1000*presentTime)
 			} elseif ratio >= 10 {
 				drawStatsLine("LoveGraphicsPresentTime: ", "%.3f ms (%.0f.0 x framerate)", 1000*presentTime, ratio)
@@ -1529,10 +1589,23 @@ local onDraw :: () {
 
 
 
-local onResize :: (w,h:int) {
+local onResize :: (ww,wh:int) {
 	createCanvases()
 	guiState.layoutNeedsUpdate = true
 	freezeDtThisFrame          = true -- Fixes things jumping forward like crazy (in Windows at least).
+
+	local maximized = LW.isMaximized()
+
+	if not maximized {
+		local w, h, flags = LW.getMode()
+		app.windowX       = cast(int) flags.x
+		app.windowY       = cast(int) flags.y
+		app.windowWidth   = w
+		app.windowHeight  = h
+	}
+	app.windowMaximized = maximized
+
+	scheduleSaveWorkspace()
 }
 
 
@@ -1834,7 +1907,7 @@ export getOptimalBufferSize :: (system:System, moreExact=false) -> int {
 
 export updateWindowTitle :: () {
 	local project = app.projects[app.currentProjectIndex]
-	love.window.setTitle(format("%s%s - %s", (project.path ?: project.displayedName), (project.edited ? " •" : ""), WINDOW_TITLE))
+	LW.setTitle(format("%s%s - %s", (project.path ?: project.displayedName), (project.edited ? " •" : ""), WINDOW_TITLE))
 }
 
 

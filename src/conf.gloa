@@ -6,10 +6,8 @@ local main :: () {
 
 		window.title     = "Hot Particles"
 		window.icon      = "gfx/appIcon32.png"
-		window.width     = 1400
-		window.height    = 800
-		window.resizable = true
-		window.vsync     = 1
+		window.width     = 200 -- For loading screen.
+		window.height    = 100
 
 		modules.audio    = false
 		modules.data     = true
