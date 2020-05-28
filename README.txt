@@ -19,7 +19,7 @@ texture, speed and rotation. The program comes with some simple textures to
 choose from, but you can also specify your own. There are some additional
 parameters, like "ScaleAll" which affects multiple standard parameters, and
 "kick-start steps" which fast-forwards the particle systems at start time
-which is handy for continous particle effects (like rain or fire).
+which is useful for continuous particle effects (like rain or fire).
 
 Press the particle viewing area to move the particle emitter.
 
@@ -38,7 +38,7 @@ F               Fast-forward particles (hold)
 R               Reset particles
 
 H               Show/hide current particle system
-F1              Show/hide stats
+F1              Show/hide stats (and toggle Vsync)
 F2              Show/hide panel numbers
 
 Tab             Next particle system
@@ -50,7 +50,7 @@ Ctrl+Shift+Tab  Previous project
 Ctrl+S          Save project
 Ctrl+Shift+S    Save new project
 Ctrl+O          Open project
-Ctrl+Shift+O    Open folder for current project
+Ctrl+Shift+O    Open folder containing current project
 Ctrl+E          Export project
 
 Ctrl+N          New project
@@ -69,8 +69,8 @@ Ctrl+Q          Quit
 It's possible to export particle system information and textures (the original
 files are copied). You can export to files or to the clipboard.
 
-Any question marks ("?") in the file/folder paths will be replaced with the
-name of the project file (without the file extension).
+In the export dialog, any question marks ("?") in the file/folder paths will
+be replaced with the name of the project file (without the file extension).
 
 Exporting happens using Lua scripts in the "exportTemplates" folder. You can
 edit existing scripts or make completely new ones to fit your game (see the
@@ -98,7 +98,7 @@ Functions:
         function).
 
     Text( string )
-        Output a string. This function can be used to output anything,
+        Output a raw string. This function can be used to output anything,
         including binary data.
 
 Values:
@@ -113,7 +113,7 @@ Values:
         emissionArea            table    Table with these fields: distribution (string), dx (number), dy (number), angle (number), relative (boolean). Is also an array.
         emissionRate            number   Particle spawning rate.
         emitAtStart             number   How many particles should emit when the particle system starts.
-        emitterLifetime         number   Lifetime of the emitter. Is -1 if the emitter is continous.
+        emitterLifetime         number   Lifetime of the emitter. Is -1 if the emitter is continuous.
         insertMode              string   Particle insert mode.
         kickStartDt             number   Delta time for when updating the emitter when the particle system starts.
         kickStartSteps          number   How many times the emitter should update when the particle system starts. May be 0.

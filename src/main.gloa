@@ -937,7 +937,7 @@ local onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool) 
 
 		case "h": system.visible = not system.visible
 
-		case "p": gui.setActive(guiState, "main", not gui.getElement(guiState, "main").active)
+		case "p": !if DEV  gui.setActive(guiState, "main", not gui.getElement(guiState, "main").active)
 
 		case "c-delete": confirmDeleteSystem(project.systemIndex)
 
