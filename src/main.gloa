@@ -378,7 +378,9 @@ export System :: struct {
 			kickStartSteps              = source.kickStartSteps,
 			gui                         = copyTable(source.gui),
 
-			particles = source.particles.clone!(),
+			particles        = source.particles.clone!(),
+			currentImageData = source.currentImageData,
+			currentImage     = source.currentImage,
 		}
 
 		for source.frames {
