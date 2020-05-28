@@ -14,7 +14,7 @@
 
 	addRecent, removeRecent
 	compareFilenames
-	getAppDirectory, getCwd
+	getAppDirectory, getSaveDirectory, getCwd
 	getModifierKey
 	isInside
 	limitArray
@@ -116,10 +116,39 @@ export isInside :: (x,y:int, areaX,areaY,areaW,areaH:int) -> bool {
 
 
 export getAppDirectory :: () -> string {
-	return LF.getSourceBaseDirectory()
+	--
+	-- So annoying to get the program's directory, LÖVE!
+	--
+	-- Unpacked:
+	--   isFused              false
+	--   sourceBaseDirectory  C:/Foo
+	--   source               C:/Foo/HotParticles
+	--
+	-- .love:
+	--   isFused              false
+	--   sourceBaseDirectory  C:/Foo/HotParticles
+	--   source               C:/Foo/HotParticles/HotParticles.love
+	--
+	-- .exe (and I assume .app):
+	--   isFused              true
+	--   sourceBaseDirectory  C:\Foo\HotParticles
+	--   source               C:\Foo\HotParticles\HotParticles.exe
+	--
+
+	local dir
+		= LF.isFused()                           ? LF.getSourceBaseDirectory()
+		: findPattern(LF.getSource(), "%.love$") ? LF.getSourceBaseDirectory() -- Not very robust, but what're ya gonna do...
+		: LF.getSource()
+
+	return (replace(dir, "\\", "/"))
 }
+
+export getSaveDirectory :: () -> string {
+	return (replace(LF.getSaveDirectory(), "\\", "/"))
+}
+
 export getCwd :: () -> string {
-	return (replace(LF.getWorkingDirectory(), "\\", "/")) -- Not sure if replace() is needed. @Cleanup
+	return (replace(LF.getWorkingDirectory(), "\\", "/"))
 }
 
 

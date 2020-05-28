@@ -1559,14 +1559,14 @@ export setupGuiCallbacks :: () {
 
 			local ok, dir, filename = pathObj.getDirectoryAndFilename!()
 			if not ok {
-				dir      = LF.getSaveDirectory().."/projects"
+				dir      = getSaveDirectory().."/projects"
 				filename = "untitled.hotparticles"
 			}
 
 			if not isSave  filename = ""
 
 			dirCurrent  = dir
-			dirFallback = LF.getSaveDirectory()
+			dirFallback = getSaveDirectory()
 
 			local filenameInput = gui.getElement(guiState, (isSave ? "saveProjectAs_filename" : "openProject_filename"), gui.InputText)
 			filenameInput.value = filename
@@ -1673,9 +1673,9 @@ export setupGuiCallbacks :: () {
 			if not connectToRemoteDirectory(dir) {
 				dir = dirFallback
 				if not connectToRemoteDirectory(dir) {
-					dir = LF.getSaveDirectory().."/projects"
+					dir = getSaveDirectory().."/projects"
 					if not connectToRemoteDirectory(dir) {
-						dir = LF.getSaveDirectory()
+						dir = getSaveDirectory()
 						if not connectToRemoteDirectory(dir) {
 							dir = getCwd()
 							assert(connectToRemoteDirectory(dir))

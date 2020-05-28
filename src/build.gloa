@@ -73,11 +73,12 @@ local doRelease :: () {
 	assert(pathPngCrush ~= "", "pathPngCrush")
 	assert(pathRh       ~= "", "pathRh")
 
-	local outputDir = "output/win64/Hot Particles"
+	local outputDirWin64     = "output/win64/Hot Particles"
+	local outputDirUniversal = "output/universal/Hot Particles"
 
 	local values: Values = {
 		exeName         = "HotParticles",
-		exePath         = outputDir.."/HotParticles.exe",
+		exePath         = outputDirWin64.."/HotParticles.exe",
 		iconPath        = "temp/appIcon.ico",
 
 		appName         = "Hot Particles",
@@ -150,7 +151,7 @@ local doRelease :: () {
 	for dir: {"gfx","src"} {
 		lfs.traverseDirectory(dir, [filesToLove] (path:string) -> lfs.Traverse {
 			if lfs.isFile(path) {
-				local DO_PRINT :: 1==1
+				local DO_PRINT :: 1==0
 				local _, ext = matchPattern(path, "[^.]+$")
 
 				if ext == "psd" or ext == "gloa" {
@@ -171,70 +172,89 @@ local doRelease :: () {
 	io.remove(values.lovePath)
 	zip(values.lovePath, filesToLove)
 
-	-- Compile resource file.
+	-- Windows.
 	do {
-		local ok, contents, err = io.readEntireFile("misc/appInfoTemplate.rc") ; assert(ok, err) -- UTF-16 LE BOM encoded.
-		contents                = templateToStringUtf16(contents, values)
-		io.writeEntireFile("temp/appInfo.rc", contents)
+		local outputDir = outputDirWin64
 
-		executeRequired(pathRh, {
-			"-open",   "temp/appInfo.rc",
-			"-save",   values.versionInfoPath,
-			"-action", "compile",
-			"-log",    "local/rh.log", -- @Temp
-			-- "-log",    "CONSOLE", -- Why doesn't this work? (And is it just in Sublime?)
-		})
+		-- Compile resource file.
+		do {
+			local ok, contents, err = io.readEntireFile("misc/appInfoTemplate.rc") ; assert(ok, err) -- UTF-16 LE BOM encoded.
+			contents                = templateToStringUtf16(contents, values)
+			io.writeEntireFile("temp/appInfo.rc", contents)
+
+			executeRequired(pathRh, {
+				"-open",   "temp/appInfo.rc",
+				"-save",   values.versionInfoPath,
+				"-action", "compile",
+				"-log",    "local/rh.log", -- @Temp
+				-- "-log",    "CONSOLE", -- Why doesn't this work? (And is it just in Sublime?)
+			})
+		}
+
+		do {
+			local TEMPLATE_UPDATE_EXE :: '\z
+				[FILENAMES]\n\z
+				Exe    = "${loveExePath}"\n\z
+				SaveAs = "${exePath}"\n\z
+				Log    = CONSOLE\n\z
+
+				[COMMANDS]\n\z
+				-delete ICONGROUP,,\n\z
+				-delete VERSIONINFO,,\n\z
+				-add "${versionInfoPath}", ,,\n\z
+				-add "${iconPath}", ICONGROUP,MAINICON,0\n\z
+			'
+
+			local contents = templateToString(TEMPLATE_UPDATE_EXE, values, toWindowsPath)
+			io.writeEntireFile("temp/updateExe.rhs", contents)
+		}
+
+		-- Create base for install directory using robocopy.
+		-- Note: Because of robocopy's complex return codes we just trust that it's always successful.
+		-- https://blogs.technet.microsoft.com/deploymentguys/2008/06/16/robocopy-exit-codes/
+		local PATH_RC_LOG :: "local/robocopy.log"
+		io.remove(PATH_RC_LOG)
+		os.execute("ROBOCOPY", {values.loveExeDir, outputDir, "/NOCOPY", "/PURGE", "/E", "/LOG+:"..PATH_RC_LOG})
+		os.execute("ROBOCOPY", {values.loveExeDir, outputDir, "*.dll",             "/E", "/LOG+:"..PATH_RC_LOG})
+
+		-- Create exe.
+		do {
+			executeRequired(pathRh, {
+				"-script", "temp/updateExe.rhs",
+			})
+
+			local  ok, contentsLoveExe, err = io.readEntireFile(values.exePath)  ; assert(ok, err)
+			local ^ok, contentsLove,   ^err = io.readEntireFile(values.lovePath) ; assert(ok, err)
+
+			local ^ok, file, ^err = io.openForWriting(values.exePath) ; assert(ok, err)
+			io.write(file, contentsLoveExe)
+			io.write(file, contentsLove)
+			io.close(file)
+		}
+
+		-- Add remaining files.
+		do {
+			copyFilesInDirectory("exportTemplates", outputDir.."/exportTemplates", "%.lua$")
+			copyFile("README.txt", outputDir.."/_README.txt")
+		}
 	}
 
+	-- Universal.
 	do {
-		local TEMPLATE_UPDATE_EXE :: '\z
-			[FILENAMES]\n\z
-			Exe    = "${loveExePath}"\n\z
-			SaveAs = "${exePath}"\n\z
-			Log    = CONSOLE\n\z
+		local outputDir = outputDirUniversal
 
-			[COMMANDS]\n\z
-			-delete ICONGROUP,,\n\z
-			-delete VERSIONINFO,,\n\z
-			-add "${versionInfoPath}", ,,\n\z
-			-add "${iconPath}", ICONGROUP,MAINICON,0\n\z
-		'
+		removeDirectory(outputDir)
+		lfs.makeDirectory(outputDir)
 
-		local contents = templateToString(TEMPLATE_UPDATE_EXE, values, toWindowsPath)
-		io.writeEntireFile("temp/updateExe.rhs", contents)
-	}
-
-	-- Create base for install directory using robocopy.
-	-- Note: Because of robocopy's complex return codes we just trust that it's always successful.
-	-- https://blogs.technet.microsoft.com/deploymentguys/2008/06/16/robocopy-exit-codes/
-	local PATH_RC_LOG :: "local/robocopy.log"
-	io.remove(PATH_RC_LOG)
-	os.execute("ROBOCOPY", {values.loveExeDir, outputDir, "/NOCOPY", "/PURGE", "/E", "/LOG+:"..PATH_RC_LOG})
-	os.execute("ROBOCOPY", {values.loveExeDir, outputDir, "*.dll",             "/E", "/LOG+:"..PATH_RC_LOG})
-
-	-- Create exe.
-	do {
-		executeRequired(pathRh, {
-			"-script", "temp/updateExe.rhs",
-		})
-
-		local  ok, contentsLoveExe, err = io.readEntireFile(values.exePath)  ; assert(ok, err)
-		local ^ok, contentsLove,   ^err = io.readEntireFile(values.lovePath) ; assert(ok, err)
-
-		local ^ok, file, ^err = io.openForWriting(values.exePath) ; assert(ok, err)
-		io.write(file, contentsLoveExe)
-		io.write(file, contentsLove)
-		io.close(file)
-	}
-
-	-- Add remaining files.
-	do {
-		local ok, err = io.copy("README.txt", outputDir.."/_README.txt")
-		assert(ok, err)
+		copyFilesInDirectory("exportTemplates", outputDir.."/exportTemplates", "%.lua$")
+		copyFile(values.lovePath,          format("%s/%s.love",     outputDir, values.exeName))
+		copyFile("README.txt",             format("%s/_README.txt",             outputDir))
+		copyFile("README (universal).txt", format("%s/_README (universal).txt", outputDir))
 	}
 
 	-- Zip for distribution!
-	zip("output/HotParticles_"..values.appVersion.."_win64.zip", "./"..outputDir)
+	zip("output/HotParticles_"..values.appVersion.."_win64.zip",     "./"..outputDirWin64)
+	zip("output/HotParticles_"..values.appVersion.."_universal.zip", "./"..outputDirUniversal)
 
 	-- os.exit(1) -- DEBUG
 }
@@ -314,4 +334,25 @@ local zip :: (zipFilePath:string, pathsToZip:[]string, append=false) {
 	assert(ok, err)
 
 	executeRequired(path7z, {"a", "-tzip", zipFilePath, "@"..PATH_INCLUDE_LIST})
+}
+
+local copyFile :: (from:string, to:string) {
+	local ok, err = io.copy(from, to)
+	assert(ok, err)
+}
+local copyFilesInDirectory :: (from:string, to:string, pattern:string) {
+	lfs.makeDirectoryRecursive(to)
+
+	for name in lfs.directory(from)  if findPattern(name, pattern) {
+		local path = from.."/"..name
+
+		if lfs.isFile(path) {
+			local ok, err = io.copy(path, to.."/"..name)
+			assert(ok, err)
+		}
+	}
+}
+
+local removeDirectory :: (dirPath:string) {
+	if lfs.isDirectory(dirPath)  executeRequired("RMDIR", {"/S", "/Q", dirPath})
 }

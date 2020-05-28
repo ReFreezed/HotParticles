@@ -9,12 +9,14 @@
 	-- For testing:
 	_G.love = love or {
 		filesystem = {
+			getSource              = function()  return require"local.forTests".source               end,
 			getSourceBaseDirectory = function()  return require"local.forTests".sourceBaseDirectory  end,
+			isFused                = function()  return false                                        end,
 		},
 	}
 ]]
 
-export APP_VERSION_STRING :: "1.0.0"
+export APP_VERSION_STRING :: "1.0.0" -- @Cleanup: Put this in an external file and use it in build.gloa too.
 
 export MAX_BUFFER_SIZE      :: 16000 -- Default buffer size for ParticleSystem is 1000.  @Incomplete: Make this configurable.
 export MAIN_PANEL_WIDTH     :: 450
@@ -642,7 +644,7 @@ export disconnectFromRemoteDirectory :: () {
 	for physfs.getSearchPaths()  assert(physfs.unmountReadDirectory(it),     it)
 	for defaultSearchPaths       assert(physfs.mountReadDirectory(it, true), it)
 
-	assert(physfs.setWriteDirectory(LF.getSaveDirectory()))
+	assert(physfs.setWriteDirectory(getSaveDirectory()))
 }
 
 
@@ -753,6 +755,8 @@ local onLoad :: (args:[]string, argsRaw:[]string) {
 	LK.setKeyRepeat(true)
 
 	defaultSearchPaths = physfs.getSearchPaths()
+	!if not DEV  insert(defaultSearchPaths, getAppDirectory())
+	disconnectFromRemoteDirectory() -- Resets paths. We didn't actually connect.
 
 	LF.createDirectory("projects")
 

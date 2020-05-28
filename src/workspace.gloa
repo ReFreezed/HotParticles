@@ -247,10 +247,7 @@ export saveProject :: (project:Project, overwrite=false) -> (success:bool, fileE
 
 	addRecent(app.recentFolders, dir, MAX_RECENT_FOLDERS)
 
-	if not overwrite {
-		local info = LF.getInfo(filename)
-		if info ~= nil  return false, true
-	}
+	if not overwrite and LF.getInfo(filename) ~= nil  return false, true
 
 	local buffer: []string
 	insert(buffer, format("%d\n", LAST_FILE_VERSION))
