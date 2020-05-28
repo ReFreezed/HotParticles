@@ -64,7 +64,8 @@ local CHECKBOX_SIZE :: 14 -- @Temp until we have an image.
 
 local DIRECTION_RADIUS :: 25
 
-local BUTTON_IMAGE_MAX_SIZE :: 20 -- Also the size of particle previews.
+local BUTTON_IMAGE_MAX_SIZE :: 18
+local PARTICLE_PREVIEW_SIZE :: 30
 local SPECIAL_TAB_WIDTH     :: 32
 
 local TAB_BOTTOM_LINE_WIDTH :: 2
@@ -412,7 +413,7 @@ export Canvas :: struct {
 
 export onKeyPressed :: (state:State, key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool) -> (handled:bool) {
 	-- Modifier keys.
-	if (state.activeId or state.hoveredId) and (key == "lctrl" or key == "rctrl" or key == "lshift" or key == "rshift" or key == "lalt" or key == "ralt") {
+	if (state.activeId or state.hoveredId) and (key == lctrl or key == rctrl or key == "lshift" or key == "rshift" or key == "lalt" or key == "ralt") {
 		local mx, my = LM.getPosition()
 		onMouseMoved(state, mx, my, 0, 0)
 	}
@@ -508,7 +509,7 @@ export onKeyPressed :: (state:State, key:LK.KeyConstant, scancode:LK.Scancode, i
 }
 
 export onKeyReleased :: (state:State, key:LK.KeyConstant, scancode:LK.Scancode) {
-	if (state.activeId or state.hoveredId) and (key == "lctrl" or key == "rctrl" or key == "lshift" or key == "rshift" or key == "lalt" or key == "ralt") {
+	if (state.activeId or state.hoveredId) and (key == lctrl or key == rctrl or key == "lshift" or key == "rshift" or key == "lalt" or key == "ralt") {
 		local mx, my = LM.getPosition()
 		onMouseMoved(state, mx, my, 0, 0)
 	}
@@ -1209,8 +1210,8 @@ local calculateNaturalSize :: (state:State, el:Element) {
 				it.shortcutWidth = it.shortcut ? fontNormal.getWidth!(it.shortcut) + SPACING_LARGE : 0
 
 				if it.system ~= NULL {
-					w             = BUTTON_IMAGE_MAX_SIZE
-					h             = BUTTON_IMAGE_MAX_SIZE
+					w             = PARTICLE_PREVIEW_SIZE
+					h             = PARTICLE_PREVIEW_SIZE
 				} elseif (it.label or it.suffix or it.shortcut) and it.image {
 					w, h          = guiImages[it.image].getDimensions!()
 					it.imageScale = math.min(BUTTON_IMAGE_MAX_SIZE/w, BUTTON_IMAGE_MAX_SIZE/h, 1)
@@ -1778,7 +1779,7 @@ local drawElement :: (state:State, el:Element) {
 			--
 			local PREVIEW_SCALE :: 2.5
 			local project = app.projects[app.currentProjectIndex]
-			local scale   = PREVIEW_SCALE * BUTTON_IMAGE_MAX_SIZE / math.min(LG.getWidth() - MAIN_PANEL_WIDTH, LG.getHeight()) * project.zoom
+			local scale   = PREVIEW_SCALE * PARTICLE_PREVIEW_SIZE / math.min(LG.getWidth() - MAIN_PANEL_WIDTH, LG.getHeight()) * project.zoom
 			local r, g, b = hsvToRgb(project.bgColorH, project.bgColorS, project.bgColorV)
 
 			LG.setColor(1, 1, 1)
@@ -1793,10 +1794,10 @@ local drawElement :: (state:State, el:Element) {
 
 				LG.pushAll()
 				intersectScissor(
-					bx1[itIndex] + (bw[itIndex] - BUTTON_IMAGE_MAX_SIZE) // 2,
-					by1[itIndex] + (bh[itIndex] - BUTTON_IMAGE_MAX_SIZE) // 2 + getScrollOffset(buttons),
-					BUTTON_IMAGE_MAX_SIZE,
-					BUTTON_IMAGE_MAX_SIZE
+					bx1[itIndex] + (bw[itIndex] - PARTICLE_PREVIEW_SIZE) // 2,
+					by1[itIndex] + (bh[itIndex] - PARTICLE_PREVIEW_SIZE) // 2 + getScrollOffset(buttons),
+					PARTICLE_PREVIEW_SIZE,
+					PARTICLE_PREVIEW_SIZE
 				)
 
 				LG.clear(r, g, b)

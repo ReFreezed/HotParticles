@@ -118,6 +118,10 @@ local forceParticleUpdates   = false
 
 local zoomTime = -9999.00
 
+export isMac: bool
+export lctrl: LK.KeyConstant
+export rctrl: LK.KeyConstant
+
 
 
 export QuadTable :: struct { !key:string, !value:LG.Quad }
@@ -216,6 +220,8 @@ export Project :: struct {
 	movementPoint3Y  = 0.0,
 	movementPoint4X  = 0.0,
 	movementPoint4Y  = 0.0,
+
+	particleEmitDuration = 0.00,
 
 	_init :: (project:Project) {
 		static n = 0 ; n += 1
@@ -738,6 +744,10 @@ local onLoad :: (args:[]string, argsRaw:[]string) {
 		-- LT.sleep(1) -- DEBUG
 	}
 
+	isMac = love.system.getOS() == "OS X"
+	lctrl = isMac ? "lgui" : "lctrl"
+	rctrl = isMac ? "rgui" : "rctrl"
+
 	local projectsToOpen: []string
 
 	for args {
@@ -907,6 +917,10 @@ local onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool) 
 			}
 			return
 
+		case "space":
+			for project.systems  it.particles.emit!(1)
+			return
+
 		case "c-s-o":
 			local ok, dir = Path(app.projects[app.currentProjectIndex].path).getDirectory!()
 			if ok  love.system.openURL("file://"..dir)
@@ -1058,16 +1072,24 @@ local onUpdate :: (dt:float) {
 	local project = app.projects[app.currentProjectIndex]
 
 	if forceParticleUpdates or gui.getTopmostActiveModal(guiState) == NULL {
-		local systemsActive = false
+		local systemsActive  = false
+		local dtForParticles = dt
+
+		if not guiState.focusId and LK.isDown"g" and getModifierKey() == ModifierKey.NONE {
+			dtForParticles /= 20
+		}
 
 		local time = LT.getTime()
-		for project.systems  it.particles.update!(dt)
+		for project.systems  it.particles.update!(dtForParticles)
 		particleUpdateTime = LT.getTime()-time
 
-		-- F for fast-forward!
+		project.particleEmitDuration += dtForParticles
+
+		-- F for fast-forward! G for slowdown.
 		if not guiState.focusId and LK.isDown"f" and getModifierKey() == ModifierKey.NONE {
 			for 2, 10 {
-				for project.systems  it.particles.update!(dt)
+				project.particleEmitDuration += dtForParticles
+				for project.systems  it.particles.update!(dtForParticles)
 			}
 		}
 
@@ -1087,6 +1109,8 @@ local onUpdate :: (dt:float) {
 			}
 
 		} else {
+			project.particleEmitDuration = 0
+
 			for system: project.systems {
 				system.particles.start!()
 
@@ -1472,19 +1496,6 @@ local onDraw :: () {
 
 			drawStatsLine("FPS: ", "%d", LT.getFPS())
 
-			!if DEV {
-				local stats = statsAll
-				if stats ~= NULL {
-					drawStatsLine("drawcalls (batched): ",    "%d (%d)",  stats.drawcalls, stats.drawcallsbatched)
-					drawStatsLine("switches canvas/shader: ", "%d/%d",    stats.canvasswitches, stats.shaderswitches)
-					drawStatsLine("texture memory: ",         "%.2f MiB", stats.texturememory/1024^2)
-					drawStatsLine("images/fonts/canvases: ",  "%d/%d/%d", stats.images, stats.fonts, stats.canvases)
-				}
-			}
-
-			drawStatsLine("ParticleSystemUpdateTime: ", "%.3f ms", 1000*particleUpdateTime)
-			drawStatsLine("ParticleSystemDrawTime: ",   "%.3f ms", 1000*particleDrawTime)
-
 			if not flags.refreshrate {
 				drawStatsLine("LoveGraphicsPresentTime: ", "%.3f ms", 1000*presentTime)
 			} elseif ratio >= 10 {
@@ -1495,11 +1506,26 @@ local onDraw :: () {
 				drawStatsLine("LoveGraphicsPresentTime: ", "%.3f ms (%.2f x framerate)",   1000*presentTime, ratio)
 			}
 
-			drawStatsLine("ParticleCountTotal: ", "%d/%d", particleCountTotal, particleCountTotalOptimal)
+			drawStatsLine("ParticleSystemUpdateTime: ", "%.3f ms",  1000*particleUpdateTime)
+			drawStatsLine("ParticleSystemDrawTime: ",   "%.3f ms",  1000*particleDrawTime)
+			drawStatsLine("ParticleCountTotal: ",       "%d/%d",    particleCountTotal, particleCountTotalOptimal)
 
 			for project.systems  drawStatsLine("ParticleCount_", "%d: %d/%d (%d)", itIndex, it.particles.getCount!(), getOptimalBufferSize(it, moreExact=true), it.particles.getBufferSize!())
 
-			!if not DEV  drawStatsLine("(hide this with F1)", "")
+			drawStatsLine("EmitterTime: ", "%.3f sec", project.particleEmitDuration)
+
+			y += 5
+			!if DEV {
+				local stats = statsAll
+				if stats ~= NULL {
+					drawStatsLine("drawcalls (batched): ",    "%d (%d)",  stats.drawcalls, stats.drawcallsbatched)
+					drawStatsLine("switches canvas/shader: ", "%d/%d",    stats.canvasswitches, stats.shaderswitches)
+					drawStatsLine("texture memory: ",         "%.2f MiB", stats.texturememory/1024^2)
+					drawStatsLine("images/fonts/canvases: ",  "%d/%d/%d", stats.images, stats.fonts, stats.canvases)
+				}
+			} else {
+				drawStatsLine("(hide this with F1)", "")
+			}
 		}
 
 		-- Panel(s).

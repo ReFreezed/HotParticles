@@ -47,8 +47,12 @@ Hold alt to change the min/max limits of sliders.
 3. Shortcuts
 ------------------------------------------------------------------------------
 
-F               Fast-forward particles (hold)
+(In macOS, press Cmd instead of Ctrl)
+
+Space           Emit particles
 R               Reset particles
+F               Fast-forward particles (hold)
+G               Slow down particles (hold)
 
 H               Show/hide current particle system
 F1              Show/hide stats (and toggle Vsync)

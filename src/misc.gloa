@@ -93,7 +93,7 @@ export InputField :: !foreign struct {
 
 
 export getModifierKey :: () -> ModifierKey {
-	local ctrl  = LK.isDown("lctrl","rctrl")
+	local ctrl  = LK.isDown(lctrl,rctrl)
 	local alt   = LK.isDown("lalt","ralt")
 	local shift = LK.isDown("lshift","rshift")
 	return

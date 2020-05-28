@@ -58,7 +58,7 @@ export setupGuiFrames :: () {
 						buttons = {
 							{value=Movement.NONE,      label="none",      tooltip="No movement"},
 							{value=Movement.CIRCLE,    label="circle",    tooltip="Circle, or back and forth"},
-							{value=Movement.EIGHT,     label="eight",     tooltip="Numeral eight"},
+							{value=Movement.EIGHT,     label="eight",     tooltip="Numeral eight, on the side"},
 							{value=Movement.IRREGULAR, label="irregular", tooltip="Irregular movement"},
 						}
 					}),
@@ -806,8 +806,8 @@ export setupGuiCallbacks :: () {
 		tabs.index = project.systemIndex
 	}
 	guiState.onBeforeAction.systems = (tabs:gui.Tabs, i:int) -> (ignore:bool) {
-		if i == #tabs.buttons              return false
-		if not LK.isDown("lctrl","rctrl")  return false
+		if i == #tabs.buttons          return false
+		if not LK.isDown(lctrl,rctrl)  return false
 
 		local project              = app.projects[app.currentProjectIndex]
 		project.systems[i].visible = not project.systems[i].visible
