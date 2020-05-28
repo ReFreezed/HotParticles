@@ -794,6 +794,14 @@ local onLoad :: (args:[]string, argsRaw:[]string) {
 			guiImages         [cast(string)name] = image
 
 			insert(particleImageNames, cast(string)name)
+
+			--[[ Black/white to transparent/white.
+			local img = LI.newImageData(path)
+			img.mapPixel!((x,y:int, r,g,b,a:float) -> (r,g,b,a:float) {
+				return 1, 1, 1, r
+			})
+			img.encode!(LI.ImageFormat.PNG, it)
+			--]]
 		}
 	}
 
