@@ -1,13 +1,26 @@
 Hot Particles - a particle editor for LÖVE
 Developed by Marcus 'ReFreezed' Thunström
 
-1. Info and controls
-2. Shortcuts
-3. Exporting
-4. Template API
+1. Disclaimer
+2. Info and controls
+3. Shortcuts
+4. Exporting
+5. Template API
 
 
-1. Info and controls
+1. Disclaimer
+------------------------------------------------------------------------------
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
+2. Info and controls
 ------------------------------------------------------------------------------
 
 The program operates using "projects". Projects are saved in *.hotparticles
@@ -31,7 +44,7 @@ Hold shift to drag related controls together (like min and max speed).
 Hold alt to change the min/max limits of sliders.
 
 
-2. Shortcuts
+3. Shortcuts
 ------------------------------------------------------------------------------
 
 F               Fast-forward particles (hold)
@@ -63,7 +76,7 @@ Ctrl+Delete     Delete particle system
 Ctrl+Q          Quit
 
 
-3. Exporting
+4. Exporting
 ------------------------------------------------------------------------------
 
 It's possible to export particle system information and textures (the original
@@ -77,7 +90,7 @@ edit existing scripts or make completely new ones to fit your game (see the
 "Template API" section).
 
 
-4. Template API
+5. Template API
 ------------------------------------------------------------------------------
 
 Templates are normal Lua scripts in the "exportTemplates" folder. Some of the
