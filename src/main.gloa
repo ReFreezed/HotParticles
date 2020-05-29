@@ -138,8 +138,9 @@ export App :: struct {
 	showStats           = false,
 	showPanelNumbers    = true,
 
-	recentFiles:   []string,
-	recentFolders: []string,
+	recentFiles:    []string,
+	recentFolders:  []string,
+	recentTextures: []string,
 
 	bookmarkedFolders: []string,
 
@@ -473,8 +474,8 @@ export updateParticleTextures :: (project:Project) {
 	for project.systems  updateParticleTexture(project, it)
 }
 
-export updateParticleTexture :: (project:Project, system:System) {
-	local loadParticleTexture :: (project:Project, system:System) -> LF.FileData, LG.Image {
+export updateParticleTexture :: (project:Project, system:System, saveRecent=false) {
+	local loadParticleTexture :: (project:Project, system:System, saveRecent:bool) -> LF.FileData, LG.Image {
 		local ok, path, isDangling = getTextureFullPath(project, system)
 		if not ok {
 			if isDangling
@@ -500,15 +501,17 @@ export updateParticleTexture :: (project:Project, system:System) {
 			return NULL, NULL
 		}
 
-		local image = LG.newImage(filename)
+		if saveRecent  addRecent(app.recentTextures, system.texturePath, MAX_RECENT_FILES)
+		-- if saveRecent  addRecent(app.recentTextures, path, MAX_RECENT_FILES)
 
+		local image = LG.newImage(filename)
 		return cast(LF.FileData)imageData, image
 	}
 
 	local imageData: LF.FileData = NULL
 	local image:     LG.Image    = NULL
 
-	if system.texturePath  imageData, image = loadParticleTexture(project, system) -- @Speed: Don't reload the texture if there's no change.
+	if system.texturePath  imageData, image = loadParticleTexture(project, system, true) -- @Speed: Don't reload the texture if there's no change.
 
 	if imageData == NULL {
 		imageData = particleImageDatas[system.textureName]
@@ -981,9 +984,20 @@ local onTextInput :: (text:string) {
 	if gui.onTextInput(guiState, text)  return
 }
 
+local macCtrlClick = false
+
 local onMousePressed :: (mx,my:int, mbutton:int, isTouch:bool, presses:int) {
 	if isTouch         return
 	if LM.isGrabbed()  return
+
+	-- @Cleanup: Make sure this is actually needed:
+	if isMac and mbutton == 1 and LK.isDown("lctrl", "rctrl") {
+		if LM.isDown(2)  return -- Make sure the user can't control-click while already right-clicking as those methods should result in the same action. :MacRightClick
+		mbutton      = 2
+		macCtrlClick = true
+	} elseif macCtrlClick and mbutton == 2 {
+		return -- :MacRightClick
+	}
 
 	if gui.onMousePressed(guiState, mx, my, mbutton, presses)  return
 
@@ -1016,6 +1030,11 @@ local onMouseMoved :: (mx,my:int, dx,dy:int, isTouch:bool) {
 
 local onMouseReleased :: (mx,my:int, mbutton:int, isTouch:bool, presses:int) {
 	if isTouch  return
+
+	if macCtrlClick and mbutton == 1 {
+		mbutton      = 2
+		macCtrlClick = false
+	}
 
 	if isPositioningParticles and mbutton == 1 {
 		isPositioningParticles = false
@@ -1648,6 +1667,12 @@ local onResize :: (ww,wh:int) {
 
 
 
+local onFocus :: (hasFocus:bool) {
+	gui.onFocus(guiState, hasFocus)
+}
+
+
+
 local main :: () {
 	!import "utils"
 	local LOVE: table : !foreign lua "love"
@@ -1665,6 +1690,7 @@ local main :: () {
 	LOVE.update        = wrapFunctionInGloaErrorHandler(onUpdate)
 	LOVE.draw          = wrapFunctionInGloaErrorHandler(onDraw)
 	LOVE.resize        = wrapFunctionInGloaErrorHandler(onResize)
+	LOVE.focus         = wrapFunctionInGloaErrorHandler(onFocus)
 	LOVE.errorhandler  = nil
 	LOVE.errhand       = nil
 }

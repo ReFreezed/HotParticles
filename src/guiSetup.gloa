@@ -905,7 +905,32 @@ export setupGuiCallbacks :: () {
 		system.texturePath    = path
 		input.value           = path
 		markEdited(project)
-		updateParticleTexture(project, system)
+		updateParticleTexture(project, system, saveRecent=true)
+	}
+	guiState.onOption.texturePath = (input:gui.InputText, _:int) {
+		local items = {"Recent textures:"}
+
+		if app.recentTextures {
+			for app.recentTextures  insert(items, it)
+			insert(items, "Clear history")
+		} else {
+			insert(items, "(no recent files)")
+		}
+
+		gui.showContextMenu(guiState, items, [items] (i:int) {
+			if i <= 1 or not app.recentTextures {
+				-- void
+			} elseif i == #items {
+				app.recentTextures = {}
+			} else {
+				local project, system = getCurrentProjectAndSystem()
+				local path            = items[i]
+				system.texturePath    = path
+				markEdited(project)
+				updateParticleTexture(project, system, saveRecent=true)
+				gui.refreshRecursively(guiState, "texturePath")
+			}
+		})
 	}
 
 	guiState.onAction.reloadTexture = (buttons:gui.Buttons, i:int) {

@@ -419,9 +419,24 @@ export onKeyPressed :: (state:State, key:LK.KeyConstant, scancode:LK.Scancode, i
 	}
 	if state.activeId  return true
 
+	--   escape other  situation
+	-- ----------------------------------------------
+	--   pass   pass   nothing
+	-- * blur   input  normal input focused
+	-- * close  eat    normal input focused + context menu
+	--   close  eat    context menu
+	-- * blur   input  context menu + inner input focused
+
 	-- Key events for inputs (which may be in a context menu).
 	if state.focusId {
 		local input = cast(InputText) state.elementsById[state.focusId]
+
+		-- Input outside context menu.
+		if state.contextMenu ~= NULL and input.frame ~= state.contextMenu {
+			if key == "escape"  hideContextMenu(state)
+			return true
+		}
+
 		if key == "escape" {
 			blurFocus(state, abort=true)
 		} elseif key == "return" or key == "kpenter" {
@@ -518,6 +533,12 @@ export onKeyReleased :: (state:State, key:LK.KeyConstant, scancode:LK.Scancode) 
 export onTextInput :: (state:State, text:string) -> (handled:bool) {
 	if state.focusId {
 		local input = cast(InputText) state.elementsById[state.focusId]
+
+		-- Input outside context menu.
+		if state.contextMenu ~= NULL and input.frame ~= state.contextMenu {
+			return true
+		}
+
 		input.field.textinput!(text)
 		return true
 	}
@@ -1092,6 +1113,10 @@ export onMouseWheel :: (state:State, dx,dy:int) -> (handled:bool) {
 	}
 
 	return false
+}
+
+export onFocus :: (state:State, hasFocus:bool) {
+	if not hasFocus  hideContextMenu(state)
 }
 
 
