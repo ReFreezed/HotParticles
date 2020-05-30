@@ -54,7 +54,7 @@ local doRelease :: () {
 			case "pathMagick":   pathMagick   = cast(string) v
 			case "pathPngCrush": pathPngCrush = cast(string) v
 			case "pathRh":       pathRh       = cast(string) v
-			case:                error(cast(string) k)
+			case:                printf("Error @ build.txt: '%s'", cast(string) k)
 		}
 	}
 
@@ -226,7 +226,7 @@ local doRelease :: () {
 		-- Add remaining files.
 		do {
 			copyFilesInDirectory("exportTemplates", outputDir.."/exportTemplates", "%.lua$")
-			copyFile("README.txt", outputDir.."/_README.txt")
+			copyFile("misc/README.txt", outputDir.."/_README.txt")
 		}
 	}
 
@@ -239,8 +239,8 @@ local doRelease :: () {
 
 		copyFilesInDirectory("exportTemplates", outputDir.."/exportTemplates", "%.lua$")
 		copyFile(values.lovePath,          format("%s/%s.love",     outputDir, values.exeName))
-		copyFile("README.txt",             format("%s/_README.txt",             outputDir))
-		copyFile("README (universal).txt", format("%s/_README (universal).txt", outputDir))
+		copyFile("misc/README.txt",             format("%s/_README.txt",             outputDir))
+		copyFile("misc/README (universal).txt", format("%s/_README (universal).txt", outputDir))
 	}
 
 	-- Zip for distribution!
