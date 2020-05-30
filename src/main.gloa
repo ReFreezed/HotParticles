@@ -16,6 +16,9 @@
 	}
 ]]
 
+local GIF_RECORDING_MODE :: DEV and 1==0
+local GIF_FRAME_DELAY    :: 1 -- 100th of a second.
+
 export APP_VERSION_STRING :: "1.0.0" -- @Cleanup: Put this in an external file and use it in build.gloa too.
 
 export MAX_BUFFER_SIZE      :: 16000 -- Default buffer size for ParticleSystem is 1000.  @Incomplete: Make this configurable.
@@ -39,12 +42,14 @@ export DEV :: !run isDev()
 
 export !import "basic"
 export !import "color"
-export !import "string"
 export !import "io/path"
+export !import "string"
+
 export io     :: !import "io"
 export math   :: !import "math"
-export utf8   :: !import "utf8"
+export os     :: !import "os"
 export physfs :: !import "love/physfs"
+export utf8   :: !import "utf8"
 
 export love :: !import "love"
 export LD :: love.data
@@ -60,8 +65,12 @@ local  LE :: love.event
 export !self
 export !load "src/misc"
 export !load "src/workspace"
+
 export gui :: !load "src/gui"
+
 !load "src/guiSetup"
+
+!if DEV  !load "src/params"
 
 
 
@@ -81,6 +90,7 @@ export particleImageNames: []string
 export particleImageDatas: struct { !key:string, !value:LF.FileData } -- FileData, not ImageData! The latter is problematic when we export textures.
 export particleImages:     struct { !key:string, !value:LG.Image    }
 export guiImages:          struct { !key:string, !value:LG.Image    }
+export dummyCursors:       struct { !key:LM.CursorType, !value:DummyCursor }
 
 export icon16Quads: QuadTable = NULL
 
@@ -122,9 +132,24 @@ export isMac: bool
 export lctrl: LK.KeyConstant
 export rctrl: LK.KeyConstant
 
+export currentCursor = LM.CursorType.ARROW
+
+!if GIF_RECORDING_MODE {
+	export gifRecordingActive    = false
+	export gifRecordingFrame     = 1
+	export gifRecordingName      = ""
+	export gifRecordingDirectory = ""
+}
+
 
 
 export QuadTable :: struct { !key:string, !value:LG.Quad }
+
+export DummyCursor :: struct {
+	hotX: int,
+	hotY: int,
+	data: LI.ImageData = NULL,
+}
 
 
 
@@ -778,6 +803,10 @@ local onLoad :: (args:[]string, argsRaw:[]string) {
 
 	LF.createDirectory("projects")
 
+	dummyCursors[LM.CursorType.ARROW]         = {hotX=2, hotY=2,  data=LI.newImageData("gfx/cursor_arrow.png")}
+	dummyCursors[LM.CursorType.I_BEAM]        = {hotX=4, hotY=9,  data=LI.newImageData("gfx/cursor_ibeam.png")}
+	dummyCursors[LM.CursorType.SIZE_VERTICAL] = {hotX=6, hotY=12, data=LI.newImageData("gfx/cursor_sizens.png")}
+
 	imageBoxGradient = LG.newImage("gfx/boxGradient.png")
 	imageChecker     = LG.newImage("gfx/checker.png") ; imageChecker.setWrap!(LG.WrapMode.REPEAT, LG.WrapMode.REPEAT) ; imageChecker.setFilter!(LG.FilterMode.NEAREST, LG.FilterMode.NEAREST)
 	imageGradient    = LG.newImage("gfx/gradient.png")
@@ -851,6 +880,15 @@ local onLoad :: (args:[]string, argsRaw:[]string) {
 			flags.centered = true
 		}
 
+		!if GIF_RECORDING_MODE {
+			w              = 1000
+			h              = 500
+			flags.x        = nil
+			flags.y        = nil
+			flags.centered = true
+			maximized      = false
+		}
+
 		app.windowWidth  = w
 		app.windowHeight = h
 
@@ -907,6 +945,43 @@ local onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool) 
 			app.showPanelNumbers = not app.showPanelNumbers
 			scheduleSaveWorkspace()
 			return
+
+		case "f8":
+			!if GIF_RECORDING_MODE {
+				gifRecordingActive = not gifRecordingActive
+				printf("Recording gif: %s", toString(gifRecordingActive))
+
+				if gifRecordingActive {
+					gifRecordingFrame     = 1
+					gifRecordingName      = os.getDate("%Y%m%d_%H%M%S")
+					gifRecordingDirectory = "gif_"..gifRecordingName
+					LF.createDirectory(gifRecordingDirectory)
+
+				} else {
+					printf("Recorded frames: %d", gifRecordingFrame-1)
+
+					local params = loadParams()
+
+					local ok, err, code, cmd = os.execute(params.pathMagick, {
+						"convert",
+						"-delay", format("%d", GIF_FRAME_DELAY), -- 100th of a second.
+						format("%s/%s/frame*.png", getSaveDirectory(), gifRecordingDirectory),
+						"-coalesce",    -- Fill out frames.
+						"-deconstruct", -- Find areas changed between frames.
+						"-loop", "0",   -- Loop forever.
+						format("%s/%s/%s.gif", getSaveDirectory(), gifRecordingDirectory, gifRecordingName),
+					})
+
+					if not ok {
+						setErrorText("Failed executing '%s': %s", cmd, err)
+					} elseif code ~= 0 {
+						setErrorText("Failed making gif (Error %d)", code)
+					} else {
+						love.system.openURL(format("file://%s/%s", getSaveDirectory(), gifRecordingDirectory))
+					}
+				}
+			}
+			return
 	}
 
 	if gui.onKeyPressed(guiState, key, scancode, isRepeat)  return
@@ -934,7 +1009,13 @@ local onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool) 
 			return
 
 		case "space":
-			for project.systems  it.particles.emit!(1)
+			for project.systems {
+				local ps     = it.particles
+				local active = ps.isActive!()
+				if not active  ps.start!() -- Needed for emit() to work.
+				ps.emit!(1)
+				if not active  ps.stop!()
+			}
 			return
 
 		case "c-s-o":
@@ -1091,6 +1172,8 @@ local onMouseWheel :: (dx,dy:int) {
 
 
 local onUpdate :: (dt:float) {
+	!if GIF_RECORDING_MODE  if gifRecordingActive  dt = GIF_FRAME_DELAY / 100
+
 	if freezeDtThisFrame {
 		dt                = 0
 		freezeDtThisFrame = false
@@ -1653,6 +1736,45 @@ local onDraw :: () {
 	LG.draw(canvasGui)
 
 	!if DEV  LG.getStats(statsAll)
+
+	!if GIF_RECORDING_MODE  if gifRecordingActive {
+		LG.captureScreenshot((screenshot:LI.ImageData) {
+			if gifRecordingFrame % 10 == 0  printf("Frame %d (%.2f sec)", gifRecordingFrame, gifRecordingFrame*GIF_FRAME_DELAY/100)
+
+			if LW.hasMouseFocus() {
+				local dummyCursor = dummyCursors[currentCursor]
+				local cursorData  = dummyCursor.data
+				local mx, my      = LM.getPosition()
+				local w,  h       = cursorData.getDimensions!()
+
+				local screenshotW, screenshotH = screenshot.getDimensions!()
+
+				local x1 = mx - dummyCursor.hotX
+				local y1 = my - dummyCursor.hotY
+				local x2 = x1 + w - 1
+				local y2 = y1 + h - 1
+
+				local mapX1 = math.max(x1, 0)
+				local mapY1 = math.max(y1, 0)
+				local mapX2 = math.min(x2, screenshotW-w)
+				local mapY2 = math.min(y2, screenshotH-h)
+
+				screenshot.mapPixel!(mapX1, mapY1, mapX2-mapX1+1, mapY2-mapY1+1, [cursorData, x1, y1] (x,y:int, r,g,b,a:float) -> (r,g,b,a:float) {
+					local r2, g2, b2, a2 = cursorData.getPixel!(x-x1, y-y1)
+					return
+						math.lerp(r, r2, a2),
+						math.lerp(g, g2, a2),
+						math.lerp(b, b2, a2),
+						1 - (1-a) * (1-a2)
+				})
+			}
+
+			local path = format("%s/frame%04d.png", gifRecordingDirectory, gifRecordingFrame)
+			screenshot.encode!(LI.ImageFormat.PNG, path)
+
+			gifRecordingFrame += 1
+		})
+	}
 
 	local time = LT.getTime()
 	LG.present()

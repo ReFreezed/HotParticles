@@ -621,11 +621,13 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int) {
 	updateLayoutIfNeeded(state)
 
 	local updateMouseCursor :: (state:State) {
+		using currentCursor
+
 		if (
 			state.hoveredId
 			and (state.focusId == state.hoveredId or state.elementsById[state.hoveredId].type == InputText)
 		) {
-			LM.setCursor(LM.getSystemCursor(LM.CursorType.I_BEAM))
+			currentCursor = I_BEAM
 
 		} elseif (
 			(state.activeId or state.hoveredId)
@@ -633,11 +635,13 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int) {
 			and (cast(Slider) state.elementsById[math.max(state.activeId, state.hoveredId)]).limitName
 			and ((state.activeId and state.activeMod == ModifierKey.A) or (not state.activeId and getModifierKey() == ModifierKey.A))
 		) {
-			LM.setCursor(LM.getSystemCursor(LM.CursorType.SIZE_VERTICAL))
+			currentCursor = SIZE_VERTICAL
 
 		} else {
-			LM.setCursor()
+			currentCursor = ARROW
 		}
+
+		LM.setCursor(LM.getSystemCursor(currentCursor))
 	}
 
 	if state.focusId {

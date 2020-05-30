@@ -1,0 +1,44 @@
+--[[============================================================
+--=
+--=  Local parameters
+--=
+--=-------------------------------------------------------------
+--=
+--=  Hot Particles - a particle editor for LÖVE
+--=  by Marcus 'ReFreezed' Thunström
+--=
+--============================================================]]
+
+export Params :: struct {
+	dirLove: string,
+	path7z: string,
+	pathMagick: string,
+	pathPngCrush: string,
+	pathRh: string,
+}
+
+export loadParams :: () -> Params {
+	local params: Params
+
+	for line in io.eachLine"local/params.txt"  if line {
+		local ok, k, v = matchPattern(line, "^([%w_]+)%s*=%s*(.*)$")
+		assert(ok, line)
+
+		if cast(string) k == {
+			case "dirLove":      params.dirLove      = cast(string) v
+			case "path7z":       params.path7z       = cast(string) v
+			case "pathMagick":   params.pathMagick   = cast(string) v
+			case "pathPngCrush": params.pathPngCrush = cast(string) v
+			case "pathRh":       params.pathRh       = cast(string) v
+			case:                printf("Error @ params.txt: '%s'", cast(string) k)
+		}
+	}
+
+	assert(params.dirLove      ~= "", "dirLove")
+	assert(params.path7z       ~= "", "path7z")
+	assert(params.pathMagick   ~= "", "pathMagick")
+	assert(params.pathPngCrush ~= "", "pathPngCrush")
+	assert(params.pathRh       ~= "", "pathRh")
+
+	return params
+}
