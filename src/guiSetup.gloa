@@ -73,7 +73,7 @@ export setupGuiFrames :: () {
 
 				guiState.separator!({ thick=false }),
 
-				guiState.section!({ name="scaleGlobalSection", label="ScaleGlobal", icon16="scale",
+				guiState.section!({ name="scaleGlobalSection", label="GlobalScale", icon16="scale",
 					guiState.slider!({ name="scaleGlobalTime",  labelLeft="time",  min=0, max=4, exponential=true, limitName="scaleGlobalTime",  readoutMulti=100, readout="%d%%" }),
 					guiState.slider!({ name="scaleGlobalSpace", labelLeft="space", min=0, max=4, exponential=true, limitName="scaleGlobalSpace", readoutMulti=100, readout="%d%%", linkMultiDrag={"scaleGlobalSize"} }),
 					guiState.slider!({ name="scaleGlobalSize",  labelLeft="size",  min=0, max=4, exponential=true, limitName="scaleGlobalSize",  readoutMulti=100, readout="%d%%", linkMultiDrag={"scaleGlobalSpace"} }),
@@ -799,7 +799,7 @@ export setupGuiCallbacks :: () {
 		tabs.buttons  = {}
 
 		for project.systems {
-			insert(tabs.buttons, cast(gui.Button){ system=it, draggable=true })
+			insert(tabs.buttons, cast(gui.Button){ system=it, draggable=true, tooltip=format("Particle system #%d (Ctrl+click to toggle)", itIndex) })
 		}
 		insert(tabs.buttons, cast(gui.Button){ image="iconAdd", tooltip="New particle system" })
 

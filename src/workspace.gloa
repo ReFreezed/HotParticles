@@ -443,9 +443,9 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 			if project == NULL {
 				if param == {
 					case "stats":
-						local ^ok, ^ptr, flag = readBool(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
+						local ^ok, ^ptr, n = readInt(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
-						app.showStats = flag
+						app.showStats = n
 					case "showProjectSettings":
 						local ^ok, ^ptr, flag = readBool(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)

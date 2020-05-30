@@ -3,7 +3,7 @@ extern int  colorCount;
 
 int clampInt(int v, int low, int high) {
 	if (v < low ) return low;
-	if (v > high) return low;
+	if (v > high) return high;
 	return v;
 }
 

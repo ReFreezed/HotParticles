@@ -128,14 +128,19 @@ export QuadTable :: struct { !key:string, !value:LG.Quad }
 
 
 
+export STATS_NONE  :: 0
+export STATS_SOME  :: 1
+export STATS_ALL   :: 2
+export STATS_COUNT :: 3
+
 export App :: struct {
 	-- Saved workspace data:
 
 	projects: []Project,
 	currentProjectIndex = 1,
 
+	showStats           = STATS_SOME,
 	showProjectSettings = false,
-	showStats           = false,
 	showPanelNumbers    = true,
 
 	recentFiles:    []string,
@@ -853,7 +858,7 @@ local onLoad :: (args:[]string, argsRaw:[]string) {
 		if maximized  LW.maximize()
 	}
 
-	LW.setVSync(app.showStats ? 0 : 1)
+	LW.setVSync(app.showStats == STATS_ALL ? 0 : 1)
 
 	setupGuiFrames()
 	setupGuiCallbacks()
@@ -893,8 +898,8 @@ local onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool) 
 			return
 
 		case "f1":
-			app.showStats = not app.showStats
-			LW.setVSync(app.showStats ? 0 : 1)
+			app.showStats = (app.showStats + 1) % STATS_COUNT
+			LW.setVSync(app.showStats == STATS_ALL ? 0 : 1)
 			scheduleSaveWorkspace()
 			return
 
@@ -1518,40 +1523,50 @@ local onDraw :: () {
 				y += fontH+1
 			}
 
-			local _, _, flags = LW.getMode()
-			local ratio       = 1 / presentTime / flags.refreshrate
+			drawStatsLine("FPS: ", "%d%s", LT.getFPS(), (app.showStats == STATS_ALL ? "" : " (vsync)"))
 
-			drawStatsLine("FPS: ", "%d", LT.getFPS())
+			if app.showStats == STATS_ALL {
+				local _, _, flags = LW.getMode()
+				local ratio       = 1 / presentTime / flags.refreshrate
 
-			if not flags.refreshrate {
-				drawStatsLine("LoveGraphicsPresentTime: ", "%.3f ms", 1000*presentTime)
-			} elseif ratio >= 10 {
-				drawStatsLine("LoveGraphicsPresentTime: ", "%.3f ms (%.0f.0 x framerate)", 1000*presentTime, ratio)
-			} elseif ratio >= 2 {
-				drawStatsLine("LoveGraphicsPresentTime: ", "%.3f ms (%.1f0 x framerate)",  1000*presentTime, ratio)
-			} else {
-				drawStatsLine("LoveGraphicsPresentTime: ", "%.3f ms (%.2f x framerate)",   1000*presentTime, ratio)
+				if not flags.refreshrate {
+					drawStatsLine("LoveGraphicsPresentTime: ", "%.3f ms", 1000*presentTime)
+				} elseif ratio >= 10 {
+					drawStatsLine("LoveGraphicsPresentTime: ", "%.3f ms (%.0f.0 x framerate)", 1000*presentTime, ratio)
+				} elseif ratio >= 2 {
+					drawStatsLine("LoveGraphicsPresentTime: ", "%.3f ms (%.1f0 x framerate)",  1000*presentTime, ratio)
+				} else {
+					drawStatsLine("LoveGraphicsPresentTime: ", "%.3f ms (%.2f x framerate)",   1000*presentTime, ratio)
+				}
+
+				drawStatsLine("ParticleSystemUpdateTime: ", "%.3f ms",  1000*particleUpdateTime)
+				drawStatsLine("ParticleSystemDrawTime: ",   "%.3f ms",  1000*particleDrawTime)
 			}
 
-			drawStatsLine("ParticleSystemUpdateTime: ", "%.3f ms",  1000*particleUpdateTime)
-			drawStatsLine("ParticleSystemDrawTime: ",   "%.3f ms",  1000*particleDrawTime)
-			drawStatsLine("ParticleCountTotal: ",       "%d/%d",    particleCountTotal, particleCountTotalOptimal)
+			drawStatsLine("ParticleCountTotal: ", "%d/%d", particleCountTotal, particleCountTotalOptimal)
 
-			for project.systems  drawStatsLine("ParticleCount_", "%d: %d/%d (%d)", itIndex, it.particles.getCount!(), getOptimalBufferSize(it, moreExact=true), it.particles.getBufferSize!())
+			if #project.systems > 1  for project.systems {
+				drawStatsLine("ParticleCount_", "%d: %d/%d (%d)", itIndex, it.particles.getCount!(), getOptimalBufferSize(it, moreExact=true), it.particles.getBufferSize!())
+			}
 
 			drawStatsLine("EmitterTime: ", "%.3f sec", project.particleEmitDuration)
 
-			y += 5
 			!if DEV {
 				local stats = statsAll
-				if stats ~= NULL {
+				if app.showStats == STATS_ALL and stats ~= NULL {
+					y += 5
 					drawStatsLine("drawcalls (batched): ",    "%d (%d)",  stats.drawcalls, stats.drawcallsbatched)
 					drawStatsLine("switches canvas/shader: ", "%d/%d",    stats.canvasswitches, stats.shaderswitches)
 					drawStatsLine("texture memory: ",         "%.2f MiB", stats.texturememory/1024^2)
 					drawStatsLine("images/fonts/canvases: ",  "%d/%d/%d", stats.images, stats.fonts, stats.canvases)
 				}
+				if app.showStats == STATS_SOME {
+					y += 5
+					drawStatsLine("(hide with F1)", "")
+				}
 			} else {
-				drawStatsLine("(hide this with F1)", "")
+				y += 5
+				drawStatsLine("(hide with F1)", "")
 			}
 		}
 
