@@ -36,12 +36,12 @@ which is useful for continuous particle effects (like rain or fire).
 
 Press the particle viewing area to move the particle emitter.
 
-Right-click on controls to show the context menu.
+Right-click on controls to show the context menu. (Or Ctrl-click in macOS.)
 Middle-click tabs to close them.
 
-Hold ctrl while dragging controls to snap the value.
-Hold shift to drag related controls together (like min and max speed).
-Hold alt to change the min/max limits of sliders.
+Hold Ctrl/Cmd while dragging controls to snap the value.
+Hold Shift to drag related controls together (like min and max speed).
+Hold Alt to change the min/max limits of sliders.
 
 
 3. Shortcuts
