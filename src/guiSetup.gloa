@@ -23,7 +23,7 @@ export setupGuiFrames :: () {
 
 			guiState.buttons!({ name="saveOpenBar",
 				buttons = {
-					{label="Open...",    tooltip="Open project  (Ctrl+O)"},
+					{label="Open...",    tooltip="Open project  (Ctrl+O) (Right-click for recent)"},
 					{label="Save",       tooltip="Save project  (Ctrl+S)"},
 					{label="Save as...", tooltip="Save new project  (Ctrl+Shift+S)"},
 					{label="Export...",  tooltip="Export particles/textures to files/clipboard  (Ctrl+E)"},
@@ -558,7 +558,7 @@ export setupGuiCallbacks :: () {
 			local label = (it.edited ? format("%s •", it.displayedName) : it.displayedName)
 			insert(tabs.buttons, cast(gui.Button){ label=label, tooltip=it.path, draggable=true })
 		}
-		insert(tabs.buttons, cast(gui.Button){ image="iconAdd", tooltip="New project (Ctrl+N)" })
+		insert(tabs.buttons, cast(gui.Button){ image="iconAdd", tooltip="New project  (Ctrl+N)" })
 
 		tabs.index = app.currentProjectIndex
 	}

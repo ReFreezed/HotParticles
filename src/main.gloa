@@ -135,10 +135,13 @@ export rctrl: LK.KeyConstant
 export currentCursor = LM.CursorType.ARROW
 
 !if GIF_RECORDING_MODE {
-	export gifRecordingActive    = false
-	export gifRecordingFrame     = 1
-	export gifRecordingName      = ""
-	export gifRecordingDirectory = ""
+	local gifRecordingActive    = false
+	local gifRecordingFrame     = 1
+	local gifRecordingName      = ""
+	local gifRecordingDirectory = ""
+
+	local VisualMousePress :: struct { x:int, y:int, progress=0.0 }
+	local visualMousePresses: []VisualMousePress
 }
 
 
@@ -960,27 +963,41 @@ local onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool) 
 				} else {
 					printf("Recorded frames: %d", gifRecordingFrame-1)
 
-					local params = loadParams()
-
-					local ok, err, code, cmd = os.execute(params.pathMagick, {
+					local ok, err, code, cmd = os.execute(loadParams().pathMagick, {
 						"convert",
 						"-delay", format("%d", GIF_FRAME_DELAY), -- 100th of a second.
 						format("%s/%s/frame*.png", getSaveDirectory(), gifRecordingDirectory),
 						"-coalesce",    -- Fill out frames.
 						"-deconstruct", -- Find areas changed between frames.
 						"-loop", "0",   -- Loop forever.
-						format("%s/%s/%s.gif", getSaveDirectory(), gifRecordingDirectory, gifRecordingName),
+						format("%s/screenshots/%s.gif", getSaveDirectory(), gifRecordingName),
 					})
+					if ok  print(cmd)
 
 					if not ok {
 						setErrorText("Failed executing '%s': %s", cmd, err)
 					} elseif code ~= 0 {
 						setErrorText("Failed making gif (Error %d)", code)
 					} else {
-						love.system.openURL(format("file://%s/%s", getSaveDirectory(), gifRecordingDirectory))
+						local path = format("%s/%s", getSaveDirectory(), gifRecordingDirectory)
+						print("Gif: "..path)
+						-- love.system.openURL("file://"..path)
 					}
 				}
 			}
+			return
+
+		case "f12": !through
+		case "s-f12":
+			!if DEV  LG.captureScreenshot([mod] (screenshot:LI.ImageData) {
+				if mod == ModifierKey.S  overlayDummyCursor(screenshot)
+				LF.createDirectory("screenshots")
+				screenshot.encode!(LI.ImageFormat.PNG, os.getDate("screenshots/%Y%m%d_%H%M%S.png"))
+			})
+			return
+
+		case "c-s-f12":
+			!if DEV  love.system.openURL(format("file://%s/screenshots", getSaveDirectory()))
 			return
 	}
 
@@ -1075,6 +1092,10 @@ local macCtrlClick = false
 local onMousePressed :: (mx,my:int, mbutton:int, isTouch:bool, presses:int) {
 	if isTouch         return
 	if LM.isGrabbed()  return
+
+	!if GIF_RECORDING_MODE  if gifRecordingActive {
+		insert(visualMousePresses, cast(VisualMousePress) {x=mx, y=my})
+	}
 
 	-- @Cleanup: Make sure this is actually needed:
 	if isMac and mbutton == 1 and LK.isDown("lctrl", "rctrl") {
@@ -1184,9 +1205,10 @@ local onUpdate :: (dt:float) {
 		if flags.refreshrate and dt > 1/10  dt = 1/flags.refreshrate
 	}
 
-	local project = app.projects[app.currentProjectIndex]
+	local project           = app.projects[app.currentProjectIndex]
+	local doUpdateParticles = forceParticleUpdates or gui.getTopmostActiveModal(guiState) == NULL
 
-	if forceParticleUpdates or gui.getTopmostActiveModal(guiState) == NULL {
+	if doUpdateParticles {
 		local systemsActive  = false
 		local dtForParticles = dt
 
@@ -1248,7 +1270,7 @@ local onUpdate :: (dt:float) {
 
 	if scheduleRecreateCanvases  createCanvases()
 
-	if not isPositioningParticles {
+	if doUpdateParticles and not isPositioningParticles {
 		local MOVEMENT_BASE :: 250
 
 		-- project.movementSpeed = LK.isDown"." ? .04 : 1 -- DEBUG
@@ -1329,6 +1351,11 @@ local onUpdate :: (dt:float) {
 	)
 
 	gui.update(guiState, dt)
+
+	!if GIF_RECORDING_MODE  for < visualMousePresses {
+		it.progress += dt/.20
+		if it.progress >= 1  remove(visualMousePresses, itIndex)
+	}
 }
 
 
@@ -1701,10 +1728,12 @@ local onDraw :: () {
 
 		-- Dev/debug stuff.
 		!if DEV {
-			local visibility = 1 - (LT.getTime() - workspaceSaveTime) / 0.40
-			if visibility > 0 {
-				LG.setColor(1, 1, 1, .4*visibility^.5)
-				LG.circle(LG.DrawMode.FILL, ww-10, 10, 4, 8)
+			!if GIF_RECORDING_MODE  if not gifRecordingActive {
+				local visibility = 1 - (LT.getTime() - workspaceSaveTime) / 0.40
+				if visibility > 0 {
+					LG.setColor(1, 1, 1, .4*visibility^.5)
+					LG.circle(LG.DrawMode.FILL, ww-10, 10, 4, 8)
+				}
 			}
 
 			-- LG.setColor(1, 1, 1)
@@ -1719,6 +1748,13 @@ local onDraw :: () {
 			LG.line(mx, my-50, mx, my+50)
 		}
 		--]]
+
+		!if GIF_RECORDING_MODE {
+			LG.setLineWidth(2)
+			LG.setColor(1, 1, 1)
+			for visualMousePresses  LG.circle(LG.DrawMode.LINE, it.x, it.y, math.lerp(2, 22, it.progress), 32)
+			LG.setLineWidth(1)
+		}
 
 		LG.reset()
 	}
@@ -1741,33 +1777,7 @@ local onDraw :: () {
 		LG.captureScreenshot((screenshot:LI.ImageData) {
 			if gifRecordingFrame % 10 == 0  printf("Frame %d (%.2f sec)", gifRecordingFrame, gifRecordingFrame*GIF_FRAME_DELAY/100)
 
-			if LW.hasMouseFocus() {
-				local dummyCursor = dummyCursors[currentCursor]
-				local cursorData  = dummyCursor.data
-				local mx, my      = LM.getPosition()
-				local w,  h       = cursorData.getDimensions!()
-
-				local screenshotW, screenshotH = screenshot.getDimensions!()
-
-				local x1 = mx - dummyCursor.hotX
-				local y1 = my - dummyCursor.hotY
-				local x2 = x1 + w - 1
-				local y2 = y1 + h - 1
-
-				local mapX1 = math.max(x1, 0)
-				local mapY1 = math.max(y1, 0)
-				local mapX2 = math.min(x2, screenshotW-w)
-				local mapY2 = math.min(y2, screenshotH-h)
-
-				screenshot.mapPixel!(mapX1, mapY1, mapX2-mapX1+1, mapY2-mapY1+1, [cursorData, x1, y1] (x,y:int, r,g,b,a:float) -> (r,g,b,a:float) {
-					local r2, g2, b2, a2 = cursorData.getPixel!(x-x1, y-y1)
-					return
-						math.lerp(r, r2, a2),
-						math.lerp(g, g2, a2),
-						math.lerp(b, b2, a2),
-						1 - (1-a) * (1-a2)
-				})
-			}
+			overlayDummyCursor(screenshot)
 
 			local path = format("%s/frame%04d.png", gifRecordingDirectory, gifRecordingFrame)
 			screenshot.encode!(LI.ImageFormat.PNG, path)
@@ -1779,6 +1789,36 @@ local onDraw :: () {
 	local time = LT.getTime()
 	LG.present()
 	presentTime = LT.getTime()-time
+}
+
+local overlayDummyCursor :: (screenshot:LI.ImageData) {
+	if not LW.hasMouseFocus()  return
+
+	local dummyCursor = dummyCursors[currentCursor]
+	local cursorData  = dummyCursor.data
+	local mx, my      = LM.getPosition()
+	local w,  h       = cursorData.getDimensions!()
+
+	local screenshotW, screenshotH = screenshot.getDimensions!()
+
+	local x1 = mx - dummyCursor.hotX
+	local y1 = my - dummyCursor.hotY
+	local x2 = x1 + w - 1
+	local y2 = y1 + h - 1
+
+	local mapX1 = math.max(x1, 0)
+	local mapY1 = math.max(y1, 0)
+	local mapX2 = math.min(x2, screenshotW-w)
+	local mapY2 = math.min(y2, screenshotH-h)
+
+	screenshot.mapPixel!(mapX1, mapY1, mapX2-mapX1+1, mapY2-mapY1+1, [cursorData, x1, y1] (x,y:int, r,g,b,a:float) -> (r,g,b,a:float) {
+		local r2, g2, b2, a2 = cursorData.getPixel!(x-x1, y-y1)
+		return
+			math.lerp(r, r2, a2),
+			math.lerp(g, g2, a2),
+			math.lerp(b, b2, a2),
+			1 - (1-a) * (1-a2)
+	})
 }
 
 

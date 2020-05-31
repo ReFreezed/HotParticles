@@ -30,7 +30,7 @@ for _, ps in ipairs(particleSystems) do
 		if ps.texturePath == "" then
 			Text"local " Text(imageIdent) Text" = ? -- Preset: " Text(ps.texturePreset) Text"\n"
 		else
-			Text"local " Text(imageIdent) Text" = LG.newImage(" LuaCsv(ps.texturePath) Text")"
+			Text"local " Text(imageIdent) Text" = LG.newImage(" LuaCsv(ps.texturePath) Text")\n"
 		end
 
 		if pixelateTextures then
