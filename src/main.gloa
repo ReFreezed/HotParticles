@@ -16,8 +16,8 @@
 	}
 ]]
 
-local GIF_RECORDING_MODE :: DEV and 1==0
-local GIF_FRAME_DELAY    :: 1 -- 100th of a second.
+local GIF_RECORDING_MODE :: DEV and 1==1
+local GIF_FRAME_DELAY    :: 2 -- 100th of a second.
 
 export APP_VERSION_STRING :: "1.0.0" -- @Cleanup: Put this in an external file and use it in build.gloa too.
 
