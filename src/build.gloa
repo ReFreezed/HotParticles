@@ -58,10 +58,10 @@ local doRelease :: () {
 		appNameShort    = "Hot Particles", -- Should be less than 16 characters long.
 		appNameInternal = "Hot Particles",
 
-		appVersion      = "1.0.0",
+		appVersion      = "1.0.1",
 		appVersionMajor = "1",
 		appVersionMinor = "0",
-		appVersionPatch = "0",
+		appVersionPatch = "1",
 		appIdentifier   = "com.refreezed.hotparticles",
 
 		companyName     = "",

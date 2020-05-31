@@ -19,7 +19,7 @@
 local GIF_RECORDING_MODE :: DEV and 1==1
 local GIF_FRAME_DELAY    :: 2 -- 100th of a second.
 
-export APP_VERSION_STRING :: "1.0.0" -- @Cleanup: Put this in an external file and use it in build.gloa too.
+export APP_VERSION_STRING :: "1.0.1" -- @Cleanup: Put this in an external file and use it in build.gloa too.
 
 export MAX_BUFFER_SIZE      :: 16000 -- Default buffer size for ParticleSystem is 1000.  @Incomplete: Make this configurable.
 export MAIN_PANEL_WIDTH     :: 450
@@ -800,11 +800,11 @@ local onLoad :: (args:[]string, argsRaw:[]string) {
 
 	LK.setKeyRepeat(true)
 
+	LF.createDirectory("projects") -- Must happen before physfs stuff so the save folder exists.
+
 	defaultSearchPaths = physfs.getSearchPaths()
 	!if not DEV  insert(defaultSearchPaths, getAppDirectory())
 	disconnectFromRemoteDirectory() -- Resets paths. We didn't actually connect.
-
-	LF.createDirectory("projects")
 
 	dummyCursors[LM.CursorType.ARROW]         = {hotX=2, hotY=2,  data=LI.newImageData("gfx/cursor_arrow.png")}
 	dummyCursors[LM.CursorType.I_BEAM]        = {hotX=4, hotY=9,  data=LI.newImageData("gfx/cursor_ibeam.png")}
