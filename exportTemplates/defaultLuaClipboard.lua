@@ -67,7 +67,7 @@ for _, ps in ipairs(particleSystems) do
 
 	if ps.kickStartSteps > 0 or ps.emitAtStart > 0 then
 		Text"-- At start time:\n"
-		Text"ps:start()\n"
+		Text"-- ps:start()\n"
 		if ps.kickStartSteps > 0 then
 			Text"-- for step = 1, " LuaCsv(ps.kickStartSteps) Text"  ps:update(" LuaCsv(ps.kickStartDt) Text")  end\n"
 		end
