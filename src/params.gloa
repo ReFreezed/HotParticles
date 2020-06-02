@@ -20,7 +20,7 @@ export Params :: struct {
 export loadParams :: () -> Params {
 	local params: Params
 
-	for line in io.eachLine"local/params.txt"  if line {
+	for line in io.eachLine"local/params.txt"  if line and not findPattern(line, "^#") {
 		local ok, k, v = matchPattern(line, "^([%w_]+)%s*=%s*(.*)$")
 		assert(ok, line)
 

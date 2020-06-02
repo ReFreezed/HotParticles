@@ -16,7 +16,7 @@
 	}
 ]]
 
-local GIF_RECORDING_MODE :: DEV and 1==1
+local GIF_RECORDING_MODE :: DEV and 1==0
 local GIF_FRAME_DELAY    :: 2 -- 100th of a second.
 
 export APP_VERSION_STRING :: "1.0.1" -- @Cleanup: Put this in an external file and use it in build.gloa too.
@@ -27,6 +27,7 @@ export DIALOG_WIDTH         :: 400
 export WORKSPACE_SAVE_DELAY :: 1.00
 export MAX_RECENT_FILES     :: 15
 export MAX_RECENT_FOLDERS   :: 4
+export MAX_CHANGES          :: 100
 
 export WINDOW_TITLE :: !run format("Hot Particles %s%s", APP_VERSION_STRING, (DEV ? " [DEBUG]" : ""))
 
@@ -257,6 +258,9 @@ export Project :: struct {
 
 	particleEmitDuration = 0.00,
 
+	changes: []Change,
+	changeIndex = 1, -- Should point at the next slot in 'changes'.
+
 	_init :: (project:Project) {
 		static n = 0 ; n += 1
 		project.displayedName = format("(untitled %d)", n)
@@ -446,6 +450,13 @@ export System :: struct {
 }
 
 export AnimationFrame :: struct { x=0.0, y=0.0, w=0.0, h=0.0 }
+
+local Change :: struct {
+	label:    string,
+	onDo:     (project:Project) = NULL,
+	onUndo:   (project:Project) = NULL,
+	finalize: (project:Project) = NULL,
+}
 
 
 
@@ -1076,6 +1087,9 @@ local onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool) 
 			markEdited(project)
 			gui.refreshRecursively(guiState, "systems")
 			setCurrentSystem(project.systemIndex+1, force=true)
+
+		case "c-z":   undo()
+		case "c-s-z": redo()
 	}
 }
 
@@ -1176,16 +1190,15 @@ local onMouseWheel :: (dx,dy:int) {
 		-- Stick slightly to 100% zoom.
 		if zoomLevel == 0 and now-zoomTime < 0.15  break
 
-		zoomLevel = math.clamp(zoomLevel + math.getSign(dy), (project.pixelateWorld ? -1 : -4), 6)
+		zoomLevel = clampZoomLevel(project, zoomLevel+math.getSign(dy))
 	}
 
 	zoomTime = now
 
 	if zoomLevel == project.zoomLevel  return
 
-	project.zoomLevel  = zoomLevel
-	project.zoomSource = project.zoom
-	project.zoomTarget = 2 ^ project.zoomLevel
+	project.zoomLevel = zoomLevel
+	limitZoomLevel(project)
 
 	setActionText("Zoom: %d%%", project.zoomTarget * 100)
 }
@@ -2178,6 +2191,62 @@ export getKickStartDt :: (system:System) -> float {
 
 export isProjectEmpty :: (project:Project) -> bool {
 	return not (project.edited or project.path)
+}
+
+
+
+export recordChange :: (label:string, onDo:(project:Project), onUndo:(project:Project), finalize:(project:Project)=NULL, trigger=true) {
+	local project = app.projects[app.currentProjectIndex]
+
+	-- Discard undone changes.
+	for project.changeIndex, #project.changes  project.changes[it] = NULL
+
+	if project.changes[MAX_CHANGES] ~= NULL  remove(project.changes, 1)
+
+	insert(project.changes, cast(Change) {label=label, onDo=onDo, onUndo=onUndo, finalize=finalize})
+	project.changeIndex = #project.changes + 1
+
+	if trigger {
+		onDo(project)
+		if finalize ~= NULL  finalize(project)
+	}
+	markEdited(project)
+}
+
+export undo :: () {
+	local project = app.projects[app.currentProjectIndex]
+	if project.changeIndex == 1  return
+
+	project.changeIndex -= 1
+
+	local change = project.changes[project.changeIndex]
+	setActionText("Undo: "..change.label)
+	change.onUndo(project)
+	if change.finalize ~= NULL  change.finalize(project)
+}
+
+export redo :: () {
+	local project = app.projects[app.currentProjectIndex]
+	if project.changeIndex > #project.changes  return
+
+	local change = project.changes[project.changeIndex]
+	setActionText("Redo: "..change.label)
+	change.onDo(project)
+	if change.finalize ~= NULL  change.finalize(project)
+
+	project.changeIndex += 1
+}
+
+
+
+export clampZoomLevel :: (project:Project, zoomLevel:int) -> (zoomLevel:int) {
+	return math.clamp(zoomLevel, (project.pixelateWorld ? -1 : -4), 6)
+}
+
+export limitZoomLevel :: (project:Project) {
+	project.zoomLevel  = clampZoomLevel(project, project.zoomLevel)
+	project.zoomSource = project.zoom
+	project.zoomTarget = 2 ^ project.zoomLevel
 }
 
 
