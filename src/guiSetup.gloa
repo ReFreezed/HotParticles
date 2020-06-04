@@ -19,21 +19,14 @@ local EXPORT_TEMPLATES_DIRECTORY :: "exportTemplates"
 export setupGuiFrames :: () {
 	guiState.frames = {
 		guiState.frame!({ name="main", width=MAIN_PANEL_WIDTH,
-			guiState.tabs!({ name="projects", specialLastTab=true }),
-
-			guiState.buttons!({ name="saveOpenBar", buttons={
-				{label="Open...",    tooltip="Open project  (Ctrl+O) (Right-click for recent)"},
-				{label="Save",       tooltip="Save project  (Ctrl+S)"},
-				{label="Save as...", tooltip="Save new project  (Ctrl+Shift+S)"},
-				{label="Export...",  tooltip="Export particles/textures to files/clipboard  (Ctrl+E)"},
-				{label="Settings",   tooltip="Toggle project settings"},
-			}}),
-
-			guiState.separator!({ thick=false }),
 			guiState.hbox!({
-				guiState.buttons!({ buttons={{name="undo",label=" < Undo ",tooltip="Ctrl+Z"},{name="redo",label=" Redo > ",tooltip="Ctrl+Shift+Z"}} }),
+				guiState.buttons!({ name="buttonsWithSettingsButton", buttons={{name="menu",label="File"},{name="toggleProjectSettings",label="Project",tooltip="Toggle project settings"}} }),
+				guiState.buttons!({ buttons={{name="undo",image="iconLeft",tooltip="Undo  (Ctrl+Z)"},{name="redo",image="iconRight",tooltip="Redo  (Ctrl+Shift+Z)"}} }),
 				guiState.text!({ name="undoRedoText", text="0/0", size=1 }),
 			}),
+			guiState.separator!({ thick=true }),
+
+			guiState.tabs!({ name="projects", specialLastTab=true }),
 
 			guiState.vbox!({ name="projectSettings",
 				guiState.separator!({ thick=true }),
@@ -624,46 +617,55 @@ export setupGuiCallbacks :: () {
 	}
 
 	-- Menu.
-	guiState.onRefresh.saveOpenBar = (buttons:gui.Buttons) {
-		buttons.buttons[5].image = app.showProjectSettings ? "iconUp" : "iconDown"
+	guiState.onRefresh.buttonsWithSettingsButton = (buttons:gui.Buttons) {
+		local _, button = itemWith(buttons.buttons, "name", "toggleProjectSettings")
+		button.image    = app.showProjectSettings ? "iconUp" : "iconDown"
 		gui.setActive(guiState, "projectSettings", app.showProjectSettings)
 	}
-	guiState.onAction.saveOpenBar = (buttons:gui.Buttons, buttonIndex:int) {
-		local project = app.projects[app.currentProjectIndex]
-		if buttonIndex == {
-			case 1: pushPanel("openProject")
-			case 2: if project.fileIsSaved  saveProject(project, overwrite=true)  else  pushPanel("saveProjectAs")
-			case 3: pushPanel("saveProjectAs")
-			case 4: pushPanel("exportProject")
-
-			case 5:
-				app.showProjectSettings  = not app.showProjectSettings
-				buttons.buttons[5].image = app.showProjectSettings ? "iconUp" : "iconDown"
-				gui.setActive(guiState, "projectSettings", app.showProjectSettings)
-		}
-	}
-	guiState.onOption.saveOpenBar = (buttons:gui.Buttons, buttonIndex:int) {
-		if buttonIndex ~= 1  return
-
-		local items = {"Recent:"}
+	guiState.onAction.menu = (buttons:gui.Buttons, buttonIndex:int) {
+		local recentItems: []gui.MenuItem
+		insert(recentItems, cast(gui.MenuItem) {name="openLast",label="Reopen closed file",shortcut="Ctrl+Shift+T"})
+		insert(recentItems, cast(gui.MenuItem) {label="-"})
 
 		if app.recentFiles {
-			for app.recentFiles  insert(items, it)
-			insert(items, "Clear history")
+			for app.recentFiles  insert(recentItems, cast(gui.MenuItem) {name="openRecent",data=it,label=it})
 		} else {
-			insert(items, "(no recent files)")
+			insert(recentItems, cast(gui.MenuItem) {label="(no recent files)"})
 		}
 
-		gui.showContextMenu(guiState, items, [items] (choice:int) {
-			if choice <= 1 or not app.recentFiles {
-				-- void
-			} elseif choice == #items {
-				app.recentFiles = {}
-			} else {
-				local path = items[choice]
-				openProject(path)
+		insert(recentItems, cast(gui.MenuItem) {label="-"})
+		insert(recentItems, cast(gui.MenuItem) {name="clearRecent",label="Clear items"})
+
+		local items: []gui.MenuItem = {
+			{label="Open project...",     name="open",   shortcut="Ctrl+O"},
+			{label="Open recent",         submenu=recentItems},
+			{label="-"},
+			{label="Save project",        name="save",   shortcut="Ctrl+S"},
+			{label="Save new project...", name="saveAs", shortcut="Ctrl+Shift+S"},
+			{label="Export...",           name="export", shortcut="Ctrl+E"},
+			{label="-"},
+			{label="Exit",                name="exit",   shortcut="Ctrl+Q"},
+		}
+
+		gui.showMenu(guiState, buttons.layoutX, buttons.layoutY+buttons.layoutHeight, items, (choice:string, data:any) {
+			local project = app.projects[app.currentProjectIndex]
+			if choice == {
+				case "open":        pushPanel("openProject")
+				case "openLast":    openRecentProject()
+				case "openRecent":  openProject(cast(string)data)
+				case "clearRecent": app.recentFiles = {}
+				case "save":        if project.fileIsSaved  saveProject(project, overwrite=true)  else  pushPanel("saveProjectAs")
+				case "saveAs":      pushPanel("saveProjectAs")
+				case "export":      pushPanel("exportProject")
+				case "exit":        pushQuitEvent()
 			}
 		})
+	}
+	guiState.onAction.toggleProjectSettings = (buttons:gui.Buttons, buttonIndex:int) {
+		app.showProjectSettings = not app.showProjectSettings
+		local _, button         = itemWith(buttons.buttons, "name", "toggleProjectSettings")
+		button.image            = app.showProjectSettings ? "iconUp" : "iconDown"
+		gui.setActive(guiState, "projectSettings", app.showProjectSettings)
 	}
 
 	-- Undo/redo.

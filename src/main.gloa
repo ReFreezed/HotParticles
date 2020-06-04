@@ -1067,14 +1067,9 @@ local onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool) 
 		case "c-s-s": pushPanel("saveProjectAs")
 		case "c-e":   pushPanel("exportProject")
 		case "c-o":   pushPanel("openProject")
+		case "c-s-t": openRecentProject()
 		case "c-n":   addNewProject() ; gui.refreshRecursively(guiState, "projects") ; setCurrentProject(#app.projects) ; scheduleSaveWorkspace()
 		case "c-w":   if not (#app.projects == 1 and not (app.projects[1].path or app.projects[1].edited))  confirmCloseProject(app.currentProjectIndex)
-
-		case "c-s-t":
-			for app.recentFiles  if not indexWith(app.projects, "path", it) {
-				openProject(it)
-				break
-			}
 
 		case "tab":     setCurrentSystem ((project.systemIndex     - 0) % #project.systems + 1)
 		case "s-tab":   setCurrentSystem ((project.systemIndex     - 2) % #project.systems + 1)
@@ -1995,6 +1990,13 @@ export openProject :: (path:string, asPreview=false) -> (success:bool, project:P
 	return true, project, true
 }
 
+export openRecentProject :: () {
+	for app.recentFiles  if not indexWith(app.projects, "path", it) {
+		openProject(it)
+		break
+	}
+}
+
 export confirmCloseProject :: (projectIndex:int) {
 	local closeProject :: (projectIndex:int) {
 		local isCurrent  = (projectIndex == app.currentProjectIndex)
@@ -2140,7 +2142,7 @@ export getTextureFullPath :: (project:Project, system:System) -> (success:bool, 
 		return true, pathObj.toString!(), false
 
 	} else {
-		return false, "", true
+		return false, path, true
 	}
 }
 

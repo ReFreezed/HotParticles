@@ -136,6 +136,34 @@ export generateIcons :: () {
 		"            ",
 		"            ",
 	})
+	guiImages.iconLeft = newMonochromeImage({
+		"       F    ",
+		"      FFF   ",
+		"     FFF    ",
+		"    FFF     ",
+		"   FFF      ",
+		"  FFF       ",
+		"  FFF       ",
+		"   FFF      ",
+		"    FFF     ",
+		"     FFF    ",
+		"      FFF   ",
+		"       F    ",
+	})
+	guiImages.iconRight = newMonochromeImage({
+		"    F       ",
+		"   FFF      ",
+		"    FFF     ",
+		"     FFF    ",
+		"      FFF   ",
+		"       FFF  ",
+		"       FFF  ",
+		"      FFF   ",
+		"     FFF    ",
+		"    FFF     ",
+		"   FFF      ",
+		"    F       ",
+	})
 	guiImages.iconEye = newMonochromeImage({
 		"            ",
 		"            ",
@@ -149,6 +177,16 @@ export generateIcons :: () {
 		"            ",
 		"            ",
 		"            ",
+	})
+
+	guiImages.iconSubmenu = newMonochromeImage({
+		"F   ",
+		"FF  ",
+		"FFF ",
+		"FFFF",
+		"FFF ",
+		"FF  ",
+		"F   ",
 	})
 
 	local createQuads :: (image:LG.Image, qw,qh:int, names:[]string) -> QuadTable {

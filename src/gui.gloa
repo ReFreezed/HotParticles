@@ -36,7 +36,7 @@
 	pressButton
 	refresh, refreshRecursively, refreshAll
 	setActive
-	showContextMenu, showContextMenuWithInput, hideContextMenu
+	showMenu, showContextMenu, showContextMenuWithInput, hideContextMenu
 
 --============================================================]]
 
@@ -120,7 +120,7 @@ export State :: struct {
 
 	extraScrollableSpace = 0,
 
-	contextMenu: Frame = NULL,
+	contextMenus: []Frame,
 
 	scrollbarHandleDragOffset = 0,
 
@@ -296,7 +296,8 @@ export Button :: struct {
 	image    = "",
 	tooltip  = "",
 	value: any,
-	draggable = false,
+	draggable   = false,
+	submenuIcon = false,
 	system: System = NULL,
 
 	imageScale = 1.0,
@@ -416,6 +417,18 @@ export Canvas :: struct {
 
 
 
+export MenuItem :: struct {
+	name:     string,
+	data:     any,
+	label:    string,
+	shortcut: string,
+	submenu:  []MenuItem,
+
+	submenuFrame: Frame = NULL,
+}
+
+
+
 export onKeyPressed :: (state:State, key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool) -> (handled:bool) {
 	-- Modifier keys.
 	if (state.activeId or state.hoveredId) and (key == lctrl or key == rctrl or key == "lshift" or key == "rshift" or key == "lalt" or key == "ralt") {
@@ -437,7 +450,7 @@ export onKeyPressed :: (state:State, key:LK.KeyConstant, scancode:LK.Scancode, i
 		local input = cast(InputText) state.elementsById[state.focusId]
 
 		-- Input outside context menu.
-		if state.contextMenu ~= NULL and input.frame ~= state.contextMenu {
+		if state.contextMenus and not indexOf(state.contextMenus, input.frame) {
 			if key == "escape"  hideContextMenu(state)
 			return true
 		}
@@ -454,7 +467,7 @@ export onKeyPressed :: (state:State, key:LK.KeyConstant, scancode:LK.Scancode, i
 	}
 
 	-- Context menu.
-	if state.contextMenu ~= NULL {
+	if state.contextMenus {
 		if key == "escape"  hideContextMenu(state)
 		return true
 	}
@@ -547,7 +560,7 @@ export onTextInput :: (state:State, text:string) -> (handled:bool) {
 		local input = cast(InputText) state.elementsById[state.focusId]
 
 		-- Input outside context menu.
-		if state.contextMenu ~= NULL and input.frame ~= state.contextMenu {
+		if state.contextMenus and not indexOf(state.contextMenus, input.frame) {
 			return true
 		}
 
@@ -570,7 +583,7 @@ export onMousePressed :: (state:State, mx,my:int, mbutton:int, presses:int) -> (
 		}
 	}
 
-	for < state.frames  if isInsideElement(state, mx, my, it) {
+	for < frame: state.frames  if isInsideElement(state, mx, my, frame) {
 		if (mbutton == 1 or mbutton == 2) and state.hoveredId and not state.focusId {
 			local input = cast(InputText) state.elementsById[state.hoveredId]
 			if input.type == InputText {
@@ -622,7 +635,7 @@ export onMousePressed :: (state:State, mx,my:int, mbutton:int, presses:int) -> (
 			}
 		}
 
-		if it ~= state.contextMenu  hideContextMenu(state)
+		if state.contextMenus and not indexOf(state.contextMenus, frame)  hideContextMenu(state)
 		return true
 	}
 
@@ -1903,6 +1916,14 @@ local drawElement :: (state:State, el:Element) {
 				LG.pop()
 			}
 
+			-- Submenu icons.
+			LG.setColor(0, 0, 0)
+
+			for buttons.buttons  if it.submenuIcon {
+				local iw, ih = guiImages.iconSubmenu.getDimensions!()
+				LG.draw(guiImages.iconSubmenu, bx2[itIndex]-iw-1, by1[itIndex]+(bh[itIndex]-ih)//2)
+			}
+
 			-- Labels.
 			for buttons.buttons  if it.label or it.suffix or it.shortcut {
 				local scissorX1 = bx1[itIndex] + (paddingX-1)
@@ -2845,11 +2866,82 @@ export pressButton :: (state:State, buttonsElementName:string, i:int) {
 
 
 
-export showContextMenu :: (state:State, items:[]string, cb:(i:int)) {
+export showMenu :: (state:State, x,y:int, items:[]MenuItem, cb:(choice:string, data:any)) {
+	hideContextMenu(state)
+
+	local makeContextMenu :: (state:State, items:[]MenuItem, active=false) -> Frame {
+		local buttons     = state.buttons!({ name="__contextMenuButtons", vertical=true, align=Alignment.LEFT, style=Style.CONTEXT_MENU, buttonMinHeight=16 })
+		local contextMenu = state.frame!({ active=active, minWidth=CONTEXT_MENU_MIN_WIDTH, layout=Layout.FLOATING, style=Style.CONTEXT_MENU, buttons })
+		insert(state.contextMenus, contextMenu)
+
+		for items {
+			if it.label == "-" {
+				insert(contextMenu, state.separator!({ thick=false }))
+
+				buttons = state.buttons!({ name="__contextMenuButtons", vertical=true, align=Alignment.LEFT, style=Style.CONTEXT_MENU, buttonMinHeight=16 })
+				insert(contextMenu, buttons)
+
+			} else {
+				insert(buttons.buttons, cast(Button){ value=it, label=it.label, shortcut=it.shortcut, submenuIcon=cast(bool)it.submenu })
+
+				if it.submenu  it.submenuFrame = makeContextMenu(state, it.submenu)
+			}
+		}
+
+		return contextMenu
+	}
+
+	local contextMenu = makeContextMenu(state, items, true)
+	contextMenu.data  = cb
+	contextMenu.x     = x
+	contextMenu.y     = y
+
+	for state.contextMenus  insert(state.frames, it)
+
+	state.layoutNeedsUpdate = true
+	updateLayoutIfNeeded(state)
+
+	x       = contextMenu.layoutX
+	y       = contextMenu.layoutY
+	local w = contextMenu.layoutWidth
+	local h = contextMenu.layoutHeight
+
+	if x   > LG.getWidth()-w  state.layoutNeedsUpdate, contextMenu.x = true, math.max(LG.getWidth()-w, 0)
+	if y+h > LG.getHeight()   state.layoutNeedsUpdate, contextMenu.y = true, y - h
+
+	state.onAction.__contextMenuButtons = [state,cb] (buttons:Buttons, buttonIndex:int) {
+		local button = buttons.buttons[buttonIndex]
+		local item   = cast(MenuItem) button.value
+
+		if item.submenu {
+			-- @Incomplete: Automatically open submenus on hover.
+			-- @Incomplete: Hide submenus automatically.
+			-- @Incomplete: Handle multiple submenus, both deep and wide.
+			-- @Incomplete: Escape should only close the deepest menu.
+			local activate           = not item.submenuFrame.active
+			item.submenuFrame.active = activate
+
+			if activate {
+				item.submenuFrame.x     = buttons.parent.layoutX + buttons.parent.layoutWidth - 3
+				item.submenuFrame.y     = math.round(buttons.layoutY + (buttonIndex-1) * buttons.buttonHeight) - SPACING
+				state.layoutNeedsUpdate = true
+				-- @Robustness: Make sure the submenu doesn't go outside the window.
+			}
+
+		} else {
+			state.contextMenus[1].data = NULL -- So hideContextMenu() doesn't call the callback too!
+			hideContextMenu(state)
+			cb(item.name, item.data)
+			scheduleSaveWorkspace()
+		}
+	}
+}
+
+export showContextMenu :: (state:State, items:[]string, cb:(choice:int)) {
 	local mx, my = LM.getPosition()
 	showContextMenu(state, mx, my, items, cb)
 }
-export showContextMenu :: (state:State, x,y:int, items:[]string, cb:(i:int)) {
+export showContextMenu :: (state:State, x,y:int, items:[]string, cb:(choice:int)) {
 	hideContextMenu(state)
 
 	local buttonList: []Button
@@ -2867,7 +2959,7 @@ export showContextMenu :: (state:State, x,y:int, items:[]string, cb:(i:int)) {
 		}),
 	})
 
-	state.contextMenu = contextMenu
+	state.contextMenus = {contextMenu}
 	insert(state.frames, contextMenu)
 
 	state.layoutNeedsUpdate = true
@@ -2881,19 +2973,19 @@ export showContextMenu :: (state:State, x,y:int, items:[]string, cb:(i:int)) {
 	if x   > LG.getWidth()-w  state.layoutNeedsUpdate, contextMenu.x = true, math.max(LG.getWidth()-w, 0)
 	if y+h > LG.getHeight()   state.layoutNeedsUpdate, contextMenu.y = true, y - h
 
-	state.onAction.__contextMenuButtons = [state,cb] (buttons:Buttons, i:int) {
-		state.contextMenu.data = NULL
+	state.onAction.__contextMenuButtons = [state,cb] (buttons:Buttons, buttonIndex:int) {
+		state.contextMenus[1].data = NULL -- So hideContextMenu() doesn't call the callback too!
 		hideContextMenu(state)
-		cb(i)
+		cb(buttonIndex)
 		scheduleSaveWorkspace()
 	}
 }
 
-export showContextMenuWithInput :: (state:State, value:string, items:[]string, cb:(i:int), cbInput:(text:string)) {
+export showContextMenuWithInput :: (state:State, value:string, items:[]string, cb:(choice:int), cbInput:(text:string)) {
 	local mx, my = LM.getPosition()
 	showContextMenuWithInput(state, mx, my, value, items, cb, cbInput)
 }
-export showContextMenuWithInput :: (state:State, x,y:int, value:string, items:[]string, cb:(i:int), cbInput:(text:string)) {
+export showContextMenuWithInput :: (state:State, x,y:int, value:string, items:[]string, cb:(choice:int), cbInput:(text:string)) {
 	hideContextMenu(state)
 
 	local buttonList: []Button
@@ -2914,7 +3006,7 @@ export showContextMenuWithInput :: (state:State, x,y:int, value:string, items:[]
 		}),
 	})
 
-	state.contextMenu = contextMenu
+	state.contextMenus = {contextMenu}
 	insert(state.frames, contextMenu)
 
 	state.layoutNeedsUpdate = true
@@ -2933,16 +3025,16 @@ export showContextMenuWithInput :: (state:State, x,y:int, value:string, items:[]
 		scheduleSaveWorkspace()
 	}
 	state.onSubmit.__contextMenuInput = [state,cb] (input:InputText) {
-		state.contextMenu.data = NULL
+		state.contextMenus[1].data = NULL -- So hideContextMenu() doesn't call the callback too!
 		hideContextMenu(state)
 		cb(0)
 		scheduleSaveWorkspace()
 	}
 
-	state.onAction.__contextMenuButtons = [state,cb] (buttons:Buttons, i:int) {
-		state.contextMenu.data = NULL
+	state.onAction.__contextMenuButtons = [state,cb] (buttons:Buttons, buttonIndex:int) {
+		state.contextMenus[1].data = NULL -- So hideContextMenu() doesn't call the callback too!
 		hideContextMenu(state)
-		cb(i)
+		cb(buttonIndex)
 		scheduleSaveWorkspace()
 	}
 
@@ -2951,13 +3043,13 @@ export showContextMenuWithInput :: (state:State, x,y:int, value:string, items:[]
 }
 
 export hideContextMenu :: (state:State) -> (success:bool) {
-	local contextMenu = state.contextMenu
-	if contextMenu == NULL  return false
+	local contextMenus = state.contextMenus
+	if not contextMenus  return false
 
-	delete(state, contextMenu)
-	state.contextMenu = NULL
+	for contextMenus  delete(state, it)
+	state.contextMenus = {}
 
-	local cb = cast((i:int)) contextMenu.data
+	local cb = cast((choice:int)) contextMenus[1].data
 	if cb ~= NULL  cb(0)
 
 	return true
