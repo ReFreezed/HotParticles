@@ -5,29 +5,20 @@
 --=
 --============================================================]]
 
-!preload compiletime [[
-	-- For testing:
-	_G.love = love or {
-		filesystem = {
-			getSource              = function()  return require"local.forTests".source               end,
-			getSourceBaseDirectory = function()  return require"local.forTests".sourceBaseDirectory  end,
-			isFused                = function()  return false                                        end,
-		},
-	}
-]]
-
 local GIF_RECORDING_MODE :: DEV and 1==0
 local GIF_FRAME_DELAY    :: 2 -- 100th of a second.
 
 export APP_VERSION_STRING :: "1.0.1" -- @Cleanup: Put this in an external file and use it in build.gloa too.
 
-export MAX_BUFFER_SIZE      :: 16000 -- Default buffer size for ParticleSystem is 1000.  @Incomplete: Make this configurable.
+-- @Incomplete: Make these configurable.
+export MAX_BUFFER_SIZE    :: 16000 -- Default buffer size for ParticleSystem is 1000.
+export MAX_RECENT_FILES   :: 15
+export MAX_RECENT_FOLDERS :: 4
+export MAX_CHANGES        :: 100
+
 export MAIN_PANEL_WIDTH     :: 450
 export DIALOG_WIDTH         :: 400
 export WORKSPACE_SAVE_DELAY :: 1.00
-export MAX_RECENT_FILES     :: 15
-export MAX_RECENT_FOLDERS   :: 4
-export MAX_CHANGES          :: 100
 
 export WINDOW_TITLE :: !run format("Hot Particles %s%s", APP_VERSION_STRING, (DEV ? " [DEBUG]" : ""))
 
@@ -38,6 +29,19 @@ local isDev :: () -> bool {
 	return (indexOf(getProgramArguments(), "--dev"))
 }
 export DEV :: !run isDev()
+
+
+
+!preload compiletime [[
+	-- For testing:
+	_G.love = love or {
+		filesystem = {
+			getSource              = function()  return require"local.forTests".source               end,
+			getSourceBaseDirectory = function()  return require"local.forTests".sourceBaseDirectory  end,
+			isFused                = function()  return false                                        end,
+		},
+	}
+]]
 
 
 
@@ -129,6 +133,8 @@ local forceParticleUpdates   = false
 
 local zoomTime = -9999.00
 
+local updateId = 0
+
 export isMac: bool
 export lctrl: LK.KeyConstant
 export rctrl: LK.KeyConstant
@@ -196,9 +202,7 @@ export Project :: struct {
 	-- Saved:
 	systems: []System,
 
-	bgColorH  = .0,
-	bgColorS  = .0,
-	bgColorV  = .15,
+	bgColor: []float = {0,0,.15}, -- HSV
 	bgChecker = 0.0,
 
 	pixelateWorld    = false,
@@ -274,9 +278,7 @@ export Project :: struct {
 
 	clone :: (source:Project) -> Project {
 		local project: Project = {
-			bgColorH                 = source.bgColorH,
-			bgColorS                 = source.bgColorS,
-			bgColorV                 = source.bgColorV,
+			bgColor                  = {source.bgColor[1], source.bgColor[2], source.bgColor[3]},
 			bgChecker                = source.bgChecker,
 			pixelateWorld            = source.pixelateWorld,
 			pixelateTextures         = source.pixelateTextures,
@@ -451,7 +453,8 @@ export System :: struct {
 
 export AnimationFrame :: struct { x=0.0, y=0.0, w=0.0, h=0.0 }
 
-local Change :: struct {
+export Change :: struct {
+	bundle:   int,
 	label:    string,
 	onDo:     (project:Project) = NULL,
 	onUndo:   (project:Project) = NULL,
@@ -615,9 +618,8 @@ export updateParticleImageFilters :: () {
 
 
 
-export addNewSystem :: (project:Project, showcase=false) {
+export newSystem :: (project:Project, showcase=false) -> System {
 	local system = System()
-	insert(project.systems, system)
 
 	if showcase {
 		system.psDirection           = -math.TAU/4
@@ -633,10 +635,16 @@ export addNewSystem :: (project:Project, showcase=false) {
 	updateParticleParams(project, system)
 	updateParticleColors(system)
 
-	if project.systems[2] ~= NULL {
+	if project.systems[1] ~= NULL {
 		local x, y = project.systems[1].particles.getPosition!()
 		system.particles.setPosition!(x, y)
 	}
+
+	return system
+}
+
+export addNewSystem :: (project:Project, showcase=false) {
+	insert(project.systems, newSystem(project, showcase))
 }
 
 export addNewProject :: () -> Project {
@@ -702,10 +710,10 @@ export disconnectFromRemoteDirectory :: () {
 
 
 
-export setActionText :: (s:string) {
+export setActionText :: (s:string, clearMessage=true) {
 	actionText     = s
 	actionTextTime = LT.getTime()
-	messageText    = "" -- Good?
+	if clearMessage  messageText = ""
 }
 export setActionText :: (s:string, v,...:int|float|string) {
 	setActionText(format(s, v, ...))
@@ -749,7 +757,7 @@ local onRun :: () -> (mainLoop:()->int|none) {
 		LE.pump()
 		for name, a,b,c,d,e,f in LE.poll() {
 			if name == LE.Event.QUIT {
-				-- if not (cast(()->bool)cast(any)LOVE.quit)() {
+				-- if not (cast(()->bool)cast(any)LOVE.quit)() { -- We don't currently have a 'quit' handler.
 					return a == NULL ? 0 : cast(int)a
 				-- }
 			}
@@ -1079,14 +1087,7 @@ local onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool) 
 		case "p": !if DEV  gui.setActive(guiState, "main", not gui.getElement(guiState, "main").active)
 
 		case "c-delete": confirmDeleteSystem(project.systemIndex)
-
-		case "c-d":
-			system = system.clone!()
-			insert(project.systems, project.systemIndex+1, system)
-
-			markEdited(project)
-			gui.refreshRecursively(guiState, "systems")
-			setCurrentSystem(project.systemIndex+1, force=true)
+		case "c-d":      duplicateSystem(project.systemIndex)
 
 		case "c-z":   undo()
 		case "c-s-z": redo()
@@ -1206,6 +1207,8 @@ local onMouseWheel :: (dx,dy:int) {
 
 
 local onUpdate :: (dt:float) {
+	updateId += 1
+
 	!if GIF_RECORDING_MODE  if gifRecordingActive  dt = GIF_FRAME_DELAY / 100
 
 	if freezeDtThisFrame {
@@ -1429,7 +1432,7 @@ local onDraw :: () {
 	do {
 		LG.setCanvas(canvasWorld)
 
-		local r, g, b = hsvToRgb(project.bgColorH, project.bgColorS, project.bgColorV)
+		local r, g, b = hsvToRgb(project.bgColor)
 		LG.clear(r, g, b)
 
 		if project.bgChecker {
@@ -1633,7 +1636,7 @@ local onDraw :: () {
 			local x = MAIN_PANEL_WIDTH+5
 			local y = 5
 
-			local r, g, b          = hsvToRgb(project.bgColorH, project.bgColorS, project.bgColorV)
+			local r, g, b          = hsvToRgb(project.bgColor)
 			local _, _, brightness = rgbToHsp(r, g, b)
 			if brightness < .5
 				LG.setColor(1, 1, 1, .7)
@@ -1741,7 +1744,10 @@ local onDraw :: () {
 
 		-- Dev/debug stuff.
 		!if DEV {
-			!if GIF_RECORDING_MODE  if not gifRecordingActive {
+			local showSaveIndicator = true
+			!if GIF_RECORDING_MODE  showSaveIndicator = not gifRecordingActive
+
+			if showSaveIndicator {
 				local visibility = 1 - (LT.getTime() - workspaceSaveTime) / 0.40
 				if visibility > 0 {
 					LG.setColor(1, 1, 1, .4*visibility^.5)
@@ -1914,6 +1920,11 @@ export setCurrentSystem :: (i:int, force=true) {
 	gui.refreshRecursively(guiState, "system")
 }
 
+export isSystemCurrent :: (system:System) -> bool {
+	local project = app.projects[app.currentProjectIndex]
+	return system == project.systems[project.systemIndex]
+}
+
 
 
 export scheduleSaveWorkspace :: () {
@@ -2027,7 +2038,7 @@ export confirmDeleteSystem :: (systemIndexToDelete:int) {
 		local project = app.projects[app.currentProjectIndex]
 		local system  = project.systems[systemIndexToDelete]
 		local scale   = ch / LG.getHeight() * project.zoom
-		local r, g, b = hsvToRgb(project.bgColorH, project.bgColorS, project.bgColorV)
+		local r, g, b = hsvToRgb(project.bgColor)
 		local emitterX, emitterY: float
 
 		if project.movementPreset == Movement.NONE {
@@ -2050,28 +2061,41 @@ export confirmDeleteSystem :: (systemIndexToDelete:int) {
 
 	forceParticleUpdates = true
 
-	pushTempChoiceDialog("Confirm delete", "Delete this particle system?", BUTTONS, submitIndex=1, extraContent=psCanvas, [systemIndexToDelete] (i:int) {
+	pushTempChoiceDialog("Confirm delete", "Delete this particle system?", BUTTONS, submitIndex=1, extraContent=psCanvas, [systemIndexToDelete] (choice:int) {
 		guiState.onDraw.temp_deleteSystemPreview = nil
 		forceParticleUpdates                     = false
 
-		if i ~= 1  return
+		if choice ~= 1  return
 
-		local project   = app.projects[app.currentProjectIndex]
-		local isCurrent = systemIndexToDelete == project.systemIndex
+		local project = app.projects[app.currentProjectIndex]
+		local system  = project.systems[systemIndexToDelete]
 
-		remove(project.systems, systemIndexToDelete)
-
-		if project.systems[1] == NULL
-			addNewSystem(project)
-		elseif systemIndexToDelete < project.systemIndex
-			project.systemIndex -= 1
-		else
-			project.systemIndex = math.min(project.systemIndex, #project.systems)
-
-		markEdited(project)
-		gui.refreshRecursively(guiState, "systems")
-		if isCurrent  setCurrentSystem(project.systemIndex, force=true)
+		if #project.systems == 1 {
+			local emptySystem = newSystem(project)
+			recordChange("Deleted particle system",
+				[emptySystem] (project:Project) {  project.systems[1] = emptySystem  },
+				[system     ] (project:Project) {  project.systems[1] = system       },
+				--[[       ]] (project:Project) {  gui.refreshRecursively(guiState, "systems") ; setCurrentSystem(1, force=true)  }
+			)
+		} else {
+			recordChange("Deleted particle system",
+				[systemIndexToDelete        ] (project:Project) {  remove(project.systems, systemIndexToDelete) ; project.systemIndex = math.min(project.systemIndex, #project.systems)  },
+				[systemIndexToDelete, system] (project:Project) {  insert(project.systems, systemIndexToDelete, system)  },
+				--[[                       ]] (project:Project) {  gui.refreshRecursively(guiState, "systems") ; setCurrentSystem(project.systemIndex, force=true)  }
+			)
+		}
 	})
+}
+
+export duplicateSystem :: (systemIndex:int) {
+	local project = app.projects[app.currentProjectIndex]
+	local system  = project.systems[systemIndex].clone!()
+
+	recordChange("Duplicated particle system",
+		[systemIndex, system] (project:Project) {  insert(project.systems, systemIndex+1, system) ; project.systemIndex = systemIndex+1  },
+		[systemIndex        ] (project:Project) {  remove(project.systems, systemIndex+1)         ; project.systemIndex = math.min(project.systemIndex, #project.systems)  },
+		--[[               ]] (project:Project) {  gui.refreshRecursively(guiState, "systems") ; setCurrentSystem(project.systemIndex, force=true)  }
+	)
 }
 
 
@@ -2195,7 +2219,8 @@ export isProjectEmpty :: (project:Project) -> bool {
 
 
 
-export recordChange :: (label:string, onDo:(project:Project), onUndo:(project:Project), finalize:(project:Project)=NULL, trigger=true) {
+export recordChange :: (label:string, onDo:(project:Project), onUndo:(project:Project), finalize:(project:Project)=NULL--[[, trigger=true]]) -> Change {
+	-- @Polish: Reset project.edited if all changes since the last save has been undone/redone.
 	local project = app.projects[app.currentProjectIndex]
 
 	-- Discard undone changes.
@@ -2203,14 +2228,24 @@ export recordChange :: (label:string, onDo:(project:Project), onUndo:(project:Pr
 
 	if project.changes[MAX_CHANGES] ~= NULL  remove(project.changes, 1)
 
-	insert(project.changes, cast(Change) {label=label, onDo=onDo, onUndo=onUndo, finalize=finalize})
+	local change: Change = {
+		bundle   = updateId,
+		label    = label,
+		onDo     = onDo,
+		onUndo   = onUndo,
+		finalize = finalize,
+	}
+	insert(project.changes, change)
 	project.changeIndex = #project.changes + 1
 
-	if trigger {
+	-- if trigger {
 		onDo(project)
 		if finalize ~= NULL  finalize(project)
-	}
+	-- }
 	markEdited(project)
+	scheduleSaveWorkspace()
+
+	return change
 }
 
 export undo :: () {
@@ -2220,9 +2255,28 @@ export undo :: () {
 	project.changeIndex -= 1
 
 	local change = project.changes[project.changeIndex]
-	setActionText("Undo: "..change.label)
-	change.onUndo(project)
-	if change.finalize ~= NULL  change.finalize(project)
+	local bundle = change.bundle
+	local labels: []string
+	local labelsAdded: struct { !key:string, !value:bool }
+
+	while true {
+		if not labelsAdded[change.label] {
+			labelsAdded[change.label] = true
+			insert(labels, change.label)
+		}
+		change.onUndo(project)
+		if change.finalize ~= NULL  change.finalize(project)
+
+		change = project.changes[project.changeIndex-1]
+		if not (change ~= NULL and change.bundle == bundle)  break
+
+		project.changeIndex -= 1
+	}
+
+	reverseArray(labels)
+	setActionText("Undo: "..concatinate(labels, ", "), clearMessage=false)
+
+	scheduleSaveWorkspace()
 }
 
 export redo :: () {
@@ -2230,11 +2284,29 @@ export redo :: () {
 	if project.changeIndex > #project.changes  return
 
 	local change = project.changes[project.changeIndex]
-	setActionText("Redo: "..change.label)
-	change.onDo(project)
-	if change.finalize ~= NULL  change.finalize(project)
+	local bundle = change.bundle
+	local labels: []string
+	local labelsAdded: struct { !key:string, !value:bool }
+
+	while true {
+		if not labelsAdded[change.label] {
+			labelsAdded[change.label] = true
+			insert(labels, change.label)
+		}
+		change.onDo(project)
+		if change.finalize ~= NULL  change.finalize(project)
+
+		change = project.changes[project.changeIndex+1]
+		if not (change ~= NULL and change.bundle == bundle)  break
+
+		project.changeIndex += 1
+	}
 
 	project.changeIndex += 1
+
+	setActionText("Redo: "..concatinate(labels, ", "), clearMessage=false)
+
+	scheduleSaveWorkspace()
 }
 
 

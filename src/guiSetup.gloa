@@ -251,7 +251,7 @@ export setupGuiFrames :: () {
 							guiState.buttons!({ data=8, buttons={{name="sizeRemove",image="iconDelete",tooltip="Remove size"},{name="sizeAdd",image="iconAdd",tooltip="Add/duplicate size"}} }),
 							guiState.slider!({ name="size8", data=8, min=0, max=8, exponential=true, limitName="size", readout="%.2f", weight=1 }),
 						}),
-						guiState.slider!({ labelLeft="variation", min=0, max=1, readoutMulti=100, readout="%d%%" }),
+						guiState.slider!({ name="sizeVariation", labelLeft="variation", min=0, max=1, readoutMulti=100, readout="%d%%" }),
 					}),
 
 					guiState.separator!({ thick=true }),
@@ -663,63 +663,172 @@ export setupGuiCallbacks :: () {
 	}
 
 	-- Project settings.
+	local addEventHandlersForDirection :: (name:string, changeLabel:string, onUpdateValue:(project:Project, system:System, angle:float), finalize:(project:Project, system:System)=NULL) {
+		guiState.onBegin[name] = (direction:gui.Direction, _:int) {
+			direction.dataTemp = direction.angle
+		}
+		guiState.onAction[name] = [onUpdateValue] (direction:gui.Direction, _:int) {
+			local project, system = getCurrentProjectAndSystem()
+			onUpdateValue(project, system, direction.angle)
+		}
+		guiState.onEnd[name] = [name, changeLabel, onUpdateValue, finalize] (direction:gui.Direction, _:int) {
+			local project, system = getCurrentProjectAndSystem()
+			local valueOld        = cast(float) direction.dataTemp
+			local valueNew        = direction.angle
+			if valueNew == valueOld  return
+
+			recordChange(changeLabel,
+				[system, valueNew, onUpdateValue] (project:Project) {  onUpdateValue(project, system, valueNew)  },
+				[system, valueOld, onUpdateValue] (project:Project) {  onUpdateValue(project, system, valueOld)  },
+				[system, name,     finalize]      (project:Project) {
+					if gui.isElementVisible(guiState, name)  gui.refreshRecursively(guiState, name)
+					if finalize ~= NULL  finalize(project, system)
+				}
+			)
+		}
+	}
+
+	local addEventHandlersForSlider :: (name:string, changeLabel:string,
+		onUpdateValue: (project:Project, system:System, value:float),
+		finalize:      (project:Project, system:System) = NULL,
+		onBegin:       (project:Project, system:System) = NULL,
+		onEnd:         (project:Project, system:System) = NULL,
+		forSystem = false
+	) {
+		guiState.onBegin[name] = [onBegin] (slider:gui.Slider, _:int) {
+			slider.dataTemp = slider.value
+
+			if onBegin ~= NULL {
+				local project, system = getCurrentProjectAndSystem()
+				onBegin(project, system)
+			}
+		}
+		guiState.onAction[name] = [onUpdateValue] (slider:gui.Slider, _:int) {
+			local project, system = getCurrentProjectAndSystem()
+			onUpdateValue(project, system, slider.value)
+		}
+		guiState.onEnd[name] = [name, changeLabel, onUpdateValue, finalize, onEnd, forSystem] (slider:gui.Slider, _:int) {
+			local project, system = getCurrentProjectAndSystem()
+			local valueOld        = cast(float) slider.dataTemp
+			local valueNew        = slider.value
+
+			if valueNew ~= valueOld  recordChange(changeLabel,
+				[system, valueNew, onUpdateValue  ] (project:Project) {  onUpdateValue(project, system, valueNew)  },
+				[system, valueOld, onUpdateValue  ] (project:Project) {  onUpdateValue(project, system, valueOld)  },
+				[system, name, finalize, forSystem] (project:Project) {
+					if not (forSystem and not isSystemCurrent(system)) {
+						if gui.isElementVisible(guiState, name)  gui.refreshRecursively(guiState, name)
+					}
+					if finalize ~= NULL  finalize(project, system)
+				}
+			)
+
+			if onEnd ~= NULL  onEnd(project, system)
+		}
+	}
+
+	local addEventHandlersForColor :: (name:string, changeLabel:string,
+		onUpdateValue: (project:Project, system:System, component:int, value:float),
+		finalize:      (project:Project, system:System) = NULL,
+		onBegin:       (project:Project, system:System) = NULL,
+		onEnd:         (project:Project, system:System) = NULL,
+		forSystem = false
+	) {
+		guiState.onBegin[name] = [onBegin] (colorEl:gui.Color, component:int) {
+			colorEl.dataTemp = colorEl.color[component]
+
+			if onBegin ~= NULL {
+				local project, system = getCurrentProjectAndSystem()
+				onBegin(project, system)
+			}
+		}
+		guiState.onAction[name] = [onUpdateValue] (colorEl:gui.Color, component:int) {
+			local project, system = getCurrentProjectAndSystem()
+			onUpdateValue(project, system, component, colorEl.color[component])
+		}
+		guiState.onEnd[name] = [name, changeLabel, onUpdateValue, finalize, onEnd, forSystem] (colorEl:gui.Color, component:int) {
+			local project, system = getCurrentProjectAndSystem()
+			local valueOld        = cast(float) colorEl.dataTemp
+			local valueNew        = colorEl.color[component]
+
+			if valueNew ~= valueOld  recordChange(changeLabel,
+				[system, valueNew, component, onUpdateValue] (project:Project) {  onUpdateValue(project, system, component, valueNew)  },
+				[system, valueOld, component, onUpdateValue] (project:Project) {  onUpdateValue(project, system, component, valueOld)  },
+				[system, name, finalize, forSystem         ] (project:Project) {
+					if not (forSystem and not isSystemCurrent(system)) {
+						if gui.isElementVisible(guiState, name)  gui.refreshRecursively(guiState, name)
+					}
+					if finalize ~= NULL  finalize(project, system)
+				}
+			)
+
+			if onEnd ~= NULL  onEnd(project, system)
+		}
+	}
+
+	local addEventHandlersForRadio :: (name:string, $ValueType:Type, changeLabel:string, onUpdateValue:(project:Project, system:System, value:ValueType)) {
+		guiState.onBegin[name] = (radio:gui.Radio, buttonIndex:int) {
+			radio.dataTemp = radio.buttons[radio.index].value
+		}
+		guiState.onAction[name] = [name, changeLabel, onUpdateValue] (radio:gui.Radio, buttonIndex:int) {
+			local project, system = getCurrentProjectAndSystem()
+			local valueOld        = cast(ValueType) radio.dataTemp
+			local valueNew        = cast(ValueType) radio.buttons[buttonIndex].value
+			if valueNew == valueOld  return
+
+			recordChange(changeLabel,
+				[system, valueNew, onUpdateValue] (project:Project) {  onUpdateValue(project, system, valueNew)  },
+				[system, valueOld, onUpdateValue] (project:Project) {  onUpdateValue(project, system, valueOld)  },
+				[name                           ] (project:Project) {  if gui.isElementVisible(guiState, name)  gui.refreshRecursively(guiState, name)  }
+			)
+		}
+	}
+
+	local addEventHandlersForCheckbox :: (name:string, changeLabel:string, onUpdateValue:(project:Project, system:System, value:bool)) {
+		guiState.onAction[name] = [name, changeLabel, onUpdateValue] (checkbox:gui.Checkbox, _:int) {
+			local project, system = getCurrentProjectAndSystem()
+			local valueNew        = checkbox.checked
+
+			recordChange(changeLabel,
+				[system, valueNew, onUpdateValue] (project:Project) {  onUpdateValue(project, system,     valueNew)  },
+				[system, valueNew, onUpdateValue] (project:Project) {  onUpdateValue(project, system, not valueNew)  },
+				[name                           ] (project:Project) {  if gui.isElementVisible(guiState, name)  gui.refreshRecursively(guiState, name)  }
+			)
+		}
+	}
+
 	guiState.onRefresh.pixelateWorld = (checkbox:gui.Checkbox) {
 		local project    = app.projects[app.currentProjectIndex]
 		checkbox.checked = project.pixelateWorld
 	}
-	guiState.onAction.pixelateWorld = (checkbox:gui.Checkbox, _:int) {
-		local flag = checkbox.checked
-
-		recordChange("Toggled pixelate world",
-			[flag] (project:Project) {  project.pixelateWorld =     flag  },
-			[flag] (project:Project) {  project.pixelateWorld = not flag  },
-			(project:Project) {
-				scheduleRecreateCanvases = true
-				limitZoomLevel(project)
-				gui.refreshRecursively(guiState, "pixelateWorld")
-			}
-		)
-	}
+	addEventHandlersForCheckbox("pixelateWorld", "Toggled pixelate world",
+		(project:Project, system:System, value:bool) {  project.pixelateWorld = value ; limitZoomLevel(project) ; scheduleRecreateCanvases = true  }
+	)
 	guiState.onRefresh.pixelateTextures = (checkbox:gui.Checkbox) {
 		local project    = app.projects[app.currentProjectIndex]
 		checkbox.checked = project.pixelateTextures
 	}
-	guiState.onAction.pixelateTextures = (checkbox:gui.Checkbox, _:int) {
-		local flag = checkbox.checked
-
-		recordChange("Toggled pixelate textures",
-			[flag] (project:Project) {  project.pixelateTextures =     flag  },
-			[flag] (project:Project) {  project.pixelateTextures = not flag  },
-			(project:Project) {
-				updateParticleImageFilters()
-				limitZoomLevel(project)
-				gui.refreshRecursively(guiState, "pixelateTextures")
-			}
-		)
-	}
+	addEventHandlersForCheckbox("pixelateTextures", "Toggled pixelate textures",
+		(project:Project, system:System, value:bool) {  project.pixelateTextures = value  }
+	)
 
 	guiState.onRefresh.bgColor = (colorEl:gui.Color) {
 		local project    = app.projects[app.currentProjectIndex]
-		colorEl.color[1] = project.bgColorH
-		colorEl.color[2] = project.bgColorS
-		colorEl.color[3] = project.bgColorV
+		colorEl.color[1] = project.bgColor[1]
+		colorEl.color[2] = project.bgColor[2]
+		colorEl.color[3] = project.bgColor[3]
 	}
-	guiState.onAction.bgColor = (colorEl:gui.Color, component:int) {
-		local project    = app.projects[app.currentProjectIndex]
-		project.bgColorH = colorEl.color[1]
-		project.bgColorS = colorEl.color[2]
-		project.bgColorV = colorEl.color[3]
-		markEdited(project)
-	}
+	addEventHandlersForColor("bgColor", "Changed background color",
+		(project:Project, system:System, component:int, value:float) {  project.bgColor[component] = value  }
+	)
+
 	guiState.onRefresh.bgChecker = (slider:gui.Slider) {
 		local project = app.projects[app.currentProjectIndex]
 		slider.value  = project.bgChecker
 	}
-	guiState.onAction.bgChecker = (slider:gui.Slider, _:int) {
-		local project     = app.projects[app.currentProjectIndex]
-		project.bgChecker = slider.value
-		markEdited(project)
-	}
+	addEventHandlersForSlider("bgChecker", "Changed background color",
+		(project:Project, system:System, value:float) {  project.bgChecker = value  }
+	)
 
 	guiState.onRefresh.emitterMovement = (radio:gui.Radio) {
 		local project  = app.projects[app.currentProjectIndex]
@@ -727,72 +836,64 @@ export setupGuiCallbacks :: () {
 		assert(found)
 		radio.index = i
 	}
-	guiState.onAction.emitterMovement = (radio:gui.Radio, buttonIndex:int) {
-		local project          = app.projects[app.currentProjectIndex]
-		project.movementPreset = cast(Movement) radio.buttons[buttonIndex].value
-		markEdited(project)
-	}
+	addEventHandlersForRadio("emitterMovement", Movement, "Changed emitter movement",
+		(project:Project, system:System, value:Movement) {  project.movementPreset = value  }
+	)
 	guiState.onRefresh.emitterMovementSx = (slider:gui.Slider) {
 		local project = app.projects[app.currentProjectIndex]
 		slider.value  = project.movementScaleX
 	}
-	guiState.onAction.emitterMovementSx = (slider:gui.Slider, _:int) {
-		local project          = app.projects[app.currentProjectIndex]
-		project.movementScaleX = slider.value
-		markEdited(project)
-	}
+	addEventHandlersForSlider("emitterMovementSx", "Changed emitter movement scale x",
+		(project:Project, system:System, value:float) {  project.movementScaleX = value  }
+	)
 	guiState.onRefresh.emitterMovementSy = (slider:gui.Slider) {
 		local project = app.projects[app.currentProjectIndex]
 		slider.value  = project.movementScaleY
 	}
-	guiState.onAction.emitterMovementSy = (slider:gui.Slider, _:int) {
-		local project          = app.projects[app.currentProjectIndex]
-		project.movementScaleY = slider.value
-		markEdited(project)
-	}
+	addEventHandlersForSlider("emitterMovementSy", "Changed emitter movement scale y",
+		(project:Project, system:System, value:float) {  project.movementScaleY = value  }
+	)
 	guiState.onRefresh.emitterMovementSpeed = (slider:gui.Slider) {
 		local project = app.projects[app.currentProjectIndex]
 		slider.value  = project.movementSpeed
 	}
-	guiState.onAction.emitterMovementSpeed = (slider:gui.Slider, _:int) {
-		local project         = app.projects[app.currentProjectIndex]
-		project.movementSpeed = slider.value
-		markEdited(project)
-	}
+	addEventHandlersForSlider("emitterMovementSpeed", "Changed emitter movement speed",
+		(project:Project, system:System, value:float) {  project.movementSpeed = value  }
+	)
 
 	-- Scale global.
 	guiState.onRefresh.scaleGlobalTime = (slider:gui.Slider) {
 		local project = app.projects[app.currentProjectIndex]
 		slider.value  = project.scaleGlobalTime
 	}
-	guiState.onAction.scaleGlobalTime = (slider:gui.Slider) {
-		local project           = app.projects[app.currentProjectIndex]
-		project.scaleGlobalTime = slider.value
-		markEdited(project)
-		for project.systems  updateParticleParams(project, it)
-	}
+	addEventHandlersForSlider("scaleGlobalTime", "Changed global time scale",
+		(project:Project, system:System, value:float) {
+			project.scaleGlobalTime = value
+			for project.systems  updateParticleParams(project, it)
+		}
+	)
 
 	guiState.onRefresh.scaleGlobalSpace = (slider:gui.Slider) {
 		local project = app.projects[app.currentProjectIndex]
 		slider.value  = project.scaleGlobalSpace
 	}
-	guiState.onAction.scaleGlobalSpace = (slider:gui.Slider) {
-		local project            = app.projects[app.currentProjectIndex]
-		project.scaleGlobalSpace = slider.value
-		markEdited(project)
-		for project.systems  updateParticleParams(project, it)
-	}
+	addEventHandlersForSlider("scaleGlobalSpace", "Changed global space scale",
+		(project:Project, system:System, value:float) {
+			project.scaleGlobalSpace = value
+			for project.systems  updateParticleParams(project, it)
+		}
+	)
 
 	guiState.onRefresh.scaleGlobalSize = (slider:gui.Slider) {
 		local project = app.projects[app.currentProjectIndex]
 		slider.value  = project.scaleGlobalSize
 	}
-	guiState.onAction.scaleGlobalSize = (slider:gui.Slider) {
-		local project           = app.projects[app.currentProjectIndex]
-		project.scaleGlobalSize = slider.value
-		markEdited(project)
-		for project.systems  updateParticleParams(project, it)
-	}
+	addEventHandlersForSlider("scaleGlobalSize", "Changed global size scale",
+		(project:Project, system:System, value:float) {
+			project.scaleGlobalSize = value
+			for project.systems  updateParticleParams(project, it)
+		}
+	)
 
 	-- Systems.
 	guiState.onRefresh.systems = (tabs:gui.Tabs) {
@@ -823,32 +924,31 @@ export setupGuiCallbacks :: () {
 			return
 		}
 
-		addNewSystem(project)
-		markEdited(project)
-		gui.refreshRecursively(guiState, "systems")
-		setCurrentSystem(#project.systems)
+		local system = newSystem(project)
+
+		recordChange("Added particle system",
+			[system] (project:Project) {  insert(project.systems, system) ; setCurrentSystem(#project.systems)  },
+			--[[  ]] (project:Project) {  remove(project.systems)         ; setCurrentSystem(math.min(project.systemIndex, #project.systems))  },
+			--[[  ]] (project:Project) {  gui.refreshRecursively(guiState, "systems")  }
+		)
 	}
 	guiState.onOption.systems = (tabs:gui.Tabs, systemIndex:int) {
 		if systemIndex == #tabs.buttons  return
 
 		gui.showContextMenu(guiState, {"Delete\tCtrl+Delete","Duplicate\tCtrl+D"}, [systemIndex] (choice:int) {
 			if choice == {
-				case 1:
-					confirmDeleteSystem(systemIndex)
-
-				case 2:
-					local project = app.projects[app.currentProjectIndex]
-					local system  = project.systems[systemIndex].clone!()
-					insert(project.systems, systemIndex+1, system)
-
-					markEdited(project)
-					gui.refreshRecursively(guiState, "systems")
-					setCurrentSystem(systemIndex+1, force=true)
+				case 1: confirmDeleteSystem(systemIndex)
+				case 2: duplicateSystem(systemIndex)
 			}
 		})
 	}
 	guiState.onClose.systems = (tabs:gui.Tabs, buttonIndex:int) {
 		if buttonIndex < #tabs.buttons  confirmDeleteSystem(buttonIndex)
+	}
+	guiState.onDragBegin.systems = (tabs:gui.Tabs, buttonIndex:int) {
+		local project   = app.projects[app.currentProjectIndex]
+		tabs.dataTemp   = project.systems
+		project.systems = {unpack(project.systems)}
 	}
 	guiState.onDrag.systems = (tabs:gui.Tabs, buttonIndex:int, mx,my:int) {
 		local project     = app.projects[app.currentProjectIndex]
@@ -861,7 +961,6 @@ export setupGuiCallbacks :: () {
 		local _, button = remove(tabs.buttons, buttonIndex)
 		insert(project.systems, targetIndex, system)
 		insert(tabs.buttons,    targetIndex, button)
-		markEdited(project)
 
 		if isCurrent
 			project.systemIndex = targetIndex
@@ -874,6 +973,26 @@ export setupGuiCallbacks :: () {
 
 		guiState.activeSubid  = targetIndex
 		guiState.hoveredSubid = targetIndex
+	}
+	guiState.onDragEnd.systems = (tabs:gui.Tabs, buttonIndex:int) {
+		local project     = app.projects[app.currentProjectIndex]
+		local systemsOld = cast([]System) tabs.dataTemp
+		local systemsNew = project.systems
+		local newOrder   = false
+
+		for systemsNew {
+			if it ~= systemsOld[itIndex] {
+				newOrder = true
+				break
+			}
+		}
+		if not newOrder  return
+
+		recordChange("Reordered particle systems",
+			[systemsNew] (project:Project) {  project.systems = systemsNew  },
+			[systemsOld] (project:Project) {  project.systems = systemsOld  },
+			--[[      ]] (project:Project) {  gui.refreshRecursively(guiState, "systems") ; setCurrentSystem(project.systemIndex, force=true)  }
+		)
 	}
 
 	-- Texture.
@@ -889,24 +1008,29 @@ export setupGuiCallbacks :: () {
 		assert(found)
 		radio.index = i
 	}
-	guiState.onAction.textureName = (radio:gui.Radio, buttonIndex:int) {
-		local project, system = getCurrentProjectAndSystem()
-		system.textureName    = cast(string) radio.buttons[buttonIndex].value
-		markEdited(project)
-		updateParticleTexture(project, system)
-	}
+	addEventHandlersForRadio("textureName", string, "Changed texture preset",
+		(project:Project, system:System, value:string) {  system.textureName = value ; updateParticleTexture(project, system)  }
+	)
 
+	local setTexturePath :: (path:string) {
+		local project, system = getCurrentProjectAndSystem()
+		local valueOld        = system.texturePath
+		local valueNew        = path
+
+		if valueNew == valueOld  return
+
+		recordChange("Changed texture path",
+			[system, valueNew] (project:Project) {  system.texturePath = valueNew  },
+			[system, valueOld] (project:Project) {  system.texturePath = valueOld  },
+			[system          ] (project:Project) {  updateParticleTexture(project, system, saveRecent=true) ; gui.refreshRecursively(guiState, "texturePath")  }
+		)
+	}
 	guiState.onRefresh.texturePath = (input:gui.InputText) {
 		local project, system = getCurrentProjectAndSystem()
 		input.value           = system.texturePath
 	}
 	guiState.onAction.texturePath = (input:gui.InputText) {
-		local project, system = getCurrentProjectAndSystem()
-		local path            = Path(trim(input.value)).toString!()
-		system.texturePath    = path
-		input.value           = path
-		markEdited(project)
-		updateParticleTexture(project, system, saveRecent=true)
+		setTexturePath(Path(trim(input.value)).toString!())
 	}
 	guiState.onOption.texturePath = (input:gui.InputText, _:int) {
 		local items = {"Recent textures:"}
@@ -924,12 +1048,8 @@ export setupGuiCallbacks :: () {
 			} elseif choice == #items {
 				app.recentTextures = {}
 			} else {
-				local project, system = getCurrentProjectAndSystem()
-				local path            = items[choice]
-				system.texturePath    = path
-				markEdited(project)
-				updateParticleTexture(project, system, saveRecent=true)
-				gui.refreshRecursively(guiState, "texturePath")
+				local path = items[choice]
+				setTexturePath(path)
 			}
 		})
 	}
@@ -943,57 +1063,42 @@ export setupGuiCallbacks :: () {
 		local project, system = getCurrentProjectAndSystem()
 		slider.value          = system.offsetX
 	}
-	guiState.onAction.textureOffsetX = (slider:gui.Slider) {
-		local project, system = getCurrentProjectAndSystem()
-		system.offsetX        = slider.value
-		markEdited(project)
-		updateParticleTextureOffset(system)
-	}
+	addEventHandlersForSlider(forSystem=true, "textureOffsetX", "Changed texture offset x",
+		(project:Project, system:System, value:float) {  system.offsetX = value ; updateParticleTextureOffset(system)  }
+	)
 
 	guiState.onRefresh.textureOffsetY = (slider:gui.Slider) {
 		local project, system = getCurrentProjectAndSystem()
 		slider.value          = system.offsetY
 	}
-	guiState.onAction.textureOffsetY = (slider:gui.Slider) {
-		local project, system = getCurrentProjectAndSystem()
-		system.offsetY        = slider.value
-		markEdited(project)
-		updateParticleTextureOffset(system)
-	}
+	addEventHandlersForSlider(forSystem=true, "textureOffsetY", "Changed texture offset y",
+		(project:Project, system:System, value:float) {  system.offsetY = value ; updateParticleTextureOffset(system)  }
+	)
 
 	-- Scale all.
 	guiState.onRefresh.scaleTime = (slider:gui.Slider) {
 		local project, system = getCurrentProjectAndSystem()
 		slider.value          = system.scaleTime
 	}
-	guiState.onAction.scaleTime = (slider:gui.Slider) {
-		local project, system = getCurrentProjectAndSystem()
-		system.scaleTime      = slider.value
-		markEdited(project)
-		updateParticleParams(project, system)
-	}
+	addEventHandlersForSlider(forSystem=true, "scaleTime", "Changed time scale",
+		(project:Project, system:System, value:float) {  system.scaleTime = value ; updateParticleParams(project, system)  }
+	)
 
 	guiState.onRefresh.scaleSpace = (slider:gui.Slider) {
 		local project, system = getCurrentProjectAndSystem()
 		slider.value          = system.scaleSpace
 	}
-	guiState.onAction.scaleSpace = (slider:gui.Slider) {
-		local project, system = getCurrentProjectAndSystem()
-		system.scaleSpace     = slider.value
-		markEdited(project)
-		updateParticleParams(project, system)
-	}
+	addEventHandlersForSlider(forSystem=true, "scaleSpace", "Changed space scale",
+		(project:Project, system:System, value:float) {  system.scaleSpace = value ; updateParticleParams(project, system)  }
+	)
 
 	guiState.onRefresh.scaleSize = (slider:gui.Slider) {
 		local project, system = getCurrentProjectAndSystem()
 		slider.value          = system.scaleSize
 	}
-	guiState.onAction.scaleSize = (slider:gui.Slider) {
-		local project, system = getCurrentProjectAndSystem()
-		system.scaleSize      = slider.value
-		markEdited(project)
-		updateParticleParams(project, system)
-	}
+	addEventHandlersForSlider(forSystem=true, "scaleSize", "Changed size scale",
+		(project:Project, system:System, value:float) {  system.scaleSize = value ; updateParticleParams(project, system)  }
+	)
 	--
 
 	guiState.onRefresh.insertMode = (radio:gui.Radio) {
@@ -1002,89 +1107,90 @@ export setupGuiCallbacks :: () {
 		assert(found)
 		radio.index = i
 	}
-	guiState.onAction.insertMode = (radio:gui.Radio, buttonIndex:int) {
-		local project, system = getCurrentProjectAndSystem()
-		system.psInsertMode   = cast(LG.ParticleInsertMode) radio.buttons[buttonIndex].value
-		updateParticleParams(project, system)
-		markEdited(project)
-	}
+	addEventHandlersForRadio("insertMode", LG.ParticleInsertMode, "Changed spawn layer",
+		(project:Project, system:System, value:LG.ParticleInsertMode) {  system.psInsertMode = value ; updateParticleParams(project, system)  }
+	)
 
 	guiState.onRefresh.emitterContinuous = (checkbox:gui.Checkbox) {
 		local project, system = getCurrentProjectAndSystem()
 		checkbox.checked      = system.psEmitterContinuous
 	}
-	guiState.onAction.emitterContinuous = (checkbox:gui.Checkbox, _:int) {
-		local project, system      = getCurrentProjectAndSystem()
-		system.psEmitterContinuous = checkbox.checked
-		updateParticleParams(project, system)
-		markEdited(project)
-		if system.psEmitterContinuous  system.particles.start!()
-	}
+	addEventHandlersForCheckbox("emitterContinuous", "Toggled continuous emitter",
+		(project:Project, system:System, value:bool) {
+			system.psEmitterContinuous = value
+			updateParticleParams(project, system)
+			if system.psEmitterContinuous  system.particles.start!()
+		}
+	)
 
 	guiState.onRefresh.emitterLifetime = (slider:gui.Slider) {
 		local project, system = getCurrentProjectAndSystem()
 		slider.value          = system.psEmitterLifetime
 	}
-	guiState.onAction.emitterLifetime = (slider:gui.Slider, _:int) {
-		local project, system      = getCurrentProjectAndSystem()
-		system.psEmitterLifetime   = slider.value
-		system.psEmitterContinuous = false
-		updateParticleParams(project, system)
-		markEdited(project)
-		system.particles.start!()
-		gui.refreshRecursively(guiState, "emitterContinuous")
-	}
+	static lastContinuousChange: Change = NULL
+	addEventHandlersForSlider(forSystem=true, "emitterLifetime", "Changed emitter lifetime",
+		onBegin = (project:Project, system:System) {
+			if not system.psEmitterContinuous {
+				lastContinuousChange = NULL
+				return
+			}
+			lastContinuousChange = recordChange("Toggled continuous emitter",
+				[system] (project:Project) {  system.psEmitterContinuous = false  },
+				[system] (project:Project) {  system.psEmitterContinuous = true   },
+				[system] (project:Project) {
+					updateParticleParams(project, system)
+					if system.psEmitterContinuous  system.particles.start!()
+					gui.refreshRecursively(guiState, "emitterContinuous")
+				}
+			)
+		},
+		(project:Project, system:System, value:float) {
+			system.psEmitterLifetime = value
+			updateParticleParams(project, system)
+			system.particles.start!()
+		},
+		onEnd = (project:Project, system:System) {
+			if lastContinuousChange ~= NULL  lastContinuousChange.bundle = project.changes[#project.changes].bundle
+		}
+	)
 	guiState.onRefresh.particleLifetimeMin = (slider:gui.Slider) {
 		local project, system = getCurrentProjectAndSystem()
 		slider.value          = system.psParticleLifetimeMin
 	}
-	guiState.onAction.particleLifetimeMin = (slider:gui.Slider, _:int) {
-		local project, system        = getCurrentProjectAndSystem()
-		system.psParticleLifetimeMin = slider.value
-		updateParticleParams(project, system)
-		markEdited(project)
-	}
+	addEventHandlersForSlider(forSystem=true, "particleLifetimeMin", "Changed min particle lifetime",
+		(project:Project, system:System, value:float) {  system.psParticleLifetimeMin = value ; updateParticleParams(project, system)  }
+	)
 	guiState.onRefresh.particleLifetimeMax = (slider:gui.Slider) {
 		local project, system = getCurrentProjectAndSystem()
 		slider.value          = system.psParticleLifetimeMax
 	}
-	guiState.onAction.particleLifetimeMax = (slider:gui.Slider, _:int) {
-		local project, system        = getCurrentProjectAndSystem()
-		system.psParticleLifetimeMax = slider.value
-		updateParticleParams(project, system)
-		markEdited(project)
-	}
+	addEventHandlersForSlider(forSystem=true, "particleLifetimeMax", "Changed max particle lifetime",
+		(project:Project, system:System, value:float) {  system.psParticleLifetimeMax = value ; updateParticleParams(project, system)  }
+	)
 
 	guiState.onRefresh.emissionRate = (slider:gui.Slider) {
 		local project, system = getCurrentProjectAndSystem()
 		slider.value          = system.psEmissionRate
 	}
-	guiState.onAction.emissionRate = (slider:gui.Slider, _:int) {
-		local project, system = getCurrentProjectAndSystem()
-		system.psEmissionRate = slider.value
-		updateParticleParams(project, system)
-		markEdited(project)
-	}
+	addEventHandlersForSlider(forSystem=true, "emissionRate", "Changed spawn rate",
+		(project:Project, system:System, value:float) {  system.psEmissionRate = value ; updateParticleParams(project, system)  }
+	)
 
 	guiState.onRefresh.kickStartEmit = (slider:gui.Slider) {
 		local project, system = getCurrentProjectAndSystem()
 		slider.value          = system.kickStartEmit
 	}
-	guiState.onAction.kickStartEmit = (slider:gui.Slider, _:int) {
-		local project, system = getCurrentProjectAndSystem()
-		system.kickStartEmit  = math.round(slider.value)
-		markEdited(project)
-	}
+	addEventHandlersForSlider(forSystem=true, "kickStartEmit", "Changed emit at start",
+		(project:Project, system:System, value:float) {  system.kickStartEmit = math.round(value) ; updateParticleParams(project, system)  }
+	)
 
 	guiState.onRefresh.kickStartSteps = (slider:gui.Slider) {
 		local project, system = getCurrentProjectAndSystem()
 		slider.value          = system.kickStartSteps
 	}
-	guiState.onAction.kickStartSteps = (slider:gui.Slider, _:int) {
-		local project, system = getCurrentProjectAndSystem()
-		system.kickStartSteps = math.round(slider.value)
-		markEdited(project)
-	}
+	addEventHandlersForSlider(forSystem=true, "kickStartSteps", "Changed kick-start steps",
+		(project:Project, system:System, value:float) {  system.kickStartSteps = math.round(value) ; updateParticleParams(project, system)  }
+	)
 
 	guiState.onRefresh.areaDistribution = (radio:gui.Radio) {
 		local project, system = getCurrentProjectAndSystem()
@@ -1093,381 +1199,376 @@ export setupGuiCallbacks :: () {
 		radio.index = i
 		gui.setActive(guiState, "areaParams", (i > 1))
 	}
-	guiState.onAction.areaDistribution = (radio:gui.Radio, buttonIndex:int) {
-		local project, system             = getCurrentProjectAndSystem()
-		system.psEmissionAreaDistribution = cast(LG.AreaSpreadDistribution) radio.buttons[buttonIndex].value
-		updateParticleParams(project, system)
-		markEdited(project)
-		gui.setActive(guiState, "areaParams", buttonIndex > 1)
-		gui.refreshRecursively(guiState, "areaParams")
-	}
+	addEventHandlersForRadio("areaDistribution", LG.AreaSpreadDistribution, "Changed distribution",
+		(project:Project, system:System, value:LG.AreaSpreadDistribution) {
+			system.psEmissionAreaDistribution = value
+			updateParticleParams(project, system)
+			gui.setActive(guiState, "areaParams", (value == LG.AreaSpreadDistribution.NONE))
+			if value ~= LG.AreaSpreadDistribution.NONE  gui.refreshRecursively(guiState, "areaParams")
+		}
+	)
 	guiState.onRefresh.areaAngle = (direction:gui.Direction) {
 		local project, system = getCurrentProjectAndSystem()
 		direction.angle       = system.psEmissionAreaAngle
 	}
-	guiState.onAction.areaAngle = (direction:gui.Direction, _:int) {
-		local project, system      = getCurrentProjectAndSystem()
-		system.psEmissionAreaAngle = direction.angle
-		updateParticleParams(project, system)
-		markEdited(project)
-	}
+	addEventHandlersForDirection("areaAngle", "Changed area angle",
+		(project:Project, system:System, value:float) {  system.psEmissionAreaAngle = value ; updateParticleParams(project, system)  }
+	)
 	guiState.onRefresh.areaDx = (slider:gui.Slider) {
 		local project, system = getCurrentProjectAndSystem()
 		slider.value          = system.psEmissionAreaDx
 	}
-	guiState.onAction.areaDx = (slider:gui.Slider, _:int) {
-		local project, system   = getCurrentProjectAndSystem()
-		system.psEmissionAreaDx = slider.value
-		updateParticleParams(project, system)
-		markEdited(project)
-	}
+	addEventHandlersForSlider(forSystem=true, "areaDx", "Changed area dx",
+		(project:Project, system:System, value:float) {  system.psEmissionAreaDx = value ; updateParticleParams(project, system)  }
+	)
 	guiState.onRefresh.areaDy = (slider:gui.Slider) {
 		local project, system = getCurrentProjectAndSystem()
 		slider.value          = system.psEmissionAreaDy
 	}
-	guiState.onAction.areaDy = (slider:gui.Slider, _:int) {
-		local project, system   = getCurrentProjectAndSystem()
-		system.psEmissionAreaDy = slider.value
-		updateParticleParams(project, system)
-		markEdited(project)
-	}
+	addEventHandlersForSlider(forSystem=true, "areaDy", "Changed area dy",
+		(project:Project, system:System, value:float) {  system.psEmissionAreaDy = value ; updateParticleParams(project, system)  }
+	)
 	guiState.onRefresh.areaRelative = (checkbox:gui.Checkbox) {
 		local project, system = getCurrentProjectAndSystem()
 		checkbox.checked      = system.psEmissionAreaRelative
 	}
-	guiState.onAction.areaRelative = (checkbox:gui.Checkbox, _:int) {
-		local project, system         = getCurrentProjectAndSystem()
-		system.psEmissionAreaRelative = checkbox.checked
-		updateParticleParams(project, system)
-		markEdited(project)
-	}
+	addEventHandlersForCheckbox("areaRelative", "Toggled relative direction",
+		(project:Project, system:System, value:bool) {  system.psEmissionAreaRelative = value ; updateParticleParams(project, system)  }
+	)
 
 	guiState.onRefresh.direction = (direction:gui.Direction) {
 		local project, system = getCurrentProjectAndSystem()
 		direction.angle       = system.psDirection
 	}
-	guiState.onAction.direction = (direction:gui.Direction, _:int) {
-		local project, system = getCurrentProjectAndSystem()
-		system.psDirection    = direction.angle
-		updateParticleParams(project, system)
-		markEdited(project)
-	}
+	addEventHandlersForDirection("direction", "Changed direction",
+		(project:Project, system:System, value:float) {  system.psDirection = value ; updateParticleParams(project, system)  }
+	)
 	guiState.onRefresh.directionSpread = (slider:gui.Slider) {
 		local project, system = getCurrentProjectAndSystem()
 		slider.value          = system.psSpread
 	}
-	guiState.onAction.directionSpread = (slider:gui.Slider, _:int) {
-		local project, system = getCurrentProjectAndSystem()
-		system.psSpread       = slider.value
-		updateParticleParams(project, system)
-		markEdited(project)
-	}
+	addEventHandlersForSlider(forSystem=true, "directionSpread", "Changed spread",
+		(project:Project, system:System, value:float) {  system.psSpread = value ; updateParticleParams(project, system)  }
+	)
 
 	guiState.onRefresh.speedMin = (slider:gui.Slider) {
 		local project, system = getCurrentProjectAndSystem()
 		slider.value          = system.psSpeedMin
 	}
-	guiState.onAction.speedMin = (slider:gui.Slider, _:int) {
-		local project, system = getCurrentProjectAndSystem()
-		system.psSpeedMin     = slider.value
-		updateParticleParams(project, system)
-		markEdited(project)
-	}
+	addEventHandlersForSlider(forSystem=true, "speedMin", "Changed min speed",
+		(project:Project, system:System, value:float) {  system.psSpeedMin = value ; updateParticleParams(project, system)  }
+	)
 	guiState.onRefresh.speedMax = (slider:gui.Slider) {
 		local project, system = getCurrentProjectAndSystem()
 		slider.value          = system.psSpeedMax
 	}
-	guiState.onAction.speedMax = (slider:gui.Slider, _:int) {
-		local project, system = getCurrentProjectAndSystem()
-		system.psSpeedMax     = slider.value
-		updateParticleParams(project, system)
-		markEdited(project)
-	}
+	addEventHandlersForSlider(forSystem=true, "speedMax", "Changed max speed",
+		(project:Project, system:System, value:float) {  system.psSpeedMax = value ; updateParticleParams(project, system)  }
+	)
 
 	guiState.onRefresh.accLinearXmin = (slider:gui.Slider) {
 		local project, system = getCurrentProjectAndSystem()
 		slider.value          = system.psLinearAccelerationXmin
 	}
-	guiState.onAction.accLinearXmin = (slider:gui.Slider, _:int) {
-		local project, system           = getCurrentProjectAndSystem()
-		system.psLinearAccelerationXmin = slider.value
-		updateParticleParams(project, system)
-		markEdited(project)
-	}
+	addEventHandlersForSlider(forSystem=true, "accLinearXmin", "Changed min linear acceleration x",
+		(project:Project, system:System, value:float) {  system.psLinearAccelerationXmin = value ; updateParticleParams(project, system)  }
+	)
 	guiState.onRefresh.accLinearXmax = (slider:gui.Slider) {
 		local project, system = getCurrentProjectAndSystem()
 		slider.value          = system.psLinearAccelerationXmax
 	}
-	guiState.onAction.accLinearXmax = (slider:gui.Slider, _:int) {
-		local project, system           = getCurrentProjectAndSystem()
-		system.psLinearAccelerationXmax = slider.value
-		updateParticleParams(project, system)
-		markEdited(project)
-	}
+	addEventHandlersForSlider(forSystem=true, "accLinearXmax", "Changed max linear acceleration x",
+		(project:Project, system:System, value:float) {  system.psLinearAccelerationXmax = value ; updateParticleParams(project, system)  }
+	)
 	guiState.onRefresh.accLinearYmin = (slider:gui.Slider) {
 		local project, system = getCurrentProjectAndSystem()
 		slider.value          = system.psLinearAccelerationYmin
 	}
-	guiState.onAction.accLinearYmin = (slider:gui.Slider, _:int) {
-		local project, system           = getCurrentProjectAndSystem()
-		system.psLinearAccelerationYmin = slider.value
-		updateParticleParams(project, system)
-		markEdited(project)
-	}
+	addEventHandlersForSlider(forSystem=true, "accLinearYmin", "Changed min linear acceleration y",
+		(project:Project, system:System, value:float) {  system.psLinearAccelerationYmin = value ; updateParticleParams(project, system)  }
+	)
 	guiState.onRefresh.accLinearYmax = (slider:gui.Slider) {
 		local project, system = getCurrentProjectAndSystem()
 		slider.value          = system.psLinearAccelerationYmax
 	}
-	guiState.onAction.accLinearYmax = (slider:gui.Slider, _:int) {
-		local project, system           = getCurrentProjectAndSystem()
-		system.psLinearAccelerationYmax = slider.value
-		updateParticleParams(project, system)
-		markEdited(project)
-	}
+	addEventHandlersForSlider(forSystem=true, "accLinearYmax", "Changed max linear acceleration y",
+		(project:Project, system:System, value:float) {  system.psLinearAccelerationYmax = value ; updateParticleParams(project, system)  }
+	)
 
 	guiState.onRefresh.radialAccelerationMin = (slider:gui.Slider) {
 		local project, system = getCurrentProjectAndSystem()
 		slider.value          = system.psRadialAccelerationMin
 	}
-	guiState.onAction.radialAccelerationMin = (slider:gui.Slider, _:int) {
-		local project, system          = getCurrentProjectAndSystem()
-		system.psRadialAccelerationMin = slider.value
-		updateParticleParams(project, system)
-		markEdited(project)
-	}
+	addEventHandlersForSlider(forSystem=true, "radialAccelerationMin", "Changed min radial acceleration",
+		(project:Project, system:System, value:float) {  system.psRadialAccelerationMin = value ; updateParticleParams(project, system)  }
+	)
 	guiState.onRefresh.radialAccelerationMax = (slider:gui.Slider) {
 		local project, system = getCurrentProjectAndSystem()
 		slider.value          = system.psRadialAccelerationMax
 	}
-	guiState.onAction.radialAccelerationMax = (slider:gui.Slider, _:int) {
-		local project, system          = getCurrentProjectAndSystem()
-		system.psRadialAccelerationMax = slider.value
-		updateParticleParams(project, system)
-		markEdited(project)
-	}
+	addEventHandlersForSlider(forSystem=true, "radialAccelerationMax", "Changed max radial acceleration",
+		(project:Project, system:System, value:float) {  system.psRadialAccelerationMax = value ; updateParticleParams(project, system)  }
+	)
 
 	guiState.onRefresh.tangentialAccelerationMin = (slider:gui.Slider) {
 		local project, system = getCurrentProjectAndSystem()
 		slider.value          = system.psTangentialAccelerationMin
 	}
-	guiState.onAction.tangentialAccelerationMin = (slider:gui.Slider, _:int) {
-		local project, system              = getCurrentProjectAndSystem()
-		system.psTangentialAccelerationMin = slider.value
-		updateParticleParams(project, system)
-		markEdited(project)
-	}
+	addEventHandlersForSlider(forSystem=true, "tangentialAccelerationMin", "Changed min tangential acceleration",
+		(project:Project, system:System, value:float) {  system.psTangentialAccelerationMin = value ; updateParticleParams(project, system)  }
+	)
 	guiState.onRefresh.tangentialAccelerationMax = (slider:gui.Slider) {
 		local project, system = getCurrentProjectAndSystem()
 		slider.value          = system.psTangentialAccelerationMax
 	}
-	guiState.onAction.tangentialAccelerationMax = (slider:gui.Slider, _:int) {
-		local project, system              = getCurrentProjectAndSystem()
-		system.psTangentialAccelerationMax = slider.value
-		updateParticleParams(project, system)
-		markEdited(project)
-	}
+	addEventHandlersForSlider(forSystem=true, "tangentialAccelerationMax", "Changed max tangential acceleration",
+		(project:Project, system:System, value:float) {  system.psTangentialAccelerationMax = value ; updateParticleParams(project, system)  }
+	)
 
 	guiState.onRefresh.linearDampingMin = (slider:gui.Slider) {
 		local project, system = getCurrentProjectAndSystem()
 		slider.value          = system.psLinearDampingMin
 	}
-	guiState.onAction.linearDampingMin = (slider:gui.Slider, _:int) {
-		local project, system     = getCurrentProjectAndSystem()
-		system.psLinearDampingMin = slider.value
-		updateParticleParams(project, system)
-		markEdited(project)
-	}
+	addEventHandlersForSlider(forSystem=true, "linearDampingMin", "Changed min linear damping",
+		(project:Project, system:System, value:float) {  system.psLinearDampingMin = value ; updateParticleParams(project, system)  }
+	)
 	guiState.onRefresh.linearDampingMax = (slider:gui.Slider) {
 		local project, system = getCurrentProjectAndSystem()
 		slider.value          = system.psLinearDampingMax
 	}
-	guiState.onAction.linearDampingMax = (slider:gui.Slider, _:int) {
-		local project, system     = getCurrentProjectAndSystem()
-		system.psLinearDampingMax = slider.value
-		updateParticleParams(project, system)
-		markEdited(project)
-	}
+	addEventHandlersForSlider(forSystem=true, "linearDampingMax", "Changed max linear damping",
+		(project:Project, system:System, value:float) {  system.psLinearDampingMax = value ; updateParticleParams(project, system)  }
+	)
 
 	guiState.onRefresh.rotationMin = (direction:gui.Direction) {
 		local project, system = getCurrentProjectAndSystem()
 		direction.angle       = system.psRotationMin
 	}
-	guiState.onAction.rotationMin = (direction:gui.Direction, _:int) {
-		local project, system = getCurrentProjectAndSystem()
-		system.psRotationMin  = direction.angle
-		updateParticleParams(project, system)
-		markEdited(project)
-	}
+	addEventHandlersForDirection("rotationMin", "Changed min rotation",
+		(project:Project, system:System, value:float) {  system.psRotationMin = value ; updateParticleParams(project, system)  }
+	)
 	guiState.onRefresh.rotationMax = (direction:gui.Direction) {
 		local project, system = getCurrentProjectAndSystem()
 		direction.angle       = system.psRotationMax
 	}
-	guiState.onAction.rotationMax = (direction:gui.Direction, _:int) {
-		local project, system = getCurrentProjectAndSystem()
-		system.psRotationMax  = direction.angle
-		updateParticleParams(project, system)
-		markEdited(project)
-	}
+	addEventHandlersForDirection("rotationMax", "Changed max rotation",
+		(project:Project, system:System, value:float) {  system.psRotationMax = value ; updateParticleParams(project, system)  }
+	)
 	guiState.onRefresh.rotationRelative = (checkbox:gui.Checkbox) {
 		local project, system = getCurrentProjectAndSystem()
 		checkbox.checked      = system.psRelativeRotation
 	}
-	guiState.onAction.rotationRelative = (checkbox:gui.Checkbox, _:int) {
-		local project, system     = getCurrentProjectAndSystem()
-		system.psRelativeRotation = checkbox.checked
-		updateParticleParams(project, system)
-		markEdited(project)
-	}
+	addEventHandlersForCheckbox("rotationRelative", "Toggled relative rotation",
+		(project:Project, system:System, value:bool) {  system.psRelativeRotation = value ; updateParticleParams(project, system)  }
+	)
 
 	guiState.onRefresh.spinMin = (slider:gui.Slider) {
 		local project, system = getCurrentProjectAndSystem()
 		slider.value          = system.psSpinMin
 	}
-	guiState.onAction.spinMin = (slider:gui.Slider, _:int) {
-		local project, system = getCurrentProjectAndSystem()
-		system.psSpinMin      = slider.value
-		updateParticleParams(project, system)
-		markEdited(project)
-	}
+	addEventHandlersForSlider(forSystem=true, "spinMin", "Changed spin at start",
+		(project:Project, system:System, value:float) {  system.psSpinMin = value ; updateParticleParams(project, system)  }
+	)
 	guiState.onRefresh.spinMax = (slider:gui.Slider) {
 		local project, system = getCurrentProjectAndSystem()
 		slider.value          = system.psSpinMax
 	}
-	guiState.onAction.spinMax = (slider:gui.Slider, _:int) {
-		local project, system = getCurrentProjectAndSystem()
-		system.psSpinMax      = slider.value
-		updateParticleParams(project, system)
-		markEdited(project)
-	}
+	addEventHandlersForSlider(forSystem=true, "spinMax", "Changed spin at end",
+		(project:Project, system:System, value:float) {  system.psSpinMax = value ; updateParticleParams(project, system)  }
+	)
 	guiState.onRefresh.spinVariation = (slider:gui.Slider) {
 		local project, system = getCurrentProjectAndSystem()
 		slider.value          = system.psSpinVariation
 	}
-	guiState.onAction.spinVariation = (slider:gui.Slider, _:int) {
-		local project, system  = getCurrentProjectAndSystem()
-		system.psSpinVariation = slider.value
-		updateParticleParams(project, system)
-		markEdited(project)
+	addEventHandlersForSlider(forSystem=true, "spinVariation", "Changed spin variation",
+		(project:Project, system:System, value:float) {  system.psSpinVariation = value ; updateParticleParams(project, system)  }
+	)
+	guiState.onRefresh.sizeVariation = (slider:gui.Slider) {
+		local project, system = getCurrentProjectAndSystem()
+		slider.value          = system.psSizeVariation
 	}
 
-	guiState.onRefresh.sizesSection = (slider:gui.Slider) {
+	-- Sizes.
+	guiState.onRefresh.sizesSection = (section:gui.Section) {
 		local project, system = getCurrentProjectAndSystem()
 		for 1, 8  gui.setActive(guiState, format("sizeContainer%d", it), (system.psSizes[it] ~= NULL))
 	}
 	guiState.onAction.sizeAdd = (buttons:gui.Buttons, buttonIndex:int) {
 		local project, system = getCurrentProjectAndSystem()
-		local sizes           = system.psSizes
 		local i               = cast(int) buttons.data
 
-		if sizes[8] ~= NULL {
+		if system.psSizes[8] ~= NULL {
 			setErrorText("Max 8 sizes")
 			return
 		}
 
-		insert(sizes, i, sizes[i])
-		updateParticleParams(project, system)
-		markEdited(project)
-
-		for j = i, #sizes {
-			local name = format("sizeContainer%d", j)
-			gui.setActive(guiState, name, true)
-			gui.refreshRecursively(guiState, name)
-		}
+		recordChange("Added size",
+			[system, i] (project:Project) {  insert(system.psSizes, i, system.psSizes[i])  },
+			[system, i] (project:Project) {  remove(system.psSizes, i)  },
+			[system, i] (project:Project) {
+				updateParticleParams(project, system)
+				if isSystemCurrent(system)  for j = i, 8 {
+					local name   = format("sizeContainer%d", j)
+					local active = j <= #system.psSizes
+					gui.setActive(guiState, name, active)
+					if active  gui.refreshRecursively(guiState, name)
+				}
+			}
+		)
 	}
 	guiState.onAction.sizeRemove = (buttons:gui.Buttons, buttonIndex:int) {
 		local project, system = getCurrentProjectAndSystem()
-		local sizes           = system.psSizes
 		local i               = cast(int) buttons.data
+		local valueOld        = system.psSizes[i]
+		local removingLast    = #system.psSizes == 1
 
-		if sizes[2] == NULL {
-			sizes[1] = 1
+		if removingLast and valueOld == 1  return
+
+		if removingLast {
+			recordChange("Removed size",
+				[system          ] (project:Project) {  system.psSizes[1] = 1         },
+				[system, valueOld] (project:Project) {  system.psSizes[1] = valueOld  },
+				[system          ] (project:Project) {  updateParticleParams(project, system) ; gui.refreshRecursively(guiState, "sizeContainer1")  }
+			)
 		} else {
-			gui.setActive(guiState, format("sizeContainer%d", #sizes), false)
-			remove(sizes, i)
-		}
-
-		updateParticleParams(project, system)
-		markEdited(project)
-
-		for j = i, #sizes {
-			gui.refreshRecursively(guiState, format("sizeContainer%d", j))
+			recordChange("Removed size",
+				[system, i          ] (project:Project) {  remove(system.psSizes, i)  },
+				[system, i, valueOld] (project:Project) {  insert(system.psSizes, i, valueOld)  },
+				[system, i          ] (project:Project) {
+					updateParticleParams(project, system)
+					if isSystemCurrent(system)  for j = i, 8 {
+						local name   = format("sizeContainer%d", j)
+						local active = j <= #system.psSizes
+						gui.setActive(guiState, name, active)
+						if active  gui.refreshRecursively(guiState, name)
+					}
+				}
+			)
 		}
 	}
 	for i = 1, 8 {
-		guiState.onRefresh[format("size%d", i)] = (slider:gui.Slider) {
+		local name = format("size%d", i)
+		guiState.onRefresh[name] = [i] (slider:gui.Slider) {
 			local project, system = getCurrentProjectAndSystem()
-			slider.value          = system.psSizes[cast(int)slider.data]
+			slider.value          = system.psSizes[i]
+			if slider.value == NULL  errorf("Size #%d", i)
 		}
-		guiState.onAction[format("size%d", i)] = (slider:gui.Slider, _:int) {
-			local project, system                = getCurrentProjectAndSystem()
-			system.psSizes[cast(int)slider.data] = slider.value
-			updateParticleParams(project, system)
-			markEdited(project)
-		}
+		addEventHandlersForSlider(forSystem=true, name, "Changed size",
+			[i] (project:Project, system:System, value:float) {  system.psSizes[i] = value ; updateParticleParams(project, system)  }
+		)
 	}
+	addEventHandlersForSlider(forSystem=true, "sizeVariation", "Changed size variation",
+		(project:Project, system:System, value:float) {  system.psSizeVariation = value ; updateParticleParams(project, system)  }
+	)
 
-	guiState.onRefresh.colors = (slider:gui.Slider) {
+	-- Colors.
+	guiState.onRefresh.colors = (box:gui.Vbox) {
 		local project, system = getCurrentProjectAndSystem()
 		local colors          = system.colors
 		for 1, 8  gui.setActive(guiState, format("colorContainer%d", it), (colors[it*4] ~= NULL))
 	}
 	guiState.onAction.colorAdd = (buttons:gui.Buttons, buttonIndex:int) {
 		local project, system = getCurrentProjectAndSystem()
-		local colors          = system.colors
 		local i               = cast(int) buttons.data
 
-		if colors[8*4] ~= NULL {
+		if system.colors[8*4] ~= NULL {
 			setErrorText("Max 8 colors")
 			return
 		}
 
-		local i1 = i*4 - 3
-		local h  = colors[i1  ]
-		local s  = colors[i1+1]
-		local v  = colors[i1+2]
-		local a  = colors[i1+3]
-
-		insert(colors, i1,   h)
-		insert(colors, i1+1, s)
-		insert(colors, i1+2, v)
-		insert(colors, i1+3, a)
-
-		markEdited(project)
-		updateParticleColors(system)
-
-		for j = i, #colors//4 {
-			local name = format("colorContainer%d", j)
-			gui.setActive(guiState, name, true)
-			gui.refreshRecursively(guiState, name)
-		}
+		recordChange("Added color",
+			[system, i] (project:Project) {
+				local i1 = i*4 - 3
+				local h  = system.colors[i1  ]
+				local s  = system.colors[i1+1]
+				local v  = system.colors[i1+2]
+				local a  = system.colors[i1+3]
+				insert(system.colors, i1,   h)
+				insert(system.colors, i1+1, s)
+				insert(system.colors, i1+2, v)
+				insert(system.colors, i1+3, a)
+			},
+			[system, i] (project:Project) {
+				local i1 = i*4 - 3
+				remove(system.colors, i1+3)
+				remove(system.colors, i1+2)
+				remove(system.colors, i1+1)
+				remove(system.colors, i1)
+			},
+			[system, i] (project:Project) {
+				updateParticleColors(system)
+				if isSystemCurrent(system)  for j = i, 8 {
+					local name   = format("colorContainer%d", j)
+					local active = j*4 <= #system.colors
+					gui.setActive(guiState, name, active)
+					if active  gui.refreshRecursively(guiState, name)
+				}
+			}
+		)
 	}
 	guiState.onAction.colorRemove = (buttons:gui.Buttons, buttonIndex:int) {
 		local project, system = getCurrentProjectAndSystem()
-		local colors          = system.colors
 		local i               = cast(int) buttons.data
+		local i1              = i*4 - 3
+		local hOld            = system.colors[i1]
+		local sOld            = system.colors[i1+1]
+		local vOld            = system.colors[i1+2]
+		local aOld            = system.colors[i1+3]
+		local removingLast    = #system.colors == 4
 
-		if colors[4+1] == NULL {
-			colors[1] = 0
-			colors[2] = 0
-			colors[3] = 1
-			colors[4] = 1
+		if removingLast and hOld == 0 and sOld == 0 and vOld == 1 and aOld == 1  return
 
+		if removingLast {
+			recordChange("Removed color",
+				[system] (project:Project) {
+					system.colors[1] = 0
+					system.colors[2] = 0
+					system.colors[3] = 1
+					system.colors[4] = 1
+				},
+				[system, hOld, sOld, vOld, aOld] (project:Project) {
+					system.colors[1] = hOld
+					system.colors[2] = sOld
+					system.colors[3] = vOld
+					system.colors[4] = aOld
+				},
+				[system] (project:Project) {
+					updateParticleColors(system) ; gui.refreshRecursively(guiState, "colorContainer1")
+				}
+			)
 		} else {
-			gui.setActive(guiState, format("colorContainer%d", #colors//4), false)
-
-			local i1 = i*4 - 3
-			remove(colors, i1+3)
-			remove(colors, i1+2)
-			remove(colors, i1+1)
-			remove(colors, i1  )
+			recordChange("Removed color",
+				[system, i] (project:Project) {
+					local i1 = i*4 - 3
+					remove(system.colors, i1+3)
+					remove(system.colors, i1+2)
+					remove(system.colors, i1+1)
+					remove(system.colors, i1  )
+				},
+				[system, i, hOld, sOld, vOld, aOld] (project:Project) {
+					local i1 = i*4 - 3
+					insert(system.colors, i1,   hOld)
+					insert(system.colors, i1+1, sOld)
+					insert(system.colors, i1+2, vOld)
+					insert(system.colors, i1+3, aOld)
+				},
+				[system, i] (project:Project) {
+					updateParticleColors(system)
+					if isSystemCurrent(system)  for j = i, 8 {
+						local name   = format("colorContainer%d", j)
+						local active = j*4 <= #system.colors
+						gui.setActive(guiState, name, active)
+						if active  gui.refreshRecursively(guiState, name)
+					}
+				}
+			)
 		}
-
-		markEdited(project)
-		updateParticleColors(system)
-
-		for j = i, #colors//4 {
-			gui.refreshRecursively(guiState, format("colorContainer%d", j))
-		}
+	}
+	static colorsBeforeDragging: []float = NULL
+	guiState.onDragBegin.colorMove = (buttons:gui.Buttons, buttonIndex:int) {
+		local project, system = getCurrentProjectAndSystem()
+		colorsBeforeDragging  = system.colors
+		system.colors         = {unpack(system.colors)}
 	}
 	guiState.onDrag.colorMove = (buttons:gui.Buttons, buttonIndex:int, mx,my:int) {
 		local dragContainer = gui.getElement(guiState, "colors", gui.Vbox)
@@ -1494,24 +1595,42 @@ export setupGuiCallbacks :: () {
 
 		gui.refreshRecursively(guiState, dragContainer)
 	}
+	guiState.onDragEnd.colorMove = (buttons:gui.Buttons, buttonIndex:int) {
+		local project, system = getCurrentProjectAndSystem()
+		local colorsOld       = colorsBeforeDragging
+		local colorsNew       = system.colors
+		local newOrder        = false
+
+		for colorsNew {
+			if it ~= colorsOld[itIndex] {
+				newOrder = true
+				break
+			}
+		}
+		if not newOrder  return
+
+		recordChange("Reordered colors",
+			[system, colorsNew] (project:Project) {  system.colors = colorsNew  },
+			[system, colorsOld] (project:Project) {  system.colors = colorsOld  },
+			[system           ] (project:Project) {
+				if isSystemCurrent(system)  gui.refreshRecursively(guiState, "colors")
+				updateParticleColors(system)
+			}
+		)
+	}
 	for i = 1, 8 {
-		guiState.onRefresh[format("color%d", i)] = (colorEl:gui.Color) {
+		guiState.onRefresh[format("color%d", i)] = [i] (colorEl:gui.Color) {
 			local project, system = getCurrentProjectAndSystem()
 			local colors          = system.colors
-			local i1              = (4 * cast(int) colorEl.data) - 3
+			local i1              = i*4 - 3
 			colorEl.color[1]      = colors[i1+0]
 			colorEl.color[2]      = colors[i1+1]
 			colorEl.color[3]      = colors[i1+2]
 			colorEl.color[4]      = colors[i1+3]
 		}
-		guiState.onAction[format("color%d", i)] = (colorEl:gui.Color, component:int) {
-			local project, system  = getCurrentProjectAndSystem()
-			local colors           = system.colors
-			local i1               = (4 * cast(int) colorEl.data) - 3
-			colors[i1+component-1] = colorEl.color[component]
-			markEdited(project)
-			updateParticleColors(system)
-		}
+		addEventHandlersForColor(forSystem=true, format("color%d", i), "Changed color",
+			[i] (project:Project, system:System, component:int, value:float) {  system.colors[(i-1)*4+component] = value ; updateParticleColors(system)  }
+		)
 	}
 
 	guiState.onRefresh.colorPreview = (preview:gui.ColorPreview) {
@@ -1525,13 +1644,13 @@ export setupGuiCallbacks :: () {
 		assert(found)
 		radio.index = i
 	}
-	guiState.onAction.blendMode = (radio:gui.Radio, buttonIndex:int) {
-		local project, system = getCurrentProjectAndSystem()
-		local blendMode       = cast(LG.BlendMode) radio.buttons[buttonIndex].value
-		system.blendMode      = blendMode
-		markEdited(project)
-		gui.getElement(guiState, "colorPreview", gui.ColorPreview).blendMode = blendMode
-	}
+	addEventHandlersForRadio("blendMode", LG.BlendMode, "Changed blend mode",
+		(project:Project, system:System, value:LG.BlendMode) {
+			system.blendMode = value
+			updateParticleParams(project, system)
+			gui.getElement(guiState, "colorPreview", gui.ColorPreview).blendMode = value
+		}
+	)
 
 	--==============================================================
 	--= Save/open project
@@ -2652,7 +2771,7 @@ export setupGuiCallbacks :: () {
 			local image           = system.currentImage
 			local iw, ih          = image.getDimensions!()
 
-			local r, g, b = hsvToRgb(project.bgColorH, project.bgColorS, project.bgColorV)
+			local r, g, b = hsvToRgb(project.bgColor)
 			LG.clear(r, g, b)
 
 			if system.frames {

@@ -129,11 +129,15 @@ export State :: struct {
 	onInactive:     struct { !key:string, !value:any--[[ (el:Element) ]] },
 	onSubmit:       struct { !key:string, !value:any--[[ (el:Element) ]] },
 	onBeforeAction: struct { !key:string, !value:any--[[ (widget:Widget, i:int) -> (ignore:bool) ]] }, -- Only used for Radio and Tabs.
+	onBegin:        struct { !key:string, !value:any--[[ (widget:Widget, i:int) ]] },
 	onAction:       struct { !key:string, !value:any--[[ (widget:Widget, i:int) ]] },
+	onEnd:          struct { !key:string, !value:any--[[ (widget:Widget, i:int) ]] },
 	onDouble:       struct { !key:string, !value:any--[[ (widget:Widget, i:int) ]] },
 	onOption:       struct { !key:string, !value:any--[[ (widget:Widget, i:int) ]] },
 	onClose:        struct { !key:string, !value:any--[[ (widget:Widget, i:int) ]] },
+	onDragBegin:    struct { !key:string, !value:any--[[ (widget:Widget, i:int) ]] },
 	onDrag:         struct { !key:string, !value:any--[[ (widget:Widget, i:int, mx,my:int) ]] },
+	onDragEnd:      struct { !key:string, !value:any--[[ (widget:Widget, i:int) ]] },
 	onDraw:         struct { !key:string, !value:any--[[ (canvas:Canvas, cw,ch:int) ]] },
 
 	buttons      :: (state:State, el:Buttons)      -> type_of(el) { return cast(type_of(el)) register(state, el, type_of(el)) },
@@ -201,7 +205,8 @@ export Element :: struct {
 	maxWidth       = -1, -- Negative means no limit.
 	maxHeight      = -1, -- Negative means no limit.
 	style          = Style.NORMAL,
-	data: any,
+	data:     any,
+	dataTemp: any,
 
 	type: Type = NULL,
 	id:   int  = NULL,
@@ -473,9 +478,12 @@ export onKeyPressed :: (state:State, key:LK.KeyConstant, scancode:LK.Scancode, i
 			local direction = cast(Direction) widget
 
 			if (mod == ModifierKey.NONE or mod == ModifierKey.S or mod == ModifierKey.C) and (key == "left" or key == "right") {
-				local delta     = math.TAU * ((mod == ModifierKey.S) ? 22.5/360 : (mod == ModifierKey.C) ? 1/360 : 5/360)
+				local delta = math.TAU * ((mod == ModifierKey.S) ? 22.5/360 : (mod == ModifierKey.C) ? 1/360 : 5/360)
+
+				triggerBeginEvent(state, direction, "", 0)
 				direction.angle = ((key == "left" ? direction.angle-delta : direction.angle+delta) + math.PI) % math.TAU - math.PI
-				triggerActionEvent(state, direction, "", 0, save=true)
+				triggerActionEvent(state, direction, "", 0, alsoEnd=true)
+
 				return true
 			}
 
@@ -493,13 +501,14 @@ export onKeyPressed :: (state:State, key:LK.KeyConstant, scancode:LK.Scancode, i
 					)
 				)
 
+				triggerBeginEvent(state, slider, "", 0)
 				slider.value = math.clamp(
 					slider.value + delta * (key == "left" ? -1 : 1),
 					applyLimitMultiplier(slider, slider.min),
 					applyLimitMultiplier(slider, slider.max)
 				)
+				triggerActionEvent(state, slider, "", 0, alsoEnd=true)
 
-				triggerActionEvent(state, slider, "", 0, save=true)
 				return true
 			}
 
@@ -507,15 +516,18 @@ export onKeyPressed :: (state:State, key:LK.KeyConstant, scancode:LK.Scancode, i
 			local colorEl = cast(Color) widget
 
 			if (mod == ModifierKey.NONE or mod == ModifierKey.S or mod == ModifierKey.C) and (key == "left" or key == "right") {
-				local component          = state.hoveredSubid
+				local component = state.hoveredSubid
 
-				local delta
-					= component == 1
+				local delta = (
+					component == 1
 					? ((mod == ModifierKey.S) ? 30  : (mod == ModifierKey.C) ? 1  : 6) / 360
 					: ((mod == ModifierKey.S) ? 7.5 : (mod == ModifierKey.C) ? .5 : 2) / 100
+				)
 
+				triggerBeginEvent(state, colorEl, "", component)
 				colorEl.color[component] = math.clamp01(key == "left" ? colorEl.color[component]-delta : colorEl.color[component]+delta)
-				triggerActionEvent(state, colorEl, "", component, save=true)
+				triggerActionEvent(state, colorEl, "", component, alsoEnd=true)
+
 				return true
 			}
 	}
@@ -575,13 +587,14 @@ export onMousePressed :: (state:State, mx,my:int, mbutton:int, presses:int) -> (
 			if el.type == Buttons and (buttons.style == Style.CONTEXT_MENU or buttons.style == Style.LIST) {
 				local handled = false
 				if presses % 2 == 0 {
-					handled = triggerDoublePressEvent(state, buttons, buttons.buttons[state.hoveredSubid].name, state.hoveredSubid, save=true)
+					handled = triggerDoublePressEvent(state, buttons, buttons.buttons[state.hoveredSubid].name, state.hoveredSubid)
 				}
 				if not handled {
-					triggerActionEvent(state, buttons, buttons.buttons[state.hoveredSubid].name, state.hoveredSubid, save=true)
+					triggerBeginEvent (state, buttons, buttons.buttons[state.hoveredSubid].name, state.hoveredSubid)
+					triggerActionEvent(state, buttons, buttons.buttons[state.hoveredSubid].name, state.hoveredSubid, alsoEnd=true)
 				}
 
-			} elseif el.type == Slider and presses % 2 == 0 and triggerDoublePressEvent(state, slider, "", 0, save=true) {
+			} elseif el.type == Slider and presses % 2 == 0 and triggerDoublePressEvent(state, slider, "", 0) {
 				-- void
 
 			} else {
@@ -605,7 +618,7 @@ export onMousePressed :: (state:State, mx,my:int, mbutton:int, presses:int) -> (
 					}
 				}
 
-				onMouseMoved(state, mx, my, 0, 0)
+				onMouseMoved(state, mx, my, 0, 0, begin=true)
 			}
 		}
 
@@ -617,7 +630,7 @@ export onMousePressed :: (state:State, mx,my:int, mbutton:int, presses:int) -> (
 	return state.activeId > 0 or getTopmostActiveModal(state) ~= NULL
 }
 
-export onMouseMoved :: (state:State, mx,my:int, dx,dy:int) {
+export onMouseMoved :: (state:State, mx,my:int, dx,dy:int, begin=false, end=false) {
 	updateLayoutIfNeeded(state)
 
 	local updateMouseCursor :: (state:State) {
@@ -728,18 +741,24 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int) {
 
 				if slider.isInt  value = math.round(value)
 
+				if begin  triggerBeginEvent(state, slider, "", 0)
 				if value ~= slider.value {
 					slider.value = value
 					triggerActionEvent(state, slider, "", 0)
 				}
+				if end  triggerEndEvent(state, slider, "", 0)
 
 				if state.activeMod == ModifierKey.S or state.activeMod == ModifierKey.CS {
 					for slider.linkMultiDrag {
 						local other = cast(Slider) state.elementsByName[it]
 
-						if other ~= NULL and other ~= slider and other.type == Slider and other.value ~= value and isElementVisible(other) {
-							other.value = value
-							triggerActionEvent(state, other, "", 0)
+						if other ~= NULL and other ~= slider and other.type == Slider and isElementVisible(other) {
+							if begin  triggerBeginEvent(state, other, "", 0)
+							if other.value ~= value {
+								other.value = value
+								triggerActionEvent(state, other, "", 0)
+							}
+							if end  triggerEndEvent(state, other, "", 0)
 						}
 					}
 				}
@@ -757,18 +776,24 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int) {
 
 			value = math.clamp01(value)
 
+			if begin  triggerBeginEvent(state, colorEl, "", component)
 			if value ~= colorEl.color[component] {
 				colorEl.color[component] = value
 				triggerActionEvent(state, colorEl, "", component)
 			}
+			if end  triggerEndEvent(state, colorEl, "", component)
 
 			if colorEl.linkMultiDrag and (state.activeMod == ModifierKey.S or state.activeMod == ModifierKey.CS) {
 				for colorEl.linkMultiDrag {
 					local other = cast(Color) state.elementsByName[it]
 
-					if other ~= NULL and other ~= colorEl and other.type == Color and other.color[component] ~= value and isElementVisible(other) {
-						other.color[component] = value
-						triggerActionEvent(state, other, "", component)
+					if other ~= NULL and other ~= colorEl and other.type == Color and isElementVisible(other) {
+						if begin  triggerBeginEvent(state, other, "", component)
+						if other.color[component] ~= value {
+							other.color[component] = value
+							triggerActionEvent(state, other, "", component)
+						}
+						if end  triggerEndEvent(state, other, "", component)
 					}
 				}
 			}
@@ -795,18 +820,24 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int) {
 				}
 			}
 
+			if begin  triggerBeginEvent(state, direction, "", 0)
 			if angle ~= direction.angle {
 				direction.angle = angle
 				triggerActionEvent(state, direction, "", 0)
 			}
+			if end  triggerEndEvent(state, direction, "", 0)
 
 			if multiDrag {
 				for direction.linkMultiDrag {
 					local other = cast(Direction) state.elementsByName[it]
 
-					if other ~= NULL and other ~= direction and other.type == Direction and other.angle ~= angle and isElementVisible(other) {
-						other.angle = angle
-						triggerActionEvent(state, other, "", 0)
+					if other ~= NULL and other ~= direction and other.type == Direction and isElementVisible(other) {
+						if begin  triggerBeginEvent(state, other, "", 0)
+						if other.angle ~= angle {
+							other.angle = angle
+							triggerActionEvent(state, other, "", 0)
+						}
+						if end  triggerEndEvent(state, other, "", 0)
 					}
 				}
 			}
@@ -826,13 +857,15 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int) {
 		case Radio: !through
 		case Buttons:
 			local buttons = cast(Buttons) widget
+			local button  = buttons.buttons[state.activeSubid]
 
-			if buttons.buttons[state.activeSubid].draggable {
+			if button.draggable {
 				if state.activeDragging {
-					triggerDragEvent(state, buttons, buttons.buttons[state.hoveredSubid].name, state.hoveredSubid, mx, my)
+					triggerDragEvent(state, buttons, button.name, state.activeSubid, mx, my)
 
 				} elseif math.distance(mx,my, state.activeStartMx,state.activeStartMy) > DRAG_RADIUS {
 					state.activeDragging = true
+					triggerDragBeginEvent(state, buttons, button.name, state.activeSubid)
 				}
 			}
 	}
@@ -884,8 +917,7 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int) {
 export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int) {
 	if state.focusId {
 		local input = cast(InputText) state.elementsById[state.focusId]
-		if input.field.mousereleased!(mx, my, mbutton)
-			onMouseMoved(state, mx, my, 0, 0)
+		if input.field.mousereleased!(mx, my, mbutton)  onMouseMoved(state, mx, my, 0, 0)
 	}
 
 	-- LMB.
@@ -896,7 +928,8 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int) {
 			case Buttons:
 				if state.hoveredId and not state.activeDragging {
 					local buttons = cast(Buttons) widget
-					triggerActionEvent(state, buttons, buttons.buttons[state.activeSubid].name, state.activeSubid, save=true)
+					triggerBeginEvent (state, buttons, buttons.buttons[state.activeSubid].name, state.activeSubid)
+					triggerActionEvent(state, buttons, buttons.buttons[state.activeSubid].name, state.activeSubid, alsoEnd=true)
 				}
 
 			case Radio:
@@ -906,8 +939,9 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int) {
 					if triggerBeforeActionEvent(state, radio, radio.buttons[state.activeSubid].name, state.activeSubid) {
 						-- void
 					} elseif radio.index ~= state.hoveredSubid {
+						triggerBeginEvent (state, radio, radio.buttons[state.activeSubid].name, state.activeSubid)
 						radio.index = state.hoveredSubid
-						triggerActionEvent(state, radio, radio.buttons[state.activeSubid].name, state.activeSubid, save=true)
+						triggerActionEvent(state, radio, radio.buttons[state.activeSubid].name, state.activeSubid, alsoEnd=true)
 					}
 				}
 
@@ -918,19 +952,22 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int) {
 					if triggerBeforeActionEvent(state, tabs, tabs.buttons[state.activeSubid].name, state.activeSubid) {
 						-- void
 					} elseif tabs.specialLastTab and state.hoveredSubid == #tabs.buttons {
-						triggerActionEvent(state, tabs, tabs.buttons[state.activeSubid].name, state.activeSubid, save=true)
+						triggerBeginEvent (state, tabs, tabs.buttons[state.activeSubid].name, state.activeSubid)
+						triggerActionEvent(state, tabs, tabs.buttons[state.activeSubid].name, state.activeSubid, alsoEnd=true)
 					} elseif tabs.index ~= state.hoveredSubid {
+						triggerBeginEvent (state, tabs, tabs.buttons[state.activeSubid].name, state.activeSubid)
 						tabs.index = state.hoveredSubid
-						triggerActionEvent(state, tabs, tabs.buttons[state.activeSubid].name, state.activeSubid, save=true)
+						triggerActionEvent(state, tabs, tabs.buttons[state.activeSubid].name, state.activeSubid, alsoEnd=true)
 					}
 				}
 
 			case Checkbox:
 				if state.hoveredId {
-					local checkbox   = cast(Checkbox) widget
-					checkbox.checked = not checkbox.checked
+					local checkbox = cast(Checkbox) widget
 
-					triggerActionEvent(state, checkbox, "", 0, save=true)
+					triggerBeginEvent(state, checkbox, "", 0)
+					checkbox.checked = not checkbox.checked
+					triggerActionEvent(state, checkbox, "", 0, alsoEnd=true)
 				}
 
 			case Slider: !through
@@ -962,7 +999,7 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int) {
 				local tabs = cast(Tabs) widget
 
 				if not (tabs.specialLastTab and state.hoveredSubid == #tabs.buttons) {
-					triggerCloseEvent(state, tabs, tabs.buttons[state.hoveredSubid].name, state.hoveredSubid, save=true)
+					triggerCloseEvent(state, tabs, tabs.buttons[state.hoveredSubid].name, state.hoveredSubid)
 				}
 		}
 	}
@@ -993,8 +1030,9 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int) {
 								case 2:
 									if not hasClipboardAngle  return
 
+									triggerBeginEvent(state, direction, "", 0)
 									direction.angle = clipboardAngle
-									triggerActionEvent(state, direction, "", 0)
+									triggerActionEvent(state, direction, "", 0, alsoEnd=true)
 							}
 						},
 						[state,direction] (text:string) {
@@ -1015,8 +1053,9 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int) {
 								case 2:
 									if not hasClipboardScalar  return
 
+									triggerBeginEvent(state, slider, "", 0)
 									slider.value = clipboardScalar
-									triggerActionEvent(state, slider, "", 0)
+									triggerActionEvent(state, slider, "", 0, alsoEnd=true)
 
 								case 3:
 									forgetLimitMultiplier(slider)
@@ -1060,15 +1099,17 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int) {
 								case 3:
 									if not hasClipboardScalar  return
 
+									triggerBeginEvent(state, colorEl, "", component)
 									colorEl.color[component] = clipboardScalar
-									triggerActionEvent(state, colorEl, "", component)
+									triggerActionEvent(state, colorEl, "", component, alsoEnd=true)
 
 								case 4:
 									if not hasClipboardColor  return
 
 									for 1, 4 {
+										triggerBeginEvent(state, colorEl, "", it)
 										colorEl.color[it] = clipboardColor[it]
-										triggerActionEvent(state, colorEl, "", it)
+										triggerActionEvent(state, colorEl, "", it, alsoEnd=true)
 									}
 							}
 						},
@@ -1082,7 +1123,26 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int) {
 
 	-- Release active ID.
 	if state.activeId and mbutton == 1 {
-		if state.activeDragging  scheduleSaveWorkspace()
+		if state.elementsById[state.activeId] ~= NULL  onMouseMoved(state, mx, my, 0, 0, end=true)
+
+		if state.activeDragging {
+			local widget = cast(Widget) state.elementsById[state.activeId]
+
+			if widget.type == {
+				case Tabs:
+				case Radio:
+				case Buttons:
+					local buttons = cast(Buttons) widget
+					local button  = buttons.buttons[state.activeSubid]
+					triggerDragEndEvent(state, buttons, button.name, state.activeSubid)
+
+				case:
+					printf("Error: triggerDragEndEvent: Unhandled element type '%d'.", widget.type)
+					triggerDragEndEvent(state, widget, "", state.activeSubid)
+			}
+
+			scheduleSaveWorkspace()
+		}
 
 		state.activeId       = 0
 		state.activeSubid    = 0
@@ -1809,7 +1869,7 @@ local drawElement :: (state:State, el:Element) {
 			local PREVIEW_SCALE :: 2.5
 			local project = app.projects[app.currentProjectIndex]
 			local scale   = PREVIEW_SCALE * PARTICLE_PREVIEW_SIZE / math.min(LG.getWidth() - MAIN_PANEL_WIDTH, LG.getHeight()) * project.zoom
-			local r, g, b = hsvToRgb(project.bgColorH, project.bgColorS, project.bgColorV)
+			local r, g, b = hsvToRgb(project.bgColor)
 
 			LG.setColor(1, 1, 1)
 
@@ -2127,7 +2187,7 @@ local drawElement :: (state:State, el:Element) {
 					colorCount  += 1
 					local color  = colorsForShader[colorCount]
 
-					color[1], color[2], color[3] = hsvToRgb(colorEl.color[1], colorEl.color[2], colorEl.color[3])
+					color[1], color[2], color[3] = hsvToRgb(colorEl.color)
 					color[4]                     = colorEl.alpha ? colorEl.color[4] : 1
 				}
 			}
@@ -2572,41 +2632,75 @@ local triggerBeforeActionEvent :: (state:State, widget:Widget, name:string, subi
 
 	return cb(widget, subid)
 }
-local triggerActionEvent :: (state:State, widget:Widget, name:string, subid:int, save=false) {
-	local cb = cast((widget:Widget, i:int)) state.onAction[name ?: widget.name]
+local triggerBeginEvent :: (state:State, widget:Widget, name:string, subid:int) {
+	-- printf("GuiEvent: Begin  '%s'", (name ?: widget.name)) -- DEBUG
+	local cb = cast((widget:Widget, i:int)) state.onBegin[name ?: widget.name]
 	if cb == NULL  return
 
 	cb(widget, subid)
-	if save  scheduleSaveWorkspace()
 }
-local triggerDoublePressEvent :: (state:State, widget:Widget, name:string, subid:int, save=false) -> (handled:bool) {
+local triggerActionEvent :: (state:State, widget:Widget, name:string, subid:int, alsoEnd=false) {
+	-- printf("GuiEvent: Action '%s'", (name ?: widget.name)) -- DEBUG
+
+	local cb = cast((widget:Widget, i:int)) state.onAction[name ?: widget.name]
+	if cb ~= NULL  cb(widget, subid)
+
+	if alsoEnd {
+		triggerEndEvent(state, widget, name, subid)
+		if cb ~= NULL  scheduleSaveWorkspace()
+	}
+}
+local triggerEndEvent :: (state:State, widget:Widget, name:string, subid:int) {
+	-- printf("GuiEvent: End    '%s'", (name ?: widget.name)) -- DEBUG
+	local cb = cast((widget:Widget, i:int)) state.onEnd[name ?: widget.name]
+	if cb == NULL  return
+
+	cb(widget, subid)
+	scheduleSaveWorkspace()
+}
+
+local triggerDoublePressEvent :: (state:State, widget:Widget, name:string, subid:int) -> (handled:bool) {
 	local cb = cast((widget:Widget, i:int)) state.onDouble[name ?: widget.name]
 	if cb == NULL  return false
 
 	cb(widget, subid)
-	if save  scheduleSaveWorkspace()
+	scheduleSaveWorkspace()
 	return true
 }
-local triggerOptionEvent :: (state:State, widget:Widget, name:string, subid:int, save=false) -> (handled:bool) {
+
+local triggerOptionEvent :: (state:State, widget:Widget, name:string, subid:int) -> (handled:bool) {
 	local cb = cast((widget:Widget, i:int)) state.onOption[name ?: widget.name]
 	if cb == NULL  return false
 
 	cb(widget, subid)
-	if save  scheduleSaveWorkspace()
 	return true
 }
-local triggerCloseEvent :: (state:State, widget:Widget, name:string, subid:int, save=false) {
+
+local triggerCloseEvent :: (state:State, widget:Widget, name:string, subid:int) {
 	local cb = cast((widget:Widget, i:int)) state.onClose[name ?: widget.name]
 	if cb == NULL  return
 
 	cb(widget, subid)
-	if save  scheduleSaveWorkspace()
+	scheduleSaveWorkspace()
+}
+
+local triggerDragBeginEvent :: (state:State, widget:Widget, name:string, subid:int) {
+	local cb = cast((widget:Widget, i:int)) state.onDragBegin[name ?: widget.name]
+	if cb == NULL  return
+
+	cb(widget, subid)
 }
 local triggerDragEvent :: (state:State, widget:Widget, name:string, subid:int, mx,my:int) {
 	local cb = cast((widget:Widget, i:int, mx,my:int)) state.onDrag[name ?: widget.name]
 	if cb == NULL  return
 
 	cb(widget, subid, mx, my)
+}
+local triggerDragEndEvent :: (state:State, widget:Widget, name:string, subid:int) {
+	local cb = cast((widget:Widget, i:int)) state.onDragEnd[name ?: widget.name]
+	if cb == NULL  return
+
+	cb(widget, subid)
 }
 
 
@@ -2660,6 +2754,11 @@ export isElementVisible :: (el:Element) -> bool {
 	return el.active
 }
 
+export isElementVisible :: (state:State, name:string) -> bool {
+	local el = state.elementsByName[name]
+	return el ~= NULL and isElementVisible(el)
+}
+
 
 
 export setFocus :: (state:State, name:string) {
@@ -2695,11 +2794,14 @@ export blurFocus :: (state:State, abort=false) {
 	if not state.focusId  return
 
 	local input = cast(InputText) state.elementsById[state.focusId]
-	if abort {
+	if input.field.getText!() == input.value {
+		-- void
+	} elseif abort {
 		input.field.setText!(input.value)
 	} else {
+		triggerBeginEvent(state, input, "", 0)
 		input.value = input.field.getText!()
-		triggerActionEvent(state, input, "", 0, save=true)
+		triggerActionEvent(state, input, "", 0, alsoEnd=true)
 	}
 
 	state.focusId = 0
@@ -2735,7 +2837,8 @@ export pressButton :: (state:State, buttonsElementName:string, i:int) {
 		return
 	}
 
-	triggerActionEvent(state, buttons, button.name, i, save=true)
+	triggerBeginEvent (state, buttons, button.name, i)
+	triggerActionEvent(state, buttons, button.name, i, alsoEnd=true)
 }
 
 
@@ -2987,8 +3090,9 @@ local commitValueFromInput :: (state:State, slider:Slider, text:string) {
 
 	if n == slider.value  return
 
+	triggerBeginEvent(state, slider, "", 0)
 	slider.value = n
-	triggerActionEvent(state, slider, "", 0)
+	triggerActionEvent(state, slider, "", 0, alsoEnd=true)
 }
 
 local commitValueFromInput :: (state:State, direction:Direction, text:string) {
@@ -2999,8 +3103,9 @@ local commitValueFromInput :: (state:State, direction:Direction, text:string) {
 
 	if angle == direction.angle  return
 
+	triggerBeginEvent(state, direction, "", 0)
 	direction.angle = angle
-	triggerActionEvent(state, direction, "", 0)
+	triggerActionEvent(state, direction, "", 0, alsoEnd=true)
 }
 
 local commitValueFromInput :: (state:State, colorEl:Color, component:int, text:string) {
@@ -3012,8 +3117,9 @@ local commitValueFromInput :: (state:State, colorEl:Color, component:int, text:s
 
 	if value == colorEl.color[component]  return
 
+	triggerBeginEvent(state, colorEl, "", component)
 	colorEl.color[component] = value
-	triggerActionEvent(state, colorEl, "", component)
+	triggerActionEvent(state, colorEl, "", component, alsoEnd=true)
 }
 
 
