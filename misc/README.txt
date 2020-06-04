@@ -43,6 +43,9 @@ Hold Ctrl/Cmd while dragging controls to snap the value.
 Hold Shift to drag related controls together (like min and max speed).
 Hold Alt to change the min/max limits of sliders.
 
+Press left and right arrow keys while hovering over controls to shift the
+value. Hold Ctrl or Shift to go slower or faster.
+
 
 3. Shortcuts
 ------------------------------------------------------------------------------
@@ -78,6 +81,9 @@ Ctrl+D          Duplicate particle system
 Ctrl+Delete     Delete particle system
 
 Ctrl+Q          Quit
+
+Ctrl+Z          Undo
+Ctrl+Shift+Z    Redo
 
 
 4. Exporting

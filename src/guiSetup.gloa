@@ -31,7 +31,7 @@ export setupGuiFrames :: () {
 
 			guiState.separator!({ thick=false }),
 			guiState.hbox!({
-				guiState.buttons!({ buttons={{name="undo",label=" < Undo "},{name="redo",label=" Redo > "}} }),
+				guiState.buttons!({ buttons={{name="undo",label=" < Undo ",tooltip="Ctrl+Z"},{name="redo",label=" Redo > ",tooltip="Ctrl+Shift+Z"}} }),
 				guiState.text!({ name="undoRedoText", text="0/0", size=1 }),
 			}),
 
