@@ -1901,6 +1901,7 @@ export setCurrentProject :: (i:int, force=false) {
 
 	gui.refreshRecursively(guiState, "projectSettings")
 	gui.refreshRecursively(guiState, "systems")
+	gui.refreshRecursively(guiState, "undoRedoText")
 
 	scheduleRecreateCanvases = true
 	updateParticleImageFilters()
@@ -2242,7 +2243,9 @@ export recordChange :: (label:string, onDo:(project:Project), onUndo:(project:Pr
 		onDo(project)
 		if finalize ~= NULL  finalize(project)
 	-- }
+
 	markEdited(project)
+	gui.refreshRecursively(guiState, "undoRedoText")
 	scheduleSaveWorkspace()
 
 	return change
@@ -2275,6 +2278,7 @@ export undo :: () {
 
 	reverseArray(labels)
 	setActionText("Undo: "..concatinate(labels, ", "), clearMessage=false)
+	gui.refreshRecursively(guiState, "undoRedoText")
 
 	scheduleSaveWorkspace()
 }
@@ -2305,6 +2309,7 @@ export redo :: () {
 	project.changeIndex += 1
 
 	setActionText("Redo: "..concatinate(labels, ", "), clearMessage=false)
+	gui.refreshRecursively(guiState, "undoRedoText")
 
 	scheduleSaveWorkspace()
 }

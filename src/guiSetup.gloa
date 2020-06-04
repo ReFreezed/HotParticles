@@ -21,14 +21,18 @@ export setupGuiFrames :: () {
 		guiState.frame!({ name="main", width=MAIN_PANEL_WIDTH,
 			guiState.tabs!({ name="projects", specialLastTab=true }),
 
-			guiState.buttons!({ name="saveOpenBar",
-				buttons = {
-					{label="Open...",    tooltip="Open project  (Ctrl+O) (Right-click for recent)"},
-					{label="Save",       tooltip="Save project  (Ctrl+S)"},
-					{label="Save as...", tooltip="Save new project  (Ctrl+Shift+S)"},
-					{label="Export...",  tooltip="Export particles/textures to files/clipboard  (Ctrl+E)"},
-					{label="Settings",   tooltip="Toggle project settings"},
-				},
+			guiState.buttons!({ name="saveOpenBar", buttons={
+				{label="Open...",    tooltip="Open project  (Ctrl+O) (Right-click for recent)"},
+				{label="Save",       tooltip="Save project  (Ctrl+S)"},
+				{label="Save as...", tooltip="Save new project  (Ctrl+Shift+S)"},
+				{label="Export...",  tooltip="Export particles/textures to files/clipboard  (Ctrl+E)"},
+				{label="Settings",   tooltip="Toggle project settings"},
+			}}),
+
+			guiState.separator!({ thick=false }),
+			guiState.hbox!({
+				guiState.buttons!({ buttons={{name="undo",label=" < Undo "},{name="redo",label=" Redo > "}} }),
+				guiState.text!({ name="undoRedoText", text="0/0", size=1 }),
 			}),
 
 			guiState.vbox!({ name="projectSettings",
@@ -316,7 +320,7 @@ export setupGuiFrames :: () {
 		}),
 
 		guiState.frame!({ name="openProject", width=MAIN_PANEL_WIDTH, active=false,
-			guiState.text!({ text="Open", large=true }),
+			guiState.text!({ text="Open", size=3 }),
 
 			guiState.separator!({ thick=true }),
 			guiState.hbox!({
@@ -349,7 +353,7 @@ export setupGuiFrames :: () {
 		}),
 
 		guiState.frame!({ name="saveProjectAs", width=MAIN_PANEL_WIDTH, active=false,
-			guiState.text!({ text="Save as", large=true }),
+			guiState.text!({ text="Save as", size=3 }),
 
 			guiState.separator!({ thick=true }),
 			guiState.hbox!({
@@ -382,7 +386,7 @@ export setupGuiFrames :: () {
 		}),
 
 		guiState.frame!({ name="exportProject", width=DIALOG_WIDTH, modal=true, layout=gui.Layout.FLOATING, active=false,
-			guiState.text!({ text="Export", large=true }),
+			guiState.text!({ text="Export", size=3 }),
 
 			guiState.separator!({ thick=false }),
 			guiState.section!({ name="exportProject_baseDirectorySection", label="Base folder", icon16="folder",
@@ -437,7 +441,7 @@ export setupGuiFrames :: () {
 		}),
 
 		guiState.frame!({ name="animation", width=MAIN_PANEL_WIDTH, active=false,
-			guiState.text!({ text="Animation", large=true }),
+			guiState.text!({ text="Animation", size=3 }),
 			guiState.canvas!({ name="animation_preview", width=100, height=100 }),
 			guiState.separator!({ thick=true }),
 			guiState.buttons!({ buttons={{name="animation_empty",label="Remove all frames"}} }),
@@ -492,7 +496,7 @@ export pushTempChoiceDialog :: (title:string, text:string, buttonList:[]gui.Butt
 	insert(guiState.frames, frame)
 
 	if title {
-		insert(frame, guiState.text!({ text=title, large=true }))
+		insert(frame, guiState.text!({ text=title, size=3 }))
 		insert(frame, guiState.separator!({ thick=true }))
 	}
 	if text {
@@ -660,6 +664,50 @@ export setupGuiCallbacks :: () {
 				openProject(path)
 			}
 		})
+	}
+
+	-- Undo/redo.
+	guiState.onAction.undo = (buttons:gui.Buttons, buttonIndex:int) {
+		undo()
+	}
+	guiState.onAction.redo = (buttons:gui.Buttons, buttonIndex:int) {
+		redo()
+	}
+	guiState.onRefresh.undoRedoText = (textEl:gui.Text) {
+		local project = app.projects[app.currentProjectIndex]
+
+		if not project.changes {
+			textEl.text = "0/0"
+			return
+		}
+
+		local change        = project.changes[project.changeIndex-1] -- Note: changeIndex points at the next entry.
+		local bundleCurrent = change ~= NULL ? change.bundle : -1
+
+		local bundleCount = 0
+		local bundleIndex = 0
+		local lastBundle  = -1
+
+		local labels: []string
+		local labelsAdded: struct { !key:string, !value:bool }
+
+		for project.changes {
+			if it.bundle ~= lastBundle {
+				bundleCount += 1
+				lastBundle   = it.bundle
+			}
+
+			if it.bundle == bundleCurrent {
+				bundleIndex = bundleCount
+
+				if not labelsAdded[it.label] {
+					labelsAdded[it.label] = true
+					insert(labels, it.label)
+				}
+			}
+		}
+
+		textEl.text = format("%d/%d  %s", bundleIndex, bundleCount, concatinate(labels, ", "))
 	}
 
 	-- Project settings.

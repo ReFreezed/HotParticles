@@ -276,8 +276,8 @@ export Vbox :: struct {
 export Text :: struct {
 	using Element,
 
-	text  = "",
-	large = false,
+	text = "",
+	size = 2, -- 1=small, 2=normal, 3=large
 }
 
 export Separator :: struct {
@@ -1274,8 +1274,8 @@ local calculateNaturalSize :: (state:State, el:Element) {
 
 		case Text:
 			local textEl        = cast(Text) el
-			local font          = textEl.large ? fontLarge : fontNormal
-			textEl.layoutWidth  = font.getWidth!(textEl.text) + (textEl.large ? 1 : 0)
+			local font          = textEl.size == 3 ? fontLarge : textEl.size == 1 ? fontSmall : fontNormal
+			textEl.layoutWidth  = font.getWidth!(textEl.text) + (textEl.size == 3 ? 1 : 0)
 			textEl.layoutHeight = font.getHeight!()
 
 		case Separator:
@@ -1739,15 +1739,17 @@ local drawElement :: (state:State, el:Element) {
 
 		case Text:
 			local textEl = cast(Text) el
+			local font   = textEl.size == 3 ? fontLarge : textEl.size == 1 ? fontSmall : fontNormal
+			local textY  = textEl.layoutY + (textEl.layoutHeight - font.getHeight!()) // 2
 
 			LG.pushAll()
 			intersectScissor(textEl.layoutX, 0, textEl.layoutWidth, LG.getHeight())
 
-			LG.setFont(textEl.large ? fontLarge : fontNormal)
+			LG.setFont(font)
 			LG.setColor(1, 1, 1, TEXT_OPACITY)
 
-			LG.print(textEl.text, textEl.layoutX, textEl.layoutY)
-			if textEl.large  LG.print(textEl.text, textEl.layoutX+1, textEl.layoutY)
+			LG.print(textEl.text, textEl.layoutX, textY)
+			if textEl.size == 3  LG.print(textEl.text, textEl.layoutX+1, textY)
 
 			LG.pop()
 
