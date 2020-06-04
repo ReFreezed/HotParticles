@@ -128,16 +128,17 @@ export State :: struct {
 	onActive:       struct { !key:string, !value:any--[[ (el:Element) ]] },
 	onInactive:     struct { !key:string, !value:any--[[ (el:Element) ]] },
 	onSubmit:       struct { !key:string, !value:any--[[ (el:Element) ]] },
-	onBeforeAction: struct { !key:string, !value:any--[[ (widget:Widget, i:int) -> (ignore:bool) ]] }, -- Only used for Radio and Tabs.
-	onBegin:        struct { !key:string, !value:any--[[ (widget:Widget, i:int) ]] },
-	onAction:       struct { !key:string, !value:any--[[ (widget:Widget, i:int) ]] },
-	onEnd:          struct { !key:string, !value:any--[[ (widget:Widget, i:int) ]] },
-	onDouble:       struct { !key:string, !value:any--[[ (widget:Widget, i:int) ]] },
-	onOption:       struct { !key:string, !value:any--[[ (widget:Widget, i:int) ]] },
-	onClose:        struct { !key:string, !value:any--[[ (widget:Widget, i:int) ]] },
-	onDragBegin:    struct { !key:string, !value:any--[[ (widget:Widget, i:int) ]] },
-	onDrag:         struct { !key:string, !value:any--[[ (widget:Widget, i:int, mx,my:int) ]] },
-	onDragEnd:      struct { !key:string, !value:any--[[ (widget:Widget, i:int) ]] },
+	onBeforeAction: struct { !key:string, !value:any--[[ (widget:Widget, subid:int) -> (ignore:bool) ]] }, -- Only used for Radio and Tabs.
+	onBegin:        struct { !key:string, !value:any--[[ (widget:Widget, subid:int) ]] },
+	onAction:       struct { !key:string, !value:any--[[ (widget:Widget, subid:int) ]] },
+	onEnd:          struct { !key:string, !value:any--[[ (widget:Widget, subid:int) ]] },
+	onDouble:       struct { !key:string, !value:any--[[ (widget:Widget, subid:int) ]] },
+	onOption:       struct { !key:string, !value:any--[[ (widget:Widget, subid:int) ]] },
+	onClose:        struct { !key:string, !value:any--[[ (widget:Widget, subid:int) ]] },
+	onDragBegin:    struct { !key:string, !value:any--[[ (widget:Widget, subid:int) ]] },
+	onDrag:         struct { !key:string, !value:any--[[ (widget:Widget, subid:int, mx,my:int) ]] },
+	onDragEnd:      struct { !key:string, !value:any--[[ (widget:Widget, subid:int) ]] },
+	onMouseEnter:   struct { !key:string, !value:any--[[ (widget:Widget, subid:int) ]] },
 	onDraw:         struct { !key:string, !value:any--[[ (canvas:Canvas, cw,ch:int) ]] },
 
 	buttons      :: (state:State, el:Buttons)      -> type_of(el) { return cast(type_of(el)) register(state, el, type_of(el)) },
@@ -237,6 +238,8 @@ export Frame :: struct {
 	temp   = false,
 	x      = -1, -- Negative means centered. Only used if floating.
 	y      = -1, -- Negative means centered. Only used if floating.
+
+	parentFrame: Frame = NULL,
 }
 
 
@@ -451,7 +454,7 @@ export onKeyPressed :: (state:State, key:LK.KeyConstant, scancode:LK.Scancode, i
 
 		-- Input outside context menu.
 		if state.contextMenus and not indexOf(state.contextMenus, input.frame) {
-			if key == "escape"  hideContextMenu(state)
+			if key == "escape"  hideContextMenu(state, mayDeactivateSubmenu=true)
 			return true
 		}
 
@@ -468,7 +471,7 @@ export onKeyPressed :: (state:State, key:LK.KeyConstant, scancode:LK.Scancode, i
 
 	-- Context menu.
 	if state.contextMenus {
-		if key == "escape"  hideContextMenu(state)
+		if key == "escape"  hideContextMenu(state, mayDeactivateSubmenu=true)
 		return true
 	}
 
@@ -679,6 +682,9 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int, begin=false, end=fals
 	}
 
 	-- Update hovered ID.
+	local lastHoveredId    = state.hoveredId
+	local lastHoveredSubid = state.hoveredSubid
+
 	local widget = cast(Widget) state.elementsById[state.activeId]
 	if not (
 		widget ~= NULL
@@ -718,6 +724,19 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int, begin=false, end=fals
 			} else {
 				state.hoveredId = 0
 			}
+		}
+	}
+
+	if state.hoveredId and not (state.hoveredId == lastHoveredId and state.hoveredSubid == lastHoveredSubid) {
+		widget = cast(Widget) state.elementsById[state.hoveredId]
+
+		if widget.type == {
+			case Tabs:  !through
+			case Radio: !through
+			case Buttons:
+				local buttons = cast(Buttons) widget
+				local button  = buttons.buttons[state.hoveredSubid]
+				triggerMouseEnterEvent(state, buttons, button.name, state.hoveredSubid)
 		}
 	}
 
@@ -2726,6 +2745,13 @@ local triggerDragEndEvent :: (state:State, widget:Widget, name:string, subid:int
 	cb(widget, subid)
 }
 
+local triggerMouseEnterEvent :: (state:State, widget:Widget, name:string, subid:int) {
+	local cb = cast((widget:Widget, i:int)) state.onMouseEnter[name ?: widget.name]
+	if cb == NULL  return
+
+	cb(widget, subid)
+}
+
 
 
 export refresh :: (state:State, el:Element) {
@@ -2866,12 +2892,24 @@ export pressButton :: (state:State, buttonsElementName:string, i:int) {
 
 
 
+local limitMenuPosition :: (state:State, contextMenu:Frame) {
+	updateLayoutIfNeeded(state)
+
+	local x = contextMenu.layoutX
+	local y = contextMenu.layoutY
+	local w = contextMenu.layoutWidth
+	local h = contextMenu.layoutHeight
+
+	if x   > LG.getWidth()-w  state.layoutNeedsUpdate, contextMenu.x = true, math.max(LG.getWidth()-w, 0)
+	if y+h > LG.getHeight()   state.layoutNeedsUpdate, contextMenu.y = true, y - h
+}
+
 export showMenu :: (state:State, x,y:int, items:[]MenuItem, cb:(choice:string, data:any)) {
 	hideContextMenu(state)
 
-	local makeContextMenu :: (state:State, items:[]MenuItem, active=false) -> Frame {
+	local makeContextMenu :: (state:State, items:[]MenuItem, parentMenu:Frame, active=false) -> Frame {
 		local buttons     = state.buttons!({ name="__contextMenuButtons", vertical=true, align=Alignment.LEFT, style=Style.CONTEXT_MENU, buttonMinHeight=16 })
-		local contextMenu = state.frame!({ active=active, minWidth=CONTEXT_MENU_MIN_WIDTH, layout=Layout.FLOATING, style=Style.CONTEXT_MENU, buttons })
+		local contextMenu = state.frame!({ parentFrame=parentMenu, minWidth=CONTEXT_MENU_MIN_WIDTH, layout=Layout.FLOATING, style=Style.CONTEXT_MENU, active=active, buttons })
 		insert(state.contextMenus, contextMenu)
 
 		for items {
@@ -2884,14 +2922,14 @@ export showMenu :: (state:State, x,y:int, items:[]MenuItem, cb:(choice:string, d
 			} else {
 				insert(buttons.buttons, cast(Button){ value=it, label=it.label, shortcut=it.shortcut, submenuIcon=cast(bool)it.submenu })
 
-				if it.submenu  it.submenuFrame = makeContextMenu(state, it.submenu)
+				if it.submenu  it.submenuFrame = makeContextMenu(state, it.submenu, contextMenu)
 			}
 		}
 
 		return contextMenu
 	}
 
-	local contextMenu = makeContextMenu(state, items, true)
+	local contextMenu = makeContextMenu(state, items, NULL, true)
 	contextMenu.data  = cb
 	contextMenu.x     = x
 	contextMenu.y     = y
@@ -2899,41 +2937,45 @@ export showMenu :: (state:State, x,y:int, items:[]MenuItem, cb:(choice:string, d
 	for state.contextMenus  insert(state.frames, it)
 
 	state.layoutNeedsUpdate = true
-	updateLayoutIfNeeded(state)
+	limitMenuPosition(state, contextMenu)
 
-	x       = contextMenu.layoutX
-	y       = contextMenu.layoutY
-	local w = contextMenu.layoutWidth
-	local h = contextMenu.layoutHeight
+	state.onMouseEnter.__contextMenuButtons = [state,cb] (buttons:Buttons, buttonIndex:int) {
+		local button = buttons.buttons[buttonIndex]
+		local item   = cast(MenuItem) button.value
 
-	if x   > LG.getWidth()-w  state.layoutNeedsUpdate, contextMenu.x = true, math.max(LG.getWidth()-w, 0)
-	if y+h > LG.getHeight()   state.layoutNeedsUpdate, contextMenu.y = true, y - h
+		local frame                           = buttons.frame
+		local menusToShow: Table(Frame, bool) = {[frame]=true}
+
+		while frame.parentFrame ~= NULL {
+			frame              = frame.parentFrame
+			menusToShow[frame] = true
+		}
+
+		-- @UX: Don't hide (or show) submenus until after a delay (or click to show).
+		for state.contextMenus  if it.active and not menusToShow[it] {
+			it.active               = false
+			state.layoutNeedsUpdate = true
+		}
+
+		if not item.submenu  return
+
+		item.submenuFrame.active = true
+		item.submenuFrame.x      = buttons.parent.layoutX + buttons.parent.layoutWidth - 3
+		item.submenuFrame.y      = math.round(buttons.layoutY + (buttonIndex-1) * buttons.buttonHeight) - SPACING
+		state.layoutNeedsUpdate  = true
+		limitMenuPosition(state, item.submenuFrame)
+	}
 
 	state.onAction.__contextMenuButtons = [state,cb] (buttons:Buttons, buttonIndex:int) {
 		local button = buttons.buttons[buttonIndex]
 		local item   = cast(MenuItem) button.value
 
-		if item.submenu {
-			-- @Incomplete: Automatically open submenus on hover.
-			-- @Incomplete: Hide submenus automatically.
-			-- @Incomplete: Handle multiple submenus, both deep and wide.
-			-- @Incomplete: Escape should only close the deepest menu.
-			local activate           = not item.submenuFrame.active
-			item.submenuFrame.active = activate
+		if item.submenu  return
 
-			if activate {
-				item.submenuFrame.x     = buttons.parent.layoutX + buttons.parent.layoutWidth - 3
-				item.submenuFrame.y     = math.round(buttons.layoutY + (buttonIndex-1) * buttons.buttonHeight) - SPACING
-				state.layoutNeedsUpdate = true
-				-- @Robustness: Make sure the submenu doesn't go outside the window.
-			}
-
-		} else {
-			state.contextMenus[1].data = NULL -- So hideContextMenu() doesn't call the callback too!
-			hideContextMenu(state)
-			cb(item.name, item.data)
-			scheduleSaveWorkspace()
-		}
+		state.contextMenus[1].data = NULL -- So hideContextMenu() doesn't call the callback too!
+		hideContextMenu(state)
+		cb(item.name, item.data)
+		scheduleSaveWorkspace()
 	}
 }
 
@@ -2963,15 +3005,7 @@ export showContextMenu :: (state:State, x,y:int, items:[]string, cb:(choice:int)
 	insert(state.frames, contextMenu)
 
 	state.layoutNeedsUpdate = true
-	updateLayoutIfNeeded(state)
-
-	x       = contextMenu.layoutX
-	y       = contextMenu.layoutY
-	local w = contextMenu.layoutWidth
-	local h = contextMenu.layoutHeight
-
-	if x   > LG.getWidth()-w  state.layoutNeedsUpdate, contextMenu.x = true, math.max(LG.getWidth()-w, 0)
-	if y+h > LG.getHeight()   state.layoutNeedsUpdate, contextMenu.y = true, y - h
+	limitMenuPosition(state, contextMenu)
 
 	state.onAction.__contextMenuButtons = [state,cb] (buttons:Buttons, buttonIndex:int) {
 		state.contextMenus[1].data = NULL -- So hideContextMenu() doesn't call the callback too!
@@ -3010,15 +3044,7 @@ export showContextMenuWithInput :: (state:State, x,y:int, value:string, items:[]
 	insert(state.frames, contextMenu)
 
 	state.layoutNeedsUpdate = true
-	updateLayoutIfNeeded(state)
-
-	x       = contextMenu.layoutX
-	y       = contextMenu.layoutY
-	local w = contextMenu.layoutWidth
-	local h = contextMenu.layoutHeight
-
-	if x   > LG.getWidth()-w  state.layoutNeedsUpdate, contextMenu.x = true, math.max(LG.getWidth()-w, 0)
-	if y+h > LG.getHeight()   state.layoutNeedsUpdate, contextMenu.y = true, y - h
+	limitMenuPosition(state, contextMenu)
 
 	state.onAction.__contextMenuInput = [cbInput] (input:InputText) {
 		cbInput(input.value)
@@ -3042,9 +3068,21 @@ export showContextMenuWithInput :: (state:State, x,y:int, value:string, items:[]
 	input.field.selectAll!()
 }
 
-export hideContextMenu :: (state:State) -> (success:bool) {
+export hideContextMenu :: (state:State, mayDeactivateSubmenu=false) -> (success:bool) {
 	local contextMenus = state.contextMenus
 	if not contextMenus  return false
+
+	if mayDeactivateSubmenu {
+		local activeCount = 0
+		for contextMenus  if it.active  activeCount += 1
+
+		if activeCount >= 2 {
+			for < contextMenus  if it.active {
+				it.active = false
+				return true
+			}
+		}
+	}
 
 	for contextMenus  delete(state, it)
 	state.contextMenus = {}
