@@ -1023,7 +1023,7 @@ export setupGuiCallbacks :: () {
 		guiState.hoveredSubid = targetIndex
 	}
 	guiState.onDragEnd.systems = (tabs:gui.Tabs, buttonIndex:int) {
-		local project     = app.projects[app.currentProjectIndex]
+		local project    = app.projects[app.currentProjectIndex]
 		local systemsOld = cast([]System) tabs.dataTemp
 		local systemsNew = project.systems
 		local newOrder   = false
@@ -1037,9 +1037,9 @@ export setupGuiCallbacks :: () {
 		if not newOrder  return
 
 		recordChange("Reordered particle systems",
-			[systemsNew] (project:Project) {  project.systems = systemsNew  },
-			[systemsOld] (project:Project) {  project.systems = systemsOld  },
-			--[[      ]] (project:Project) {  gui.refreshRecursively(guiState, "systems") ; setCurrentSystem(project.systemIndex, force=true)  }
+			[systemsNew, systemsOld] (project:Project) {  _, project.systemIndex = indexOf(systemsNew, project.systems[project.systemIndex]) ; project.systems = systemsNew  },
+			[systemsNew, systemsOld] (project:Project) {  _, project.systemIndex = indexOf(systemsOld, project.systems[project.systemIndex]) ; project.systems = systemsOld  },
+			--[[                  ]] (project:Project) {  gui.refreshRecursively(guiState, "systems") ; setCurrentSystem(project.systemIndex, force=true)  }
 		)
 	}
 

@@ -19,7 +19,7 @@ local  lfs :: !import "lfs"
 local  os  :: !import "os"
 
 export !self
-!load "src/params"
+!load "src/shared"
 
 !run {
 	local options      = getBuildOptions()
@@ -49,28 +49,33 @@ local doRelease :: () {
 	local outputDirWin64     = "output/win64/Hot Particles"
 	local outputDirUniversal = "output/universal/Hot Particles"
 
-	local values: Values = {
-		exeName         = "HotParticles",
-		exePath         = outputDirWin64.."/HotParticles.exe",
-		iconPath        = "temp/appIcon.ico",
+	local values: Values = NULL
+	do {
+		local version, versionMajor, versionMinor, versionPatch = getReleaseVersion()
 
-		appName         = "Hot Particles",
-		appNameShort    = "Hot Particles", -- Should be less than 16 characters long.
-		appNameInternal = "Hot Particles",
+		values = {
+			exeName         = "HotParticles",
+			exePath         = outputDirWin64.."/HotParticles.exe",
+			iconPath        = "temp/appIcon.ico",
 
-		appVersion      = "1.0.1",
-		appVersionMajor = "1",
-		appVersionMinor = "0",
-		appVersionPatch = "1",
-		appIdentifier   = "com.refreezed.hotparticles",
+			appName         = "Hot Particles",
+			appNameShort    = "Hot Particles", -- Should be less than 16 characters long.
+			appNameInternal = "Hot Particles",
 
-		companyName     = "",
-		copyright       = os.getDate"Copyright %Y Marcus 'ReFreezed' Thunström",
+			appVersion      = version,
+			appVersionMajor = versionMajor,
+			appVersionMinor = versionMinor,
+			appVersionPatch = versionPatch,
+			appIdentifier   = "com.refreezed.hotparticles",
 
-		lovePath        = "temp/app.love",
-		loveExeDir      = params.dirLove,
-		loveExePath     = params.dirLove.."/love.exe",
-		versionInfoPath = "temp/appInfo.res",
+			companyName     = "",
+			copyright       = os.getDate"Copyright %Y Marcus 'ReFreezed' Thunström",
+
+			lovePath        = "temp/app.love",
+			loveExeDir      = params.dirLove,
+			loveExePath     = params.dirLove.."/love.exe",
+			versionInfoPath = "temp/appInfo.res",
+		}
 	}
 
 	lfs.makeDirectory("temp")

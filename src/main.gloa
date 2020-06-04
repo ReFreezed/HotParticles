@@ -8,7 +8,7 @@
 local GIF_RECORDING_MODE :: DEV and 1==0
 local GIF_FRAME_DELAY    :: 2 -- 100th of a second.
 
-export APP_VERSION_STRING :: "1.0.1" -- @Cleanup: Put this in an external file and use it in build.gloa too.
+export APP_VERSION_STRING :: !run (getReleaseVersion())
 
 -- @Incomplete: Make these configurable.
 export MAX_BUFFER_SIZE    :: 16000 -- Default buffer size for ParticleSystem is 1000.
@@ -75,7 +75,7 @@ export gui :: !load "src/gui"
 
 !load "src/guiSetup"
 
-!if DEV  !load "src/params"
+!if DEV  !load "src/shared"
 
 
 
@@ -2278,8 +2278,9 @@ export undo :: () {
 
 	reverseArray(labels)
 	setActionText("Undo: "..concatinate(labels, ", "), clearMessage=false)
-	gui.refreshRecursively(guiState, "undoRedoText")
 
+	markEdited(project)
+	gui.refreshRecursively(guiState, "undoRedoText")
 	scheduleSaveWorkspace()
 }
 
@@ -2309,8 +2310,9 @@ export redo :: () {
 	project.changeIndex += 1
 
 	setActionText("Redo: "..concatinate(labels, ", "), clearMessage=false)
-	gui.refreshRecursively(guiState, "undoRedoText")
 
+	markEdited(project)
+	gui.refreshRecursively(guiState, "undoRedoText")
 	scheduleSaveWorkspace()
 }
 

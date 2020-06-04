@@ -1,6 +1,6 @@
 --[[============================================================
 --=
---=  Local parameters
+--=  Shared between program and build system
 --=
 --=-------------------------------------------------------------
 --=
@@ -41,4 +41,14 @@ export loadParams :: () -> Params {
 	assert(params.pathRh       ~= "", "pathRh")
 
 	return params
+}
+
+export getReleaseVersion :: () -> (version:string, versionMajor,versionMinor,versionPatch:string) {
+	local ok, version, err = io.readEntireFile("misc/version.txt")
+	assert(ok, err)
+
+	local ^ok, versionMajor, versionMinor, versionPatch = matchPattern(cast(string)version, "^(%d+)%.(%d+)%.(%d+)$")
+	assert(ok, cast(string)version)
+
+	return cast(string)version, cast(string)versionMajor, cast(string)versionMinor, cast(string)versionPatch
 }

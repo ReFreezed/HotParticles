@@ -1129,8 +1129,8 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int) {
 			local widget = cast(Widget) state.elementsById[state.activeId]
 
 			if widget.type == {
-				case Tabs:
-				case Radio:
+				case Tabs:  !through
+				case Radio: !through
 				case Buttons:
 					local buttons = cast(Buttons) widget
 					local button  = buttons.buttons[state.activeSubid]
