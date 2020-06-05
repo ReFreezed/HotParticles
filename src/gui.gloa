@@ -750,6 +750,7 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int, begin=false, end=fals
 			local slider = cast(Slider) widget
 
 			if state.activeMod == ModifierKey.A {
+				-- Change limits.
 				if dy {
 					local limitMultiplier = math.clamp(getLimitMultiplier(slider) * 0.99 ^ dy, 1e-7, 1e+7)
 					setLimitMultiplier(slider, limitMultiplier)
@@ -761,18 +762,35 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int, begin=false, end=fals
 				local value01 = (mx-x1) / (x2-x1)
 				value01       = applyExponential(slider, value01, 2)
 
+				local min = applyLimitMultiplier(slider, slider.min)
+				local max = applyLimitMultiplier(slider, slider.max)
+
+				-- Snap value to something sensible.
 				if mod == ModifierKey.C or mod == ModifierKey.CS {
-					value01 = math.round(value01 * slider.steps) / slider.steps
+					local getSnap :: (max:float, stepsCirca:int) -> float {
+						-- Not sure if this makes any sense... Math is hard, yo!
+						local snapBad = max / stepsCirca * .55 -- 11/16 -- !run math.sqrt(.5)
+						local snap    = 1.0
+
+						while snap > snapBad  snap /= 2
+						while snap < snapBad  snap *= 2
+
+						return snap
+					}
+
+					local range = max - min
+					local snap  = getSnap(range, slider.steps)
+					local value = min + value01 * range
+					value       = math.round(value / snap) * snap
+					value01     = (value - min) / range
 				}
 
-				local value = math.lerp(
-					applyLimitMultiplier(slider, slider.min),
-					applyLimitMultiplier(slider, slider.max),
-					math.clamp01(value01)
-				)
+				-- Get final value.
+				local value = math.lerp(min, max, math.clamp01(value01))
 
 				if slider.isInt  value = math.round(value)
 
+				-- Update stored value.
 				if begin  triggerBeginEvent(state, slider, "", 0)
 				if value ~= slider.value {
 					slider.value = value
@@ -780,6 +798,7 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int, begin=false, end=fals
 				}
 				if end  triggerEndEvent(state, slider, "", 0)
 
+				-- Update linked sliders.
 				if state.activeMod == ModifierKey.S or state.activeMod == ModifierKey.CS {
 					for slider.linkMultiDrag {
 						local other = cast(Slider) state.elementsByName[it]
