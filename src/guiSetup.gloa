@@ -2899,7 +2899,11 @@ export setupGuiCallbacks :: () {
 
 		guiState.onAction.animation_empty = (buttons:gui.Buttons, buttonIndex:int) {
 			local project, system = getCurrentProjectAndSystem()
-			system.frames         = {}
+			if not system.frames  return
+
+			system.frames = {}
+
+			markEdited(project)
 			gui.refreshRecursively(guiState, "animation_frames")
 			updateParticleAnimation(system)
 		}
@@ -2999,6 +3003,7 @@ export setupGuiCallbacks :: () {
 				setGuiValue(system, it, input.value)
 			}
 
+			markEdited(project)
 			updateParticleAnimation(system)
 			gui.refreshRecursively(guiState, "animation_frames")
 		}
@@ -3065,6 +3070,7 @@ export setupGuiCallbacks :: () {
 				setGuiValue(system, it, input.value)
 			}
 
+			markEdited(project)
 			updateParticleAnimation(system)
 			gui.refreshRecursively(guiState, "animation_frames")
 		}
@@ -3102,6 +3108,7 @@ export setupGuiCallbacks :: () {
 
 			remove(system.frames, i)
 
+			markEdited(project)
 			updateParticleAnimation(system)
 			gui.refreshRecursively(guiState, "animation_frames")
 		}
@@ -3117,6 +3124,7 @@ export setupGuiCallbacks :: () {
 			}
 			insert(system.frames, i+1, animFrameNew)
 
+			markEdited(project)
 			updateParticleAnimation(system)
 			gui.refreshRecursively(guiState, "animation_frames")
 		}
@@ -3136,6 +3144,7 @@ export setupGuiCallbacks :: () {
 			animFrame.w = w
 			animFrame.h = h
 
+			markEdited(project)
 			updateParticleAnimation(system)
 			gui.getElement(guiState, format("animation_message%d", i), gui.Text).text = ""
 		}
@@ -3155,6 +3164,7 @@ export setupGuiCallbacks :: () {
 				frames[j], frames[j+dir] = frames[j+dir], frames[j]
 			}
 
+			markEdited(project)
 			updateParticleAnimation(system)
 			gui.refreshRecursively(guiState, dragContainer)
 
