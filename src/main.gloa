@@ -363,6 +363,8 @@ export System :: struct {
 	kickStartEmit  = 0,
 	kickStartSteps = 0,
 
+	title = "",
+
 	frames: []AnimationFrame,
 
 	gui: struct { !key:string, !value:string },
@@ -433,6 +435,7 @@ export System :: struct {
 			scaleSize                   = source.scaleSize,
 			kickStartEmit               = source.kickStartEmit,
 			kickStartSteps              = source.kickStartSteps,
+			title                       = source.title,
 			gui                         = copyTable(source.gui),
 
 			particles        = source.particles.clone!(),

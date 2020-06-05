@@ -1013,12 +1013,26 @@ export setupGuiCallbacks :: () {
 	guiState.onOption.systems = (tabs:gui.Tabs, systemIndex:int) {
 		if systemIndex == #tabs.buttons  return
 
-		gui.showContextMenu(guiState, {"Delete\tCtrl+Delete","Duplicate\tCtrl+D"}, [systemIndex] (choice:int) {
-			if choice == {
-				case 1: confirmDeleteSystem(systemIndex)
-				case 2: duplicateSystem(systemIndex)
+		local project = app.projects[app.currentProjectIndex]
+		local system  = project.systems[systemIndex]
+
+		gui.showContextMenuWithInput(guiState, system.title, {"Delete\tCtrl+Delete","Duplicate\tCtrl+D"},
+			[systemIndex] (choice:int) {
+				if choice == {
+					case 1: confirmDeleteSystem(systemIndex)
+					case 2: duplicateSystem(systemIndex)
+				}
+			},
+			[system] (valueNew:string) {
+				local valueOld = system.title
+				if valueNew == valueOld  return
+
+				recordChange("Changed particle system title",
+					[system, valueNew] (project:Project) {  system.title = valueNew  },
+					[system, valueOld] (project:Project) {  system.title = valueOld  }
+				)
 			}
-		})
+		)
 	}
 	guiState.onClose.systems = (tabs:gui.Tabs, buttonIndex:int) {
 		if buttonIndex < #tabs.buttons  confirmDeleteSystem(buttonIndex)
@@ -2659,6 +2673,7 @@ export setupGuiCallbacks :: () {
 			publicParticleSystem.spinVariation    = ps.getSpinVariation!()
 			publicParticleSystem.spread           = ps.getSpread!()
 			publicParticleSystem.texturePreset    = system.textureName
+			publicParticleSystem.title            = system.title
 
 			do { local min,max   = ps.getLinearDamping!()          ; publicParticleSystem.linearDamping          = cast(table) {min,max, min=min,max=max} }
 			do { local min,max   = ps.getParticleLifetime!()       ; publicParticleSystem.particleLifetime       = cast(table) {min,max, min=min,max=max} }

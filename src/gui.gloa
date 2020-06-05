@@ -1853,7 +1853,7 @@ local drawElement :: (state:State, el:Element) {
 				if not showBg {
 					-- void
 				} elseif isTabs {
-					local topInset = math.min(.5*bh[itIndex], bw[itIndex]/4)
+					local topInset = math.min(.3*bh[itIndex], bw[itIndex]/4)
 					LG.polygon(LG.DrawMode.FILL,
 						bx1[itIndex],          by2[itIndex],
 						bx1[itIndex]+topInset, by1[itIndex],
@@ -1905,34 +1905,54 @@ local drawElement :: (state:State, el:Element) {
 			local scale   = PREVIEW_SCALE * PARTICLE_PREVIEW_SIZE / math.min(LG.getWidth() - MAIN_PANEL_WIDTH, LG.getHeight()) * project.zoom
 			local r, g, b = hsvToRgb(project.bgColor)
 
-			LG.setColor(1, 1, 1)
-
-			for buttons.buttons  if it.system ~= NULL and it.system.visible {
+			for buttons.buttons  if it.system ~= NULL {
 				local system = it.system
-				local emitterX, emitterY: float
 
-				if project.movementPreset == Movement.NONE {
-					emitterX, emitterY = system.particles.getPosition!()
+				if system.visible {
+					local emitterX, emitterY: float
+
+					if project.movementPreset == Movement.NONE {
+						emitterX, emitterY = system.particles.getPosition!()
+					}
+
+					LG.pushAll()
+					intersectScissor(
+						bx1[itIndex] + (bw[itIndex] - PARTICLE_PREVIEW_SIZE) // 2,
+						by1[itIndex] + (bh[itIndex] - PARTICLE_PREVIEW_SIZE) // 2 + getScrollOffset(buttons),
+						PARTICLE_PREVIEW_SIZE,
+						PARTICLE_PREVIEW_SIZE
+					)
+
+					LG.clear(r, g, b)
+					LG.setBlendMode(system.blendMode)
+					LG.setColor(1, 1, 1)
+
+					LG.draw(system.particles,
+						bx1[itIndex] + bw[itIndex]/2 - emitterX*scale,
+						by1[itIndex] + bh[itIndex]/2 - emitterY*scale,
+						0, scale
+					)
+
+					LG.pop()
 				}
 
-				LG.pushAll()
-				intersectScissor(
-					bx1[itIndex] + (bw[itIndex] - PARTICLE_PREVIEW_SIZE) // 2,
-					by1[itIndex] + (bh[itIndex] - PARTICLE_PREVIEW_SIZE) // 2 + getScrollOffset(buttons),
-					PARTICLE_PREVIEW_SIZE,
-					PARTICLE_PREVIEW_SIZE
-				)
+				if system.title {
+					local scissorX1 = bx1[itIndex] + (paddingX-1)
+					local scissorX2 = bx2[itIndex] - (paddingX-1)
 
-				LG.clear(r, g, b)
-				LG.setBlendMode(system.blendMode)
+					if scissorX2 > scissorX1 {
+						local textY = by1[itIndex] + (bh[itIndex] - fontNormal.getHeight!()) // 2
+						local textX = bx1[itIndex] + math.max((bw[itIndex] - fontNormal.getWidth!(system.title)) // 2, paddingX)
 
-				LG.draw(system.particles,
-					bx1[itIndex] + bw[itIndex]/2 - emitterX*scale,
-					by1[itIndex] + bh[itIndex]/2 - emitterY*scale,
-					0, scale
-				)
-
-				LG.pop()
+						LG.pushAll()
+						intersectScissor(scissorX1, 0, scissorX2-scissorX1, LG.getHeight())
+						LG.setColor(0, 0, 0, .7)
+						LG.print(system.title, textX+1, textY+1)
+						LG.setColor(1, 1, 1)
+						LG.print(system.title, textX, textY)
+						LG.pop()
+					}
+				}
 			}
 
 			-- Submenu icons.

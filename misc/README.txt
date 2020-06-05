@@ -159,6 +159,7 @@ Values:
         texturePath             string   Path to the texture relative to the specified base folder. Is empty if no path value is available.
         texturePreset           string   Fallback for when texturePath is empty.
         textureWidth            number   Width of the particle texture.
+        title                   string   Title of the particle system. Is empty by default.
 
     pixelateTextures
         Boolean. True if textures are set to be pixelated (i.e. use nearest

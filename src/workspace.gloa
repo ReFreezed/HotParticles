@@ -116,6 +116,7 @@ local writeProject :: (buffer:[]string, project:Project, isSavingWorkspace:bool)
 		insert(buffer, "spread")            ; writeValue(buffer, eol=true, system.psSpread)
 		insert(buffer, "texture")           ; writeValue(buffer, eol=true, system.textureName)
 		insert(buffer, "texturePath")       ; writeValue(buffer, eol=true, system.texturePath)
+		insert(buffer, "title")             ; writeValue(buffer, eol=true, system.title)
 
 		insert(buffer, "linearDamping")          ; writeValues(buffer, eol=true, system.psLinearDampingMin,          system.psLinearDampingMax)
 		insert(buffer, "offset")                 ; writeValues(buffer, eol=true, system.offsetX,                     system.offsetY)
@@ -767,6 +768,12 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 						if not ok                 return parsingError(path, ln, "Bad value format: %s", line)
 						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
 						system.kickStartSteps = steps
+
+					case "title":
+						local ^ok, ^ptr, title = readString(version, line, cast(int)ptr)
+						if not ok                 return parsingError(path, ln, "Bad value format: %s", line)
+						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
+						system.title = title
 
 					case "linearDamping":
 						local ^ok, ^ptr, min = readFloat(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
