@@ -10,12 +10,6 @@ local GIF_FRAME_DELAY    :: 2 -- 100th of a second.
 
 export APP_VERSION_STRING :: !run (getReleaseVersion())
 
--- @Incomplete: Make these configurable.
-export MAX_BUFFER_SIZE    :: 16000 -- Default buffer size for ParticleSystem is 1000.
-export MAX_RECENT_FILES   :: 15
-export MAX_RECENT_FOLDERS :: 4
-export MAX_CHANGES        :: 100
-
 export MAIN_PANEL_WIDTH     :: 450
 export DIALOG_WIDTH         :: 400
 export WORKSPACE_SAVE_DELAY :: 1.00
@@ -191,6 +185,11 @@ export App :: struct {
 	windowWidth     = 0,
 	windowHeight    = 0,
 	windowMaximized = false,
+
+	maxBufferSize    = 16000, -- Default buffer size for ParticleSystem is 1000.
+	maxRecentFiles   = 15,
+	maxRecentFolders = 4,
+	maxChanges       = 100,
 }
 
 
@@ -547,8 +546,8 @@ export updateParticleTexture :: (project:Project, system:System, saveRecent=fals
 			return NULL, NULL
 		}
 
-		if saveRecent  addRecent(app.recentTextures, system.texturePath, MAX_RECENT_FILES)
-		-- if saveRecent  addRecent(app.recentTextures, path, MAX_RECENT_FILES)
+		if saveRecent  addRecent(app.recentTextures, system.texturePath, app.maxRecentFiles)
+		-- if saveRecent  addRecent(app.recentTextures, path, app.maxRecentFiles)
 
 		local image = LG.newImage(filename)
 		return cast(LF.FileData)imageData, image
@@ -1063,28 +1062,30 @@ local onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool) 
 
 	-- Keys in normal view.
 	if modAndKey == {
-		case "c-s":   if project.fileIsSaved  saveProject(project, overwrite=true)  else  pushPanel("saveProjectAs")
-		case "c-s-s": pushPanel("saveProjectAs")
-		case "c-e":   pushPanel("exportProject")
-		case "c-o":   pushPanel("openProject")
-		case "c-s-t": openRecentProject()
-		case "c-n":   addNewProject() ; gui.refreshRecursively(guiState, "projects") ; setCurrentProject(#app.projects) ; scheduleSaveWorkspace()
-		case "c-w":   if not (#app.projects == 1 and not (app.projects[1].path or app.projects[1].edited))  confirmCloseProject(app.currentProjectIndex)
+		case "c-s":      if project.fileIsSaved  saveProject(project, overwrite=true)  else  pushPanel("saveProjectAs")
+		case "c-s-s":    pushPanel("saveProjectAs")
+		case "c-e":      pushPanel("exportProject")
+		case "c-o":      pushPanel("openProject")
+		case "c-s-t":    openRecentProject()
+		case "c-n":      addNewProject() ; gui.refreshRecursively(guiState, "projects") ; setCurrentProject(#app.projects) ; scheduleSaveWorkspace()
+		case "c-w":      if not (#app.projects == 1 and not (app.projects[1].path or app.projects[1].edited))  confirmCloseProject(app.currentProjectIndex)
 
-		case "tab":     setCurrentSystem ((project.systemIndex     - 0) % #project.systems + 1)
-		case "s-tab":   setCurrentSystem ((project.systemIndex     - 2) % #project.systems + 1)
-		case "c-tab":   setCurrentProject((app.currentProjectIndex - 0) % #app.projects    + 1)
-		case "c-s-tab": setCurrentProject((app.currentProjectIndex - 2) % #app.projects    + 1)
+		case "tab":      setCurrentSystem ((project.systemIndex     - 0) % #project.systems + 1)
+		case "s-tab":    setCurrentSystem ((project.systemIndex     - 2) % #project.systems + 1)
+		case "c-tab":    setCurrentProject((app.currentProjectIndex - 0) % #app.projects    + 1)
+		case "c-s-tab":  setCurrentProject((app.currentProjectIndex - 2) % #app.projects    + 1)
 
-		case "h": system.visible = not system.visible
+		case "h":        system.visible = not system.visible
 
-		case "p": !if DEV  gui.setActive(guiState, "main", not gui.getElement(guiState, "main").active)
+		case "p":        !if DEV  gui.setActive(guiState, "main", not gui.getElement(guiState, "main").active)
 
 		case "c-delete": confirmDeleteSystem(project.systemIndex)
 		case "c-d":      duplicateSystem(project.systemIndex)
 
-		case "c-z":   undo()
-		case "c-s-z": redo()
+		case "c-z":      undo()
+		case "c-s-z":    redo()
+
+		case "c-k":      pushPanel("preferences")
 	}
 }
 
@@ -1666,7 +1667,16 @@ local onDraw :: () {
 			drawStatsLine("ParticleCountTotal: ", "%d/%d", particleCountTotal, particleCountTotalOptimal)
 
 			if #project.systems > 1  for project.systems {
-				drawStatsLine("ParticleCount_", "%d: %d/%d (%d)", itIndex, it.particles.getCount!(), getOptimalBufferSize(it, moreExact=true), it.particles.getBufferSize!())
+				local bufferSize = it.particles.getBufferSize!()
+				drawStatsLine(
+					"ParticleCount_",
+					"%d: %d/%d (%d%s)",
+					itIndex,
+					it.particles.getCount!(),
+					getOptimalBufferSize(it, moreExact=true),
+					bufferSize,
+					(bufferSize >= app.maxBufferSize ? " MAX" : "")
+				)
 			}
 
 			drawStatsLine("EmitterTime: ", "%.3f sec", project.particleEmitDuration)
@@ -1953,7 +1963,7 @@ export openProject :: (path:string, asPreview=false) -> (success:bool, project:P
 	}
 	defer disconnectFromRemoteDirectory()
 
-	if not asPreview  addRecent(app.recentFolders, dir, MAX_RECENT_FOLDERS)
+	if not asPreview  addRecent(app.recentFolders, dir, app.maxRecentFolders)
 
 	local ^ok, gotError, _app = loadWorkspace(filename)
 	if not ok {
@@ -1968,7 +1978,7 @@ export openProject :: (path:string, asPreview=false) -> (success:bool, project:P
 		return false, NULL, NULL
 	}
 
-	if not asPreview  addRecent(app.recentFiles, path, MAX_RECENT_FILES)
+	if not asPreview  addRecent(app.recentFiles, path, app.maxRecentFiles)
 
 	project.path          = path
 	project.displayedName = filename
@@ -2002,7 +2012,7 @@ export confirmCloseProject :: (projectIndex:int) {
 		local isCurrent  = (projectIndex == app.currentProjectIndex)
 		local _, project = remove(app.projects, projectIndex)
 
-		if project.path  addRecent(app.recentFiles, project.path, MAX_RECENT_FILES)
+		if project.path  addRecent(app.recentFiles, project.path, app.maxRecentFiles)
 
 		if app.projects[1] == NULL
 			addNewProject()
@@ -2162,7 +2172,7 @@ export markEdited :: (project:Project) {
 export updateBufferSize :: (system:System) -> (gotUpdated:bool) {
 	local ps                = system.particles
 	local bufferSizeCurrent = ps.getBufferSize!()
-	local bufferSize        = bufferSizeCurrent
+	local bufferSize        = math.min(bufferSizeCurrent, app.maxBufferSize)
 	local optimalBufferSize = getOptimalBufferSize(system)
 
 	while bufferSize < optimalBufferSize  bufferSize *= 2
@@ -2180,7 +2190,7 @@ export getOptimalBufferSize :: (system:System, moreExact=false) -> int {
 	local rate             = ps.getEmissionRate!()               -- n/s
 	local relevantTime     = emitterLifetime < 0 ? particleLifetime : math.min(particleLifetime, emitterLifetime)
 	local bufferSize       = math.ceil(system.kickStartEmit + rate * relevantTime * (moreExact ? 1 : 1.05)) -- n/s * s  =  n
-	return math.min(bufferSize, MAX_BUFFER_SIZE)
+	return math.min(bufferSize, app.maxBufferSize)
 }
 
 
@@ -2228,7 +2238,7 @@ export recordChange :: (label:string, onDo:(project:Project), onUndo:(project:Pr
 	-- Discard undone changes.
 	for project.changeIndex, #project.changes  project.changes[it] = NULL
 
-	if project.changes[MAX_CHANGES] ~= NULL  remove(project.changes, 1)
+	while project.changes[app.maxChanges] ~= NULL  remove(project.changes, 1) -- This may remove more than one if app.maxChanges changed.
 
 	local change: Change = {
 		bundle   = updateId,
