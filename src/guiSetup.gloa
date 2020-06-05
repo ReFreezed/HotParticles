@@ -21,7 +21,7 @@ export setupGuiFrames :: () {
 		guiState.frame!({ name="main", width=MAIN_PANEL_WIDTH,
 			guiState.hbox!({
 				guiState.buttons!({ name="menuAndSettingsButtons", buttons={{name="menu",label="File"},{name="toggleProjectSettings",label="Project",tooltip="Toggle project settings"}} }),
-				guiState.buttons!({ buttons={{name="undo",image="iconLeft",tooltip="Undo  (Ctrl+Z)"},{name="redo",image="iconRight",tooltip="Redo  (Ctrl+Shift+Z)"}} }),
+				guiState.buttons!({ buttons={{name="undo",image="iconLeft",tooltip="Undo  ("..ctrlText.."+Z)"},{name="redo",image="iconRight",tooltip="Redo  ("..ctrlText.."+Shift+Z)"}} }),
 				guiState.text!({ name="undoRedoText", text="0/0", size=1 }),
 			}),
 			guiState.separator!({ thick=true }),
@@ -579,7 +579,7 @@ export setupGuiCallbacks :: () {
 			local label = (it.edited ? format("%s •", it.displayedName) : it.displayedName)
 			insert(tabs.buttons, cast(gui.Button){ label=label, tooltip=it.path, draggable=true })
 		}
-		insert(tabs.buttons, cast(gui.Button){ image="iconAdd", tooltip="New project  (Ctrl+N)" })
+		insert(tabs.buttons, cast(gui.Button){ image="iconAdd", tooltip="New project  ("..ctrlText.."+N)" })
 
 		tabs.index = app.currentProjectIndex
 	}
@@ -599,7 +599,7 @@ export setupGuiCallbacks :: () {
 	guiState.onOption.projects = (tabs:gui.Tabs, projectIndex:int) {
 		if projectIndex == #tabs.buttons  return
 
-		gui.showContextMenu(guiState, {"Close\tCtrl+W","Duplicate"}, [projectIndex] (choice:int) {
+		gui.showContextMenu(guiState, {"Close\t"..ctrlText.."+W","Duplicate"}, [projectIndex] (choice:int) {
 			if choice == {
 				case 1:
 					confirmCloseProject(projectIndex)
@@ -939,7 +939,7 @@ export setupGuiCallbacks :: () {
 		tabs.buttons  = {}
 
 		for project.systems {
-			insert(tabs.buttons, cast(gui.Button){ system=it, draggable=true, tooltip=format("Particle system #%d (Ctrl+click to toggle)", itIndex) })
+			insert(tabs.buttons, cast(gui.Button){ system=it, draggable=true, tooltip=format("Particle system #%d (%s+click to toggle)", itIndex, ctrlText) })
 		}
 		insert(tabs.buttons, cast(gui.Button){ image="iconAdd", tooltip="New particle system" })
 
@@ -976,7 +976,7 @@ export setupGuiCallbacks :: () {
 		local project = app.projects[app.currentProjectIndex]
 		local system  = project.systems[systemIndex]
 
-		gui.showContextMenuWithInput(guiState, system.title, inputTooltip="Particle system title", {"Delete\tCtrl+Delete","Duplicate\tCtrl+D"},
+		gui.showContextMenuWithInput(guiState, system.title, inputTooltip="Particle system title", {"Delete\t"..ctrlText.."+Delete","Duplicate\t"..ctrlText.."+D"},
 			[systemIndex] (choice:int) {
 				if choice == {
 					case 1: confirmDeleteSystem(systemIndex)

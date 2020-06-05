@@ -131,6 +131,7 @@ local updateId = 0
 export isMac: bool
 export lctrl: LK.KeyConstant
 export rctrl: LK.KeyConstant
+export ctrlText: string
 
 export currentCursor = LM.CursorType.ARROW
 
@@ -800,9 +801,10 @@ local onLoad :: (args:[]string, argsRaw:[]string) {
 		-- LT.sleep(1) -- DEBUG
 	}
 
-	isMac = love.system.getOS() == "OS X"
-	lctrl = isMac ? "lgui" : "lctrl"
-	rctrl = isMac ? "rgui" : "rctrl"
+	isMac    = love.system.getOS() == "OS X"
+	lctrl    = isMac ? "lgui" : "lctrl"
+	rctrl    = isMac ? "rgui" : "rctrl"
+	ctrlText = isMac ? "Cmd"  : "Ctrl"
 
 	local projectsToOpen: []string
 
@@ -2348,7 +2350,7 @@ export limitZoomLevel :: (project:Project) {
 
 export showMainMenu :: () {
 	local recentItems: []gui.MenuItem
-	insert(recentItems, cast(gui.MenuItem) {name="openLast",label="Reopen closed file",shortcut="Ctrl+Shift+T"})
+	insert(recentItems, cast(gui.MenuItem) {name="openLast",label="Reopen closed file",shortcut=ctrlText.."+Shift+T"})
 	insert(recentItems, cast(gui.MenuItem) {label="-"})
 
 	if app.recentFiles {
@@ -2361,16 +2363,16 @@ export showMainMenu :: () {
 	insert(recentItems, cast(gui.MenuItem) {name="clearRecent",label="Clear items"})
 
 	local items: []gui.MenuItem = {
-		{label="Open project...",     name="open",        shortcut="Ctrl+O"},
+		{label="Open project...",     name="open",        shortcut=ctrlText.."+O"},
 		{label="Open recent",         submenu=recentItems},
 		{label="-"},
-		{label="Save project",        name="save",        shortcut="Ctrl+S"},
-		{label="Save new project...", name="saveAs",      shortcut="Ctrl+Shift+S"},
-		{label="Export...",           name="export",      shortcut="Ctrl+E"},
+		{label="Save project",        name="save",        shortcut=ctrlText.."+S"},
+		{label="Save new project...", name="saveAs",      shortcut=ctrlText.."+Shift+S"},
+		{label="Export...",           name="export",      shortcut=ctrlText.."+E"},
 		{label="-"},
-		{label="Preferences",         name="preferences", shortcut="Ctrl+K"},
+		{label="Preferences",         name="preferences", shortcut=ctrlText.."+K"},
 		{label="-"},
-		{label="Exit",                name="exit",        shortcut="Ctrl+Q"},
+		{label="Exit",                name="exit",        shortcut=ctrlText.."+Q"},
 	}
 
 	local buttons = gui.getElement(guiState, "menuAndSettingsButtons", gui.Buttons)
