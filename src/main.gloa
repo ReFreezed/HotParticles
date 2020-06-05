@@ -1089,6 +1089,8 @@ local onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool) 
 		case "c-s-z":    redo()
 
 		case "c-k":      pushPanel("preferences")
+
+		case "f10":      showMainMenu()
 	}
 }
 
@@ -2340,6 +2342,53 @@ export limitZoomLevel :: (project:Project) {
 	project.zoomLevel  = clampZoomLevel(project, project.zoomLevel)
 	project.zoomSource = project.zoom
 	project.zoomTarget = 2 ^ project.zoomLevel
+}
+
+
+
+export showMainMenu :: () {
+	local recentItems: []gui.MenuItem
+	insert(recentItems, cast(gui.MenuItem) {name="openLast",label="Reopen closed file",shortcut="Ctrl+Shift+T"})
+	insert(recentItems, cast(gui.MenuItem) {label="-"})
+
+	if app.recentFiles {
+		for app.recentFiles  insert(recentItems, cast(gui.MenuItem) {name="openRecent",data=it,label=it})
+	} else {
+		insert(recentItems, cast(gui.MenuItem) {label="(no recent files)"})
+	}
+
+	insert(recentItems, cast(gui.MenuItem) {label="-"})
+	insert(recentItems, cast(gui.MenuItem) {name="clearRecent",label="Clear items"})
+
+	local items: []gui.MenuItem = {
+		{label="Open project...",     name="open",        shortcut="Ctrl+O"},
+		{label="Open recent",         submenu=recentItems},
+		{label="-"},
+		{label="Save project",        name="save",        shortcut="Ctrl+S"},
+		{label="Save new project...", name="saveAs",      shortcut="Ctrl+Shift+S"},
+		{label="Export...",           name="export",      shortcut="Ctrl+E"},
+		{label="-"},
+		{label="Preferences",         name="preferences", shortcut="Ctrl+K"},
+		{label="-"},
+		{label="Exit",                name="exit",        shortcut="Ctrl+Q"},
+	}
+
+	local buttons = gui.getElement(guiState, "menuAndSettingsButtons", gui.Buttons)
+
+	gui.showMenu(guiState, buttons.layoutX, buttons.layoutY+buttons.layoutHeight, items, (choice:string, data:any) {
+		local project = app.projects[app.currentProjectIndex]
+		if choice == {
+			case "open":        pushPanel("openProject")
+			case "openLast":    openRecentProject()
+			case "openRecent":  openProject(cast(string)data)
+			case "clearRecent": app.recentFiles = {}
+			case "save":        if project.fileIsSaved  saveProject(project, overwrite=true)  else  pushPanel("saveProjectAs")
+			case "saveAs":      pushPanel("saveProjectAs")
+			case "export":      pushPanel("exportProject")
+			case "preferences": pushPanel("preferences")
+			case "exit":        pushQuitEvent()
+		}
+	})
 }
 
 
