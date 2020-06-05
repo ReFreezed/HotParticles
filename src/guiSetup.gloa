@@ -1016,7 +1016,7 @@ export setupGuiCallbacks :: () {
 		local project = app.projects[app.currentProjectIndex]
 		local system  = project.systems[systemIndex]
 
-		gui.showContextMenuWithInput(guiState, system.title, {"Delete\tCtrl+Delete","Duplicate\tCtrl+D"},
+		gui.showContextMenuWithInput(guiState, system.title, inputTooltip="Particle system title", {"Delete\tCtrl+Delete","Duplicate\tCtrl+D"},
 			[systemIndex] (choice:int) {
 				if choice == {
 					case 1: confirmDeleteSystem(systemIndex)
