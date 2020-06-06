@@ -12,6 +12,7 @@
 export !import "basic"
 export !import "string"
 !import "compiler"
+!import "unicode"
 !import "utils"
 
 export io  :: !import "io"
@@ -234,6 +235,7 @@ local doRelease :: () {
 	zip("output/HotParticles_"..values.appVersion.."_win64.zip",     "./"..outputDirWin64)
 	zip("output/HotParticles_"..values.appVersion.."_universal.zip", "./"..outputDirUniversal)
 
+	print("Release stuff done!")
 	-- os.exit(1) -- DEBUG
 }
 
@@ -255,7 +257,7 @@ local templateToString :: (s:string, values:Values, formatter:(s:string)->string
 	}))
 }
 local templateToStringUtf16 :: (s:string, values:Values, formatter:(s:string)->string=NULL) -> string {
-	return (replacePatternWithFunction(s, "%z$%z{([%w%z]+)%z}", [values, formatter] (k:string) -> string|none {
+	return (replacePatternWithFunction(s, "$%z{%z([%w%z]+)}%z", [values, formatter] (k:string) -> string|none {
 		k       = utf16ToUtf8(k)
 		local v = values[k]
 		if v         == NULL  errorf("No value '%s'.", k)
@@ -265,25 +267,13 @@ local templateToStringUtf16 :: (s:string, values:Values, formatter:(s:string)->s
 }
 
 local utf16ToUtf8 :: (s:string) -> string {
-	-- @Hack @Hack @Hack!!!
-	s = replacePattern(s, "%z", "")
-	s = replace(s, "Å", "\xC5")
-	s = replace(s, "Ä", "\xC4")
-	s = replace(s, "Ö", "\xD6")
-	s = replace(s, "å", "\xE5")
-	s = replace(s, "ä", "\xE4")
-	s = replace(s, "ö", "\xF6")
+	local ok, cps = utf16DecodeLe(s) ; assert(ok)
+	ok,       s   = utf8Encode(cps)  ; assert(ok)
 	return s
 }
 local utf8ToUtf16 :: (s:string) -> string {
-	-- @Hack @Hack @Hack!!!
-	s = replace(s, "Å", "\xC5")
-	s = replace(s, "Ä", "\xC4")
-	s = replace(s, "Ö", "\xD6")
-	s = replace(s, "å", "\xE5")
-	s = replace(s, "ä", "\xE4")
-	s = replace(s, "ö", "\xF6")
-	s = replacePatternWithPattern(s, ".", "\0%0")
+	local ok, cps = utf8Decode(s)      ; assert(ok)
+	ok,       s   = utf16EncodeLe(cps) ; assert(ok)
 	return s
 }
 
