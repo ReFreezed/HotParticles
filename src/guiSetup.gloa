@@ -19,15 +19,15 @@ local EXPORT_TEMPLATES_DIRECTORY :: "exportTemplates"
 export setupGuiFrames :: () {
 	guiState.frames = {
 		guiState.frame!({ name="main", width=MAIN_PANEL_WIDTH,
+			guiState.tabs!({ name="projects", specialLastTab=true }),
+			guiState.text!({ height=1 }), -- Spacer.
+
 			guiState.hbox!({
 				guiState.buttons!({ name="menuAndSettingsButtons", buttons={{name="menu",label="File"},{name="toggleProjectSettings",label="Project",tooltip="Toggle project settings"}} }),
 				guiState.buttons!({ buttons={{name="undo",image="iconLeft",tooltip="Undo  ("..ctrlText.."+Z)"},{name="redo",image="iconRight",tooltip="Redo  ("..ctrlText.."+Shift+Z)"}} }),
 				guiState.text!({ name="undoRedoText", text="0/0", size=1 }),
 			}),
 			guiState.separator!({ thick=true }),
-
-			guiState.tabs!({ name="projects", specialLastTab=true }),
-			guiState.text!({ height=1 }), -- Spacer.
 
 			guiState.vbox!({ name="projectSettings",
 				guiState.section!({ label="Pixelate",
@@ -1064,25 +1064,13 @@ export setupGuiCallbacks :: () {
 		(project:Project, system:System, value:string) {  system.textureName = value ; updateParticleTexture(project, system)  }
 	)
 
-	local setTexturePath :: (path:string) {
-		local project, system = getCurrentProjectAndSystem()
-		local valueOld        = system.texturePath
-		local valueNew        = path
-
-		if valueNew == valueOld  return
-
-		recordChange("Changed texture path",
-			[system, valueNew] (project:Project) {  system.texturePath = valueNew  },
-			[system, valueOld] (project:Project) {  system.texturePath = valueOld  },
-			[system          ] (project:Project) {  updateParticleTexture(project, system, saveRecent=true) ; gui.refreshRecursively(guiState, "texturePath")  }
-		)
-	}
 	guiState.onRefresh.texturePath = (input:gui.InputText) {
 		local project, system = getCurrentProjectAndSystem()
 		input.value           = system.texturePath
 	}
 	guiState.onAction.texturePath = (input:gui.InputText) {
-		setTexturePath(Path(trim(input.value)).toString!())
+		local project, system = getCurrentProjectAndSystem()
+		setTexturePath(project, system, Path(trim(input.value)).toString!())
 	}
 	guiState.onOption.texturePath = (input:gui.InputText, _:int) {
 		local items = {"Recent textures:"}
@@ -1100,8 +1088,8 @@ export setupGuiCallbacks :: () {
 			} elseif choice == #items {
 				app.recentTextures = {}
 			} else {
-				local path = items[choice]
-				setTexturePath(path)
+				local project, system = getCurrentProjectAndSystem()
+				setTexturePath(project, system, items[choice])
 			}
 		})
 	}

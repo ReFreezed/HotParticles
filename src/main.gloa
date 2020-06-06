@@ -523,7 +523,7 @@ export updateParticleTextures :: (project:Project) {
 	for project.systems  updateParticleTexture(project, it)
 }
 
-export updateParticleTexture :: (project:Project, system:System, saveRecent=false) {
+export updateParticleTexture :: (project:Project, system:System, saveRecent=false) -> (loadedCustomTexture:bool) {
 	local loadParticleTexture :: (project:Project, system:System, saveRecent:bool) -> LF.FileData, LG.Image {
 		local ok, path, isDangling = getTextureFullPath(project, system)
 		if not ok {
@@ -559,12 +559,14 @@ export updateParticleTexture :: (project:Project, system:System, saveRecent=fals
 
 	local imageData: LF.FileData = NULL
 	local image:     LG.Image    = NULL
+	local loadedCustomTexture    = true
 
 	if system.texturePath  imageData, image = loadParticleTexture(project, system, true) -- @Speed: Don't reload the texture if there's no change.
 
 	if imageData == NULL {
-		imageData = particleImageDatas[system.textureName]
-		image     = particleImages    [system.textureName]
+		imageData           = particleImageDatas[system.textureName]
+		image               = particleImages    [system.textureName]
+		loadedCustomTexture = false
 	}
 
 	system.currentImageData = imageData
@@ -575,6 +577,8 @@ export updateParticleTexture :: (project:Project, system:System, saveRecent=fals
 
 	local filter = project.pixelateTextures ? LG.FilterMode.NEAREST : LG.FilterMode.LINEAR
 	image.setFilter!(filter, filter)
+
+	return loadedCustomTexture
 }
 
 export updateParticleAnimation :: (system:System) {
@@ -591,6 +595,7 @@ export updateParticleAnimation :: (system:System) {
 	} else {
 		system.particles.setQuads!()
 	}
+
 	updateParticleTextureOffset(system)
 }
 
@@ -938,7 +943,26 @@ local onLoad :: (args:[]string, argsRaw:[]string) {
 
 
 local onFileDropped :: (file:LF.DroppedFile) {
-	openProject(file.getFilename!())
+	local path   = Path(file.getFilename!()).toString!()
+	local _, ext = matchPattern(path, "%.(%w+)$")
+
+	if ext == "hotparticles" {
+		openProject(path)
+		return
+	}
+
+	-- @Compiler @Cleanup: Fix messy ImageFile* types in love module.
+	-- @Compiler @Incomplete: Do something about LG.newImage() (and probably others) raising a Lua error on failure.
+	local pcall_newImage :: (file:LF.File) -> LG.Image !foreign lua [[
+		function(file)  local ok, image = pcall(love.graphics.newImage, file) ; return ok and image or nil  end
+	]]
+	if pcall_newImage(file) == NULL {
+		setErrorText("Could not load '%s'", path)
+		return
+	}
+
+	local project, system = getCurrentProjectAndSystem()
+	setTexturePath(project, system, path)
 }
 
 
@@ -2163,6 +2187,19 @@ export getTextureFullPath :: (project:Project, system:System) -> (success:bool, 
 	}
 }
 
+export setTexturePath :: (project:Project, system:System, path:string) {
+	local valueOld = system.texturePath
+	local valueNew = path
+
+	if valueNew == valueOld  return
+
+	recordChange("Changed texture path",
+		[system, valueNew] (project:Project) {  system.texturePath = valueNew  },
+		[system, valueOld] (project:Project) {  system.texturePath = valueOld  },
+		[system          ] (project:Project) {  updateParticleTexture(project, system, saveRecent=true) ; gui.refreshRecursively(guiState, "texturePath")  }
+	)
+}
+
 
 
 export markEdited :: (project:Project) {
@@ -2363,6 +2400,8 @@ export showMainMenu :: () {
 	insert(recentItems, cast(gui.MenuItem) {name="clearRecent",label="Clear items"})
 
 	local items: []gui.MenuItem = {
+		{label="New project",         name="new",         shortcut=ctrlText.."+N"},
+		{label="-"},
 		{label="Open project...",     name="open",        shortcut=ctrlText.."+O"},
 		{label="Open recent",         submenu=recentItems},
 		{label="-"},
@@ -2380,6 +2419,7 @@ export showMainMenu :: () {
 	gui.showMenu(guiState, buttons.layoutX, buttons.layoutY+buttons.layoutHeight, items, (choice:string, data:any) {
 		local project = app.projects[app.currentProjectIndex]
 		if choice == {
+			case "new":         addNewProject() ; gui.refreshRecursively(guiState, "projects") ; setCurrentProject(#app.projects) ; scheduleSaveWorkspace()
 			case "open":        pushPanel("openProject")
 			case "openLast":    openRecentProject()
 			case "openRecent":  openProject(cast(string)data)

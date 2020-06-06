@@ -46,6 +46,8 @@ Hold Alt to change the min/max limits of sliders.
 Press left and right arrow keys while hovering over controls to shift the
 value. Hold Ctrl or Shift to go slower or faster.
 
+Zoom in and out with the mouse wheel.
+
 
 3. Shortcuts
 ------------------------------------------------------------------------------
