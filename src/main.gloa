@@ -128,6 +128,8 @@ local zoomTime = -9999.00
 
 local updateId = 0
 
+local timeForAnimationPreview = 0.00
+
 export isMac: bool
 export lctrl: LK.KeyConstant
 export rctrl: LK.KeyConstant
@@ -1247,16 +1249,21 @@ local onUpdate :: (dt:float) {
 		if flags.refreshrate and dt > 1/10  dt = 1/flags.refreshrate
 	}
 
+	local mod  = getModifierKey()
+	local slow = not guiState.focusId and mod == ModifierKey.NONE and LK.isDown"g"
+	local fast = not guiState.focusId and mod == ModifierKey.NONE and LK.isDown"f"
+
+	local dtForParticles      = dt / (slow ? 20 : 1)
+	local particleUpdateCount = fast ? 10 : 1
+
+	timeForAnimationPreview += particleUpdateCount * dtForParticles
+
 	local project           = app.projects[app.currentProjectIndex]
-	local doUpdateParticles = forceParticleUpdates or gui.getTopmostActiveModal(guiState) == NULL
+	local showWorld         = getVisibilityFlags()
+	local doUpdateParticles = showWorld and (forceParticleUpdates or gui.getTopmostActiveModal(guiState) == NULL)
 
 	if doUpdateParticles {
 		local systemsActive  = false
-		local dtForParticles = dt
-
-		if not guiState.focusId and LK.isDown"g" and getModifierKey() == ModifierKey.NONE {
-			dtForParticles /= 20
-		}
 
 		local time = LT.getTime()
 		for project.systems  it.particles.update!(dtForParticles)
@@ -1264,12 +1271,9 @@ local onUpdate :: (dt:float) {
 
 		project.particleEmitDuration += dtForParticles
 
-		-- F for fast-forward! G for slowdown.
-		if not guiState.focusId and LK.isDown"f" and getModifierKey() == ModifierKey.NONE {
-			for 2, 10 {
-				project.particleEmitDuration += dtForParticles
-				for project.systems  it.particles.update!(dtForParticles)
-			}
+		for 2, particleUpdateCount {
+			project.particleEmitDuration += dtForParticles
+			for project.systems  it.particles.update!(dtForParticles)
 		}
 
 		for system: project.systems {
@@ -1568,7 +1572,7 @@ local onDraw :: () {
 
 				if system.frames {
 					local quads        = system.particles.getQuads!()
-					local quad         = getQuadForAnimationPreview(system.particles, quads)
+					local quad         = getAnimationPreviewQuad(system.particles, quads)
 					local _, _, qw, qh = quads[1].getViewport!()
 
 					w = math.round(qw)
@@ -1603,30 +1607,41 @@ local onDraw :: () {
 				LG.setColor(1, 1, 1)
 				LG.draw(image, x0, y0, 0, scale)
 
-				LG.setColor(0, 1, 0)
+				if system.frames {
+					local drawFrame :: (x0,y0:int, scale:float, frame:AnimationFrame) {
+						local x1 = math.round(x0 + scale * (frame.x          ))
+						local y1 = math.round(y0 + scale * (frame.y          ))
+						local x2 = math.round(x0 + scale * (frame.x + frame.w))
+						local y2 = math.round(y0 + scale * (frame.y + frame.h))
+						LG.rectangle(LG.DrawMode.LINE, x1+.5, y1+.5, x2-x1-1, y2-y1-1)
+					}
 
-				for system.frames {
-					local x1 = math.round(x0 + scale * (it.x       ))
-					local y1 = math.round(y0 + scale * (it.y       ))
-					local x2 = math.round(x0 + scale * (it.x + it.w))
-					local y2 = math.round(y0 + scale * (it.y + it.h))
-					LG.rectangle(LG.DrawMode.LINE, x1+.5, y1+.5, x2-x1-1, y2-y1-1)
-				}
-
-				local occupiedCoords: Table(int, bool)
-
-				for system.frames {
-					local text = format("%d", itIndex)
-					local x    = math.round(x0 + scale * it.x) + 2
-					local y    = math.round(y0 + scale * it.y)
-
-					while occupiedCoords[y*iw+x]  y += fontNormal.getHeight!()
-					occupiedCoords[y*iw+x] = true
-
-					LG.setColor(0, 0, 0)
-					LG.print(text, x+1, y+1)
 					LG.setColor(0, 1, 0)
-					LG.print(text, x, y)
+					for system.frames  drawFrame(x0,y0, scale, it)
+
+					local frameIndex = getAnimationPreviewProgress(system.particles, #system.frames)
+					LG.setColor(1, 1, 1)
+					drawFrame(x0,y0, scale, system.frames[frameIndex])
+
+					local occupiedCoords: Table(int, bool)
+
+					for system.frames {
+						local text = format("%d", itIndex)
+						local x    = math.round(x0 + scale * it.x) + 2
+						local y    = math.round(y0 + scale * it.y)
+
+						while occupiedCoords[y*iw+x]  y += fontNormal.getHeight!()
+						occupiedCoords[y*iw+x] = true
+
+						LG.setColor(0, 0, 0)
+						LG.print(text, x+1, y+1)
+
+						if itIndex == frameIndex
+							LG.setColor(1, 1, 1)
+						else
+							LG.setColor(0, 1, 0)
+						LG.print(text, x, y)
+					}
 				}
 
 				local mx, my = LM.getPosition()
@@ -2115,13 +2130,13 @@ export confirmDeleteSystem :: (systemIndexToDelete:int) {
 
 		if #project.systems == 1 {
 			local emptySystem = newSystem(project)
-			recordChange("Deleted particle system",
+			recordChange("Delete particle system",
 				[emptySystem] (project:Project) {  project.systems[1] = emptySystem  },
 				[system     ] (project:Project) {  project.systems[1] = system       },
 				--[[       ]] (project:Project) {  gui.refreshRecursively(guiState, "systems") ; setCurrentSystem(1, force=true)  }
 			)
 		} else {
-			recordChange("Deleted particle system",
+			recordChange("Delete particle system",
 				[systemIndexToDelete        ] (project:Project) {  remove(project.systems, systemIndexToDelete) ; project.systemIndex = math.min(project.systemIndex, #project.systems)  },
 				[systemIndexToDelete, system] (project:Project) {  insert(project.systems, systemIndexToDelete, system)  },
 				--[[                       ]] (project:Project) {  gui.refreshRecursively(guiState, "systems") ; setCurrentSystem(project.systemIndex, force=true)  }
@@ -2134,7 +2149,7 @@ export duplicateSystem :: (systemIndex:int) {
 	local project = app.projects[app.currentProjectIndex]
 	local system  = project.systems[systemIndex].clone!()
 
-	recordChange("Duplicated particle system",
+	recordChange("Duplicate particle system",
 		[systemIndex, system] (project:Project) {  insert(project.systems, systemIndex+1, system) ; project.systemIndex = systemIndex+1  },
 		[systemIndex        ] (project:Project) {  remove(project.systems, systemIndex+1)         ; project.systemIndex = math.min(project.systemIndex, #project.systems)  },
 		--[[               ]] (project:Project) {  gui.refreshRecursively(guiState, "systems") ; setCurrentSystem(project.systemIndex, force=true)  }
@@ -2156,12 +2171,17 @@ export setGuiValue :: (system:System, name:string, value:string) {
 
 
 
-export getQuadForAnimationPreview :: (ps:LG.ParticleSystem, quads:[]LG.Quad) -> (quad:LG.Quad--[[may be NULL]], progress:float) {
+export getAnimationPreviewProgress :: (ps:LG.ParticleSystem, frameCount:int) -> (i:int, progress:float, progressInSeconds:float) {
 	local min, max = ps.getParticleLifetime!()
-	local lifetime = math.max((min + max) / 2, .0001)
-	local progress = (LT.getTime() / lifetime) % 1
-	local i        = math.clamp(math.floor(1 + progress * #quads), 1, #quads)
-	return quads[i], progress
+	local lifetime = math.max((min + max) / 2, .0001) -- Use average lifetime.
+	local progress = (timeForAnimationPreview / lifetime) % 1
+	local i        = math.clamp(math.floor(1 + progress * frameCount), 1, frameCount)
+	return i, progress, lifetime*progress
+}
+
+export getAnimationPreviewQuad :: (ps:LG.ParticleSystem, quads:[]LG.Quad) -> (quad:LG.Quad--[[may be NULL]], progress:float, progressInSeconds:float) {
+	local i, progress, progressInSeconds = getAnimationPreviewProgress(ps, #quads)
+	return quads[i], progress, progressInSeconds
 }
 
 
@@ -2193,7 +2213,7 @@ export setTexturePath :: (project:Project, system:System, path:string) {
 
 	if valueNew == valueOld  return
 
-	recordChange("Changed texture path",
+	recordChange("Texture path",
 		[system, valueNew] (project:Project) {  system.texturePath = valueNew  },
 		[system, valueOld] (project:Project) {  system.texturePath = valueOld  },
 		[system          ] (project:Project) {  updateParticleTexture(project, system, saveRecent=true) ; gui.refreshRecursively(guiState, "texturePath")  }

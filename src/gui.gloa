@@ -70,9 +70,9 @@ local SPECIAL_TAB_WIDTH     :: 32
 
 local TAB_BOTTOM_LINE_WIDTH :: 2
 
-local TEXT_OPACITY                 :: .85
-local HOVER_OUTLINE_OPACITY        :: .3
-local HOVER_OUTLINE_OPACITY_STRONG :: .7
+export TEXT_OPACITY                 :: .85
+local  HOVER_OUTLINE_OPACITY        :: .3
+local  HOVER_OUTLINE_OPACITY_STRONG :: .7
 
 local DRAG_RADIUS :: 8 -- Distance moved before dragging starts for real.
 
