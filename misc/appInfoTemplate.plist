@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+	<!-- LÖVE version 11.3 -->
+
+	<!-- Bundle app type. -->
+	<key>CFBundleIdentifier</key><string>${appIdentifier}</string>
+
+	<!-- Bundle names. -->
+	<key>CFBundleDisplayName</key><string>${appName}</string><!-- Actual bundle name. -->
+	<key>CFBundleName</key><string>${appNameShort}</string><!-- Short bundle name. Should be less than 16 characters long. -->
+
+	<!-- Bundle version numbers. -->
+	<key>CFBundleShortVersionString</key><string>${appVersion}</string><!-- Release version number. -->
+	<key>CFBundleVersion</key><string>${appVersion}</string><!-- Build version number. -->
+
+	<!-- Bundle copyright notice. -->
+	<key>NSHumanReadableCopyright</key><string>${copyright}</string>
+
+	<!-- Bundle icon. -->
+	<key>CFBundleIconFile</key><string>AppIcon</string>
+	<key>CFBundleIconName</key><string>AppIcon</string>
+
+	<!-- Bundle creator ID. -->
+	<key>CFBundleSignature</key><string>????</string>
+
+	<!-- Values that probably shouldn't be touched... -->
+	<key>BuildMachineOSBuild</key><string>19A582a</string>
+	<key>CFBundleDevelopmentRegion</key><string>English</string>
+	<key>CFBundleExecutable</key><string>love</string>
+	<key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+	<key>CFBundlePackageType</key><string>APPL</string>
+	<key>CFBundleSupportedPlatforms</key><array><string>MacOSX</string></array>
+	<key>DTCompiler</key><string>com.apple.compilers.llvm.clang.1_0</string>
+	<key>DTPlatformBuild</key><string>11A1027</string>
+	<key>DTPlatformVersion</key><string>GM</string>
+	<key>DTSDKBuild</key><string>19A547</string>
+	<key>DTSDKName</key><string>macosx10.15</string>
+	<key>DTXcode</key><string>1110</string>
+	<key>DTXcodeBuild</key><string>11A1027</string>
+	<key>LSApplicationCategoryType</key><string>public.app-category.games</string>
+	<key>LSMinimumSystemVersion</key><string>10.7</string>
+	<key>NSHighResolutionCapable</key><true/>
+	<key>NSPrincipalClass</key><string>NSApplication</string>
+	<key>NSSupportsAutomaticGraphicsSwitching</key><false/>
+</dict></plist>

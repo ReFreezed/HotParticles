@@ -48,6 +48,7 @@ local doRelease :: () {
 	params = loadParams()
 
 	local outputDirWin64     = "output/win64/Hot Particles"
+	local outputDirMacOs     = "output/macOs/Hot Particles"
 	local outputDirUniversal = "output/universal/Hot Particles"
 
 	local values: Values = NULL
@@ -73,8 +74,10 @@ local doRelease :: () {
 			copyright       = os.getDate"Copyright %Y Marcus 'ReFreezed' Thunström",
 
 			lovePath        = "temp/app.love",
-			loveExeDir      = params.dirLove,
-			loveExePath     = params.dirLove.."/love.exe",
+			loveExeDir      = params.dirLoveWin64,
+			loveExePath     = params.dirLoveWin64.."/love.exe",
+			loveAppDir      = params.dirLoveMacOs,
+			loveAppPath     = params.dirLoveMacOs.."/love.app",
 			versionInfoPath = "temp/appInfo.res",
 		}
 	}
@@ -104,7 +107,7 @@ local doRelease :: () {
 		}
 
 		-- Create .ico.
-		local ok, err = io.writeEntireFile("temp/icons.txt", "\z
+		writeFile("temp/icons.txt", "\z
 			gfx/appIcon16.png\n\z
 			gfx/appIcon24.png\n\z
 			gfx/appIcon32.png\n\z
@@ -113,7 +116,6 @@ local doRelease :: () {
 			gfx/appIcon128.png\n\z
 			gfx/appIcon256.png\n\z
 		")
-		assert(ok, err)
 
 		executeRequired(params.pathMagick, {
 			"@temp/icons.txt",
@@ -152,14 +154,17 @@ local doRelease :: () {
 	zip(values.lovePath, filesToLove)
 
 	-- Windows.
+	local PATH_RC_LOG :: "local/robocopy.log"
+	io.remove(PATH_RC_LOG)
+
 	do {
 		local outputDir = outputDirWin64
 
 		-- Compile resource file.
 		do {
-			local ok, contents, err = io.readEntireFile("misc/appInfoTemplate.rc") ; assert(ok, err) -- UTF-16 LE BOM encoded.
-			contents                = templateToStringUtf16(contents, values)
-			io.writeEntireFile("temp/appInfo.rc", contents)
+			local contents = readFile("misc/appInfoTemplate.rc") -- UTF-16 LE BOM encoded.
+			contents       = templateToStringUtf16(contents, values)
+			writeFile("temp/appInfo.rc", contents)
 
 			executeRequired(params.pathRh, {
 				"-open",   "temp/appInfo.rc",
@@ -185,14 +190,12 @@ local doRelease :: () {
 			'
 
 			local contents = templateToString(TEMPLATE_UPDATE_EXE, values, toWindowsPath)
-			io.writeEntireFile("temp/updateExe.rhs", contents)
+			writeFile("temp/updateExe.rhs", contents)
 		}
 
 		-- Create base for install directory using robocopy.
 		-- Note: Because of robocopy's complex return codes we just trust that it's always successful.
 		-- https://blogs.technet.microsoft.com/deploymentguys/2008/06/16/robocopy-exit-codes/
-		local PATH_RC_LOG :: "local/robocopy.log"
-		io.remove(PATH_RC_LOG)
 		os.execute("ROBOCOPY", {values.loveExeDir, outputDir, "/NOCOPY", "/PURGE", "/E", "/LOG+:"..PATH_RC_LOG})
 		os.execute("ROBOCOPY", {values.loveExeDir, outputDir, "*.dll",             "/E", "/LOG+:"..PATH_RC_LOG})
 
@@ -202,10 +205,10 @@ local doRelease :: () {
 				"-script", "temp/updateExe.rhs",
 			})
 
-			local  ok, contentsLoveExe, err = io.readEntireFile(values.exePath)  ; assert(ok, err)
-			local ^ok, contentsLove,   ^err = io.readEntireFile(values.lovePath) ; assert(ok, err)
+			local contentsLoveExe = readFile(values.exePath)
+			local contentsLove    = readFile(values.lovePath)
 
-			local ^ok, file, ^err = io.openForWriting(values.exePath) ; assert(ok, err)
+			local ok, file, err = io.openForWriting(values.exePath) ; assert(ok, err)
 			io.write(file, contentsLoveExe)
 			io.write(file, contentsLove)
 			io.close(file)
@@ -215,6 +218,60 @@ local doRelease :: () {
 		do {
 			copyFilesInDirectory("exportTemplates", outputDir.."/exportTemplates", "%.lua$")
 			copyFile("misc/README.txt", outputDir.."/_README.txt")
+		}
+	}
+
+	-- macOS.
+	do {
+		local outputDir   = outputDirMacOs
+		local contentsDir = format("%s/%s.app/Contents", outputDir, values.exeName)
+
+		-- Create base for install directory using robocopy.
+		lfs.makeDirectoryRecursive(contentsDir)
+		lfs.makeDirectory(contentsDir.."/Frameworks")
+		lfs.makeDirectory(contentsDir.."/MacOS")
+		lfs.makeDirectory(contentsDir.."/Resources")
+
+		os.execute("ROBOCOPY", {values.loveAppPath.."/Contents", contentsDir, "/NOCOPY", "/PURGE", "/E", "/LOG+:"..PATH_RC_LOG})
+		removeDirectory(contentsDir.."/_CodeSignature")
+
+		os.execute("ROBOCOPY", {values.loveAppPath.."/Contents/Frameworks", contentsDir.."/Frameworks", "/E", "/LOG+:"..PATH_RC_LOG})
+		os.execute("ROBOCOPY", {values.loveAppPath.."/Contents/MacOS",      contentsDir.."/MacOS",      "/E", "/LOG+:"..PATH_RC_LOG})
+
+		-- Create .icns.
+		!import"macos/icns".create("temp/appIcon.icns", {
+			{path="gfx/appIcon16.png",  size=16},
+			{path="gfx/appIcon32.png",  size=32},
+			{path="gfx/appIcon64.png",  size=64},
+			{path="gfx/appIcon128.png", size=128},
+			{path="gfx/appIcon256.png", size=256},
+		})
+
+		-- Create other files.
+		local infoPlist = readFile("misc/appInfoTemplate.plist")
+
+		infoPlist = replacePattern(infoPlist, "<!%-%-.-%-%->", "")  -- Remove comments.
+		infoPlist = replacePattern(infoPlist, ">%s+",          ">") -- Remove useless whitespace.
+		infoPlist = replacePattern(infoPlist, "%s+<",          "<") -- Remove useless whitespace.
+
+		infoPlist = templateToString(infoPlist, values, (s:string) -> string {
+			return (replacePattern(s, '[&<>"]', cast(table) {
+				["&"] = "&amp;",
+				["<"] = "&lt;",
+				[">"] = "&gt;",
+				['"'] = "&quot;",
+			}))
+		})
+
+		writeFile(contentsDir.."/Info.plist", infoPlist)
+		writeFile(contentsDir.."/PkgInfo",    "APPL????")
+
+		-- Add remaining files.
+		do {
+			copyFilesInDirectory("exportTemplates", outputDir.."/exportTemplates", "%.lua$")
+			copyFile(values.lovePath,     contentsDir.."/Resources/Game.love")
+			copyFile("temp/appIcon.icns", contentsDir.."/Resources/AppIcon.icns")
+			copyFile("misc/README.txt",   outputDir.."/_README.txt")
 		}
 	}
 
@@ -233,6 +290,7 @@ local doRelease :: () {
 
 	-- Zip for distribution!
 	zip("output/HotParticles_"..values.appVersion.."_win64.zip",     "./"..outputDirWin64)
+	zip("output/HotParticles_"..values.appVersion.."_macos.zip",     "./"..outputDirMacOs)
 	zip("output/HotParticles_"..values.appVersion.."_universal.zip", "./"..outputDirUniversal)
 
 	print("Release stuff done!")
@@ -302,6 +360,16 @@ local zip :: (zipFilePath:string, pathsToZip:[]string, append=false) {
 	assert(ok, err)
 
 	executeRequired(params.path7z, {"a", "-tzip", zipFilePath, "@"..PATH_INCLUDE_LIST})
+}
+
+local readFile :: (path:string) -> string {
+	local ok, contents, err = io.readEntireFile(path)
+	assert(ok, err)
+	return contents
+}
+local writeFile :: (path:string, contents:string) {
+	local ok, err = io.writeEntireFile(path, contents)
+	assert(ok, err)
 }
 
 local copyFile :: (from:string, to:string) {

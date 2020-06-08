@@ -10,7 +10,8 @@
 --============================================================]]
 
 export Params :: struct {
-	dirLove: string,
+	dirLoveWin64: string,
+	dirLoveMacOs: string,
 	path7z: string,
 	pathMagick: string,
 	pathPngCrush: string,
@@ -20,21 +21,23 @@ export Params :: struct {
 export loadParams :: () -> Params {
 	local params: Params
 
-	for line in io.eachLine"local/params.txt"  if line and not findPattern(line, "^#") {
+	for line in io.eachLine"local/params.ini"  if line and not findPattern(line, "^#") {
 		local ok, k, v = matchPattern(line, "^([%w_]+)%s*=%s*(.*)$")
 		assert(ok, line)
 
 		if cast(string) k == {
-			case "dirLove":      params.dirLove      = cast(string) v
+			case "dirLoveWin64": params.dirLoveWin64 = cast(string) v
+			case "dirLoveMacOs": params.dirLoveMacOs = cast(string) v
 			case "path7z":       params.path7z       = cast(string) v
 			case "pathMagick":   params.pathMagick   = cast(string) v
 			case "pathPngCrush": params.pathPngCrush = cast(string) v
 			case "pathRh":       params.pathRh       = cast(string) v
-			case:                printf("Error @ params.txt: '%s'", cast(string) k)
+			case:                printf("Error @ params.ini: '%s'", cast(string) k)
 		}
 	}
 
-	assert(params.dirLove      ~= "", "dirLove")
+	assert(params.dirLoveWin64 ~= "", "dirLoveWin64")
+	assert(params.dirLoveMacOs ~= "", "dirLoveMacOs")
 	assert(params.path7z       ~= "", "path7z")
 	assert(params.pathMagick   ~= "", "pathMagick")
 	assert(params.pathPngCrush ~= "", "pathPngCrush")
