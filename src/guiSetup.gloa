@@ -450,7 +450,7 @@ export setupGuiFrames :: () {
 
 			guiState.separator!({ thick=false }),
 			guiState.section!({ label="Undo history",
-				guiState.inputText!({ name="preferences_maxChanges", tooltip="Default: 100" }),
+				guiState.inputText!({ name="preferences_maxChanges", tooltip="Default: 200" }),
 			}),
 
 			guiState.separator!({ thick=true }),

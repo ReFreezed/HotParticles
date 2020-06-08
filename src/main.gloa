@@ -192,7 +192,7 @@ export App :: struct {
 	maxBufferSize    = 16000, -- Default buffer size for ParticleSystem is 1000.
 	maxRecentFiles   = 15,
 	maxRecentFolders = 4,
-	maxChanges       = 100,
+	maxChanges       = 200,
 }
 
 
