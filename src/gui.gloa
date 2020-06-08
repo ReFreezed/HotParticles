@@ -356,7 +356,7 @@ export Slider :: struct {
 	min = 0.0,
 	max = 1.0,
 
-	steps = 16,
+	steps = 32,
 
 	limitName   = "",
 	limitCenter = 0.0,

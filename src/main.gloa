@@ -344,8 +344,8 @@ export System :: struct {
 	psSizeVariation             = 0.0,
 	psSpeedMin                  = 0.0,
 	psSpeedMax                  = 0.0,
-	psSpinMin                   = 0.0,
-	psSpinMax                   = 0.0,
+	psSpinMin                   = 0.0, -- Turns, not angle.
+	psSpinMax                   = 0.0, -- Turns, not angle.
 	psSpinVariation             = 0.0,
 	psSpread                    = 0.0,
 	psTangentialAccelerationMin = 0.0,
@@ -500,7 +500,7 @@ export updateParticleParams :: (project:Project, s:System) {
 	ps.setSizes!(sizes)
 	ps.setSizeVariation!(s.psSizeVariation)
 	ps.setSpeed!(s.psSpeedMin*space*time, s.psSpeedMax*space*time)
-	ps.setSpin!(s.psSpinMin*time, s.psSpinMax*time)
+	ps.setSpin!(s.psSpinMin*time*math.TAU, s.psSpinMax*time*math.TAU)
 	ps.setSpinVariation!(s.psSpinVariation)
 	ps.setSpread!(s.psSpread)
 	ps.setTangentialAcceleration!(s.psTangentialAccelerationMin*space*time^2, s.psTangentialAccelerationMax*space*time^2)

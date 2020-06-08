@@ -14,7 +14,7 @@
 
 --============================================================]]
 
-local LAST_FILE_VERSION :: 5
+local LAST_FILE_VERSION :: 6
 
 
 
@@ -814,6 +814,8 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 						local ^ok, ^ptr, min = readFloat(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 						local ^ok, ^ptr, max = readFloat(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
+						if version < 6  min /= math.TAU
+						if version < 6  max /= math.TAU
 						system.psSpinMin = min
 						system.psSpinMax = max
 

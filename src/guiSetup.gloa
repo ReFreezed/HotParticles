@@ -207,9 +207,9 @@ export setupGuiFrames :: () {
 					guiState.separator!({ thick=false }),
 
 					guiState.section!({ name="spinSection", label="Spin", icon16="spin",
-						guiState.slider!({ name="spinMin", labelLeft="at start", min=-8*math.TAU, max=8*math.TAU, exponential=true, limitName="spin", readoutMulti=1/math.TAU, readout="%.2f turns / sec", linkMultiDrag={"spinMax"} }),
-						guiState.slider!({ name="spinMax", labelLeft="at end",   min=-8*math.TAU, max=8*math.TAU, exponential=true, limitName="spin", readoutMulti=1/math.TAU, readout="%.2f turns / sec", linkMultiDrag={"spinMin"} }),
-						guiState.slider!({ name="spinVariation", labelLeft="variation", min=0, max=1, readoutMulti=100, readout="%d%%" }),
+						guiState.slider!({ name="spinMin",       labelLeft="at start",  min=-8, max=8, exponential=true, limitName="spin", readout="%.2f turns / sec", linkMultiDrag={"spinMax"} }),
+						guiState.slider!({ name="spinMax",       labelLeft="at end",    min=-8, max=8, exponential=true, limitName="spin", readout="%.2f turns / sec", linkMultiDrag={"spinMin"} }),
+						guiState.slider!({ name="spinVariation", labelLeft="variation", min=0,  max=1, readoutMulti=100, readout="%d%%" }),
 					}),
 
 					guiState.separator!({ thick=true }),
