@@ -2078,11 +2078,13 @@ export setupGuiCallbacks :: () {
 		local ok, filename = pathObj.getFilename!()
 
 		if not ok {
-			if not project.path  return false, NULL
-
-			_, filename = Path(project.path).getFilename!()
-			filename    = replacePatternWithPattern(filename, "(.)%.[^.]+", "%1") ?: "untitled"
-			filename    = filename..".lua"
+			if project.path {
+				_, filename = Path(project.path).getFilename!()
+				filename    = replacePatternWithPattern(filename, "(.)%.[^.]+", "%1") ?: "untitled"
+				filename    = filename..".lua"
+			} else {
+				filename    = "untitled.lua"
+			}
 
 			pathObj.setFilename!(filename)
 
@@ -2101,7 +2103,7 @@ export setupGuiCallbacks :: () {
 		return true, pathObj.toString!()
 	}
 	local resolveTextureOuputPath :: (project:Project, system:System) -> (success:bool, path:string, sameAsInput:bool) {
-		local pathObj = Path(system.texturePath ?: format("%s/gfx/particles/%s.png", getAppDirectory(), system.textureName))
+		local pathObj = Path(system.texturePath ?: system.textureName..".png")
 
 		-- Resolve to current path.
 		if not pathObj.isAbsolute {
