@@ -932,7 +932,7 @@ local onLoad :: (args:[]string, argsRaw:[]string) {
 
 	setupGuiFrames()
 	setupGuiCallbacks()
-	gui.refreshAll(guiState)
+	guiState.refreshAll!()
 
 	setCurrentProject(app.currentProjectIndex, force=true)
 
@@ -1049,7 +1049,7 @@ local onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool) 
 			return
 	}
 
-	if gui.onKeyPressed(guiState, key, scancode, isRepeat)  return
+	if guiState.onKeyPressed!(key, scancode, isRepeat)  return
 	if LM.isGrabbed()  return
 
 	-- Context-sensitive global keys.
@@ -1123,11 +1123,11 @@ local onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool) 
 }
 
 local onKeyReleased :: (key:LK.KeyConstant, scancode:LK.Scancode) {
-	gui.onKeyReleased(guiState, key, scancode)
+	guiState.onKeyReleased!(key, scancode)
 }
 
 local onTextInput :: (text:string) {
-	if gui.onTextInput(guiState, text)  return
+	if guiState.onTextInput!(text)  return
 }
 
 local macCtrlClick = false
@@ -1149,7 +1149,7 @@ local onMousePressed :: (mx,my:int, mbutton:int, isTouch:bool, presses:int) {
 		return -- :MacRightClick
 	}
 
-	if gui.onMousePressed(guiState, mx, my, mbutton, presses)  return
+	if guiState.onMousePressed!(mx, my, mbutton, presses)  return
 
 	local showWorld = getVisibilityFlags()
 	if not showWorld  return
@@ -1175,7 +1175,7 @@ local onMouseMoved :: (mx,my:int, dx,dy:int, isTouch:bool) {
 		return
 	}
 
-	gui.onMouseMoved(guiState, mx, my, dx, dy)
+	guiState.onMouseMoved!(mx, my, dx, dy)
 }
 
 local onMouseReleased :: (mx,my:int, mbutton:int, isTouch:bool, presses:int) {
@@ -1190,23 +1190,23 @@ local onMouseReleased :: (mx,my:int, mbutton:int, isTouch:bool, presses:int) {
 		isPositioningParticles = false
 		LM.setGrabbed(false)
 		LK.setKeyRepeat(true)
-		gui.onMouseMoved(guiState, mx, my, 0, 0)
+		guiState.onMouseMoved!(mx, my, 0, 0)
 		return
 	}
 
-	gui.onMouseReleased(guiState, mx, my, mbutton, presses)
+	guiState.onMouseReleased!(mx, my, mbutton, presses)
 }
 
 local onMouseWheel :: (dx,dy:int) {
-	if LM.isGrabbed()                      return
-	if gui.onMouseWheel(guiState, dx, dy)  return
-	if not dy                              return
+	if LM.isGrabbed()                  return
+	if guiState.onMouseWheel!(dx, dy)  return
+	if not dy                          return
 
 	local showWorld = getVisibilityFlags()
 	if not showWorld  return
 
 	local mx, my = LM.getPosition()
-	if gui.getTopmostActiveModal(guiState) ~= NULL or gui.isOverGui(guiState, mx, my)  return
+	if guiState.getTopmostActiveModal!() ~= NULL or guiState.isOverGui!(mx, my)  return
 
 	local mod = getModifierKey()
 	if mod ~= ModifierKey.NONE  return
@@ -1260,7 +1260,7 @@ local onUpdate :: (dt:float) {
 
 	local project           = app.projects[app.currentProjectIndex]
 	local showWorld         = getVisibilityFlags()
-	local doUpdateParticles = showWorld and (forceParticleUpdates or gui.getTopmostActiveModal(guiState) == NULL)
+	local doUpdateParticles = showWorld and (forceParticleUpdates or guiState.getTopmostActiveModal!() == NULL)
 
 	if doUpdateParticles {
 		local systemsActive  = false
@@ -1646,7 +1646,7 @@ local onDraw :: () {
 
 				local mx, my = LM.getPosition()
 
-				if LW.hasMouseFocus() and not (guiState.activeId or gui.isOverGui(guiState, mx, my)) {
+				if LW.hasMouseFocus() and not (guiState.activeId or guiState.isOverGui!(mx, my)) {
 					local text = format(
 						"[%d, %d]",
 						math.clamp(math.floor((mx-x0)/scale), 0, iw),
@@ -1747,7 +1747,7 @@ local onDraw :: () {
 		}
 
 		-- Panel(s).
-		gui.draw(guiState)
+		guiState.draw!()
 
 		-- GUI texts.
 		local drawGuiText :: (text:string, time:float, duration:float, y:int) {
@@ -1758,7 +1758,7 @@ local onDraw :: () {
 			if visibility <= 0  return
 
 			local w = fontLarge.getWidth!(text)
-			local x = (LG.getWidth() + (gui.getTopmostActiveModal(guiState) == NULL ? MAIN_PANEL_WIDTH : 0) - w) // 2
+			local x = (LG.getWidth() + (guiState.getTopmostActiveModal!() == NULL ? MAIN_PANEL_WIDTH : 0) - w) // 2
 			local a = visibility ^ .5
 
 			LG.setColor(0, 0, 0, a)
@@ -1914,7 +1914,7 @@ local onResize :: (ww,wh:int) {
 
 
 local onFocus :: (hasFocus:bool) {
-	gui.onFocus(guiState, hasFocus)
+	guiState.onFocus!(hasFocus)
 }
 
 
@@ -2436,7 +2436,7 @@ export showMainMenu :: () {
 
 	local buttons = gui.getElement(guiState, "menuAndSettingsButtons", gui.Buttons)
 
-	gui.showMenu(guiState, buttons.layoutX, buttons.layoutY+buttons.layoutHeight, items, (choice:string, data:any) {
+	guiState.showMenu!(buttons.layoutX, buttons.layoutY+buttons.layoutHeight, items, (choice:string, data:any) {
 		local project = app.projects[app.currentProjectIndex]
 		if choice == {
 			case "new":         addNewProject() ; gui.refreshRecursively(guiState, "projects") ; setCurrentProject(#app.projects) ; scheduleSaveWorkspace()

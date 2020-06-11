@@ -560,7 +560,7 @@ export popPanel :: (nameForAssert="") -> (success:bool) {
 	local frame = gui.getElement(guiState, name, gui.Frame)
 	gui.setActive(guiState, frame, false)
 
-	if frame.temp  gui.delete(guiState, frame)
+	if frame.temp  guiState.delete!(frame)
 	return true
 }
 
@@ -3037,7 +3037,7 @@ export setupGuiCallbacks :: () {
 		guiState.onRefresh.animation_frames = (vbox:gui.Vbox) {
 			local project, system = getCurrentProjectAndSystem()
 
-			for < vbox  gui.delete(guiState, it)
+			for < vbox  guiState.delete!(it)
 
 			for system.frames {
 				local inputValue = format("%s %s %s %s", it.x, it.y, it.w, it.h)
@@ -3056,7 +3056,7 @@ export setupGuiCallbacks :: () {
 
 		local getAnimationFrame :: (el:gui.Element) -> AnimationFrame, int {
 			local project, system = getCurrentProjectAndSystem()
-			local _, parent       = gui.findParent(guiState, el, "animation_frame")
+			local _, parent       = guiState.findParent!(el, "animation_frame")
 			local i               = cast(int) parent.data
 
 			return system.frames[i], i

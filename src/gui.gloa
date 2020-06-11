@@ -36,6 +36,7 @@
 	pressButton
 	refresh, refreshRecursively, refreshAll
 	setActive
+	setFocus, blurFocus
 	showMenu, showContextMenu, showContextMenuWithInput, hideContextMenu
 
 --============================================================]]
@@ -158,7 +159,71 @@ export State :: struct {
 	tabs         :: (state:State, el:Tabs)         -> type_of(el) { return cast(type_of(el)) register(state, el, type_of(el)) },
 	text         :: (state:State, el:Text)         -> type_of(el) { return cast(type_of(el)) register(state, el, type_of(el)) },
 	vbox         :: (state:State, el:Vbox)         -> type_of(el) { return cast(type_of(el)) register(state, el, type_of(el)) },
+
+	-- @Cleanup: Methods!  (@Compiler @Incomplete: Maybe actually support aliases for overloads?)
+	-- getElement :: _getElement,
+	-- isElementVisible :: _isElementVisible,
+	-- refresh :: _refresh,
+	-- refreshRecursively :: _refreshRecursively,
+	-- setActive :: _setActive,
+	-- setFocus :: _setFocus,
+	-- showContextMenu :: _showContextMenu,
+	-- showContextMenuWithInput :: _showContextMenuWithInput,
+	blurFocus :: _blurFocus,
+	delete :: _delete,
+	draw :: _draw,
+	findParent :: _findParent,
+	getElementAt :: _getElementAt,
+	getTopmostActiveModal :: _getTopmostActiveModal,
+	getWidgetAt :: _getWidgetAt,
+	hideContextMenu :: _hideContextMenu,
+	isInsideElement :: _isInsideElement,
+	isOverGui :: _isOverGui,
+	onFocus :: _onFocus,
+	onKeyPressed :: _onKeyPressed,
+	onKeyReleased :: _onKeyReleased,
+	onMouseMoved :: _onMouseMoved,
+	onMousePressed :: _onMousePressed,
+	onMouseReleased :: _onMouseReleased,
+	onMouseWheel :: _onMouseWheel,
+	onTextInput :: _onTextInput,
+	pressButton :: _pressButton,
+	refreshAll :: _refreshAll,
+	showMenu :: _showMenu,
 }
+
+-- @Cleanup: Methods!  (@Compiler @Incomplete: Maybe actually support aliases for overloads?)
+-- local _getElement :: getElement
+-- local _isElementVisible :: isElementVisible
+-- local _refresh :: refresh
+-- local _refreshRecursively :: refreshRecursively
+-- local _setActive :: setActive
+-- local _setFocus :: setFocus
+-- local _showContextMenu :: showContextMenu
+-- local _showContextMenuWithInput :: showContextMenuWithInput
+local _blurFocus :: blurFocus
+local _delete :: delete
+local _draw :: draw
+local _findParent :: findParent
+local _getElementAt :: getElementAt
+local _getTopmostActiveModal :: getTopmostActiveModal
+local _getWidgetAt :: getWidgetAt
+local _hideContextMenu :: hideContextMenu
+local _isInsideElement :: isInsideElement
+local _isOverGui :: isOverGui
+local _onFocus :: onFocus
+local _onKeyPressed :: onKeyPressed
+local _onKeyReleased :: onKeyReleased
+local _onMouseMoved :: onMouseMoved
+local _onMousePressed :: onMousePressed
+local _onMouseReleased :: onMouseReleased
+local _onMouseWheel :: onMouseWheel
+local _onTextInput :: onTextInput
+local _pressButton :: pressButton
+local _refreshAll :: refreshAll
+local _showMenu :: showMenu
+
+
 
 local register :: (state:State, el:Element, T:Type) -> Element {
 	el.type = T
@@ -436,7 +501,7 @@ export onKeyPressed :: (state:State, key:LK.KeyConstant, scancode:LK.Scancode, i
 	-- Modifier keys.
 	if (state.activeId or state.hoveredId) and (key == lctrl or key == rctrl or key == "lshift" or key == "rshift" or key == "lalt" or key == "ralt") {
 		local mx, my = LM.getPosition()
-		onMouseMoved(state, mx, my, 0, 0)
+		state.onMouseMoved!(mx, my, 0, 0)
 	}
 	if state.activeId  return true
 
@@ -454,14 +519,14 @@ export onKeyPressed :: (state:State, key:LK.KeyConstant, scancode:LK.Scancode, i
 
 		-- Input outside context menu.
 		if state.contextMenus and not indexOf(state.contextMenus, input.frame) {
-			if key == "escape"  hideContextMenu(state, mayDeactivateSubmenu=true)
+			if key == "escape"  state.hideContextMenu!(mayDeactivateSubmenu=true)
 			return true
 		}
 
 		if key == "escape" {
-			blurFocus(state, abort=true)
+			state.blurFocus!(abort=true)
 		} elseif key == "return" or key == "kpenter" {
-			blurFocus(state, abort=false)
+			state.blurFocus!(abort=false)
 			triggerSubmitEvent(state, input)
 		} else {
 			input.field.keypressed!(key, scancode, isRepeat)
@@ -471,13 +536,13 @@ export onKeyPressed :: (state:State, key:LK.KeyConstant, scancode:LK.Scancode, i
 
 	-- Context menu.
 	if state.contextMenus {
-		if key == "escape"  hideContextMenu(state, mayDeactivateSubmenu=true)
+		if key == "escape"  state.hideContextMenu!(mayDeactivateSubmenu=true)
 		return true
 	}
 
 	-- Submit modals.
 	if key == "return" or key == "kpenter" {
-		local topModal = getTopmostActiveModal(state)
+		local topModal = state.getTopmostActiveModal!()
 
 		if topModal ~= NULL {
 			triggerSubmitEvent(state, topModal)
@@ -554,7 +619,7 @@ export onKeyPressed :: (state:State, key:LK.KeyConstant, scancode:LK.Scancode, i
 export onKeyReleased :: (state:State, key:LK.KeyConstant, scancode:LK.Scancode) {
 	if (state.activeId or state.hoveredId) and (key == lctrl or key == rctrl or key == "lshift" or key == "rshift" or key == "lalt" or key == "ralt") {
 		local mx, my = LM.getPosition()
-		onMouseMoved(state, mx, my, 0, 0)
+		state.onMouseMoved!(mx, my, 0, 0)
 	}
 }
 
@@ -582,11 +647,11 @@ export onMousePressed :: (state:State, mx,my:int, mbutton:int, presses:int) -> (
 			local input = cast(InputText) state.elementsById[state.focusId]
 			input.field.mousepressed!(mx-(input.layoutX+SPACING), my-(input.layoutY+getScrollOffset(input)), mbutton, presses)
 		} else {
-			blurFocus(state, abort=false)
+			state.blurFocus!(abort=false)
 		}
 	}
 
-	for < frame: state.frames  if isInsideElement(state, mx, my, frame) {
+	for < frame: state.frames  if state.isInsideElement!(mx, my, frame) {
 		if (mbutton == 1 or mbutton == 2) and state.hoveredId and not state.focusId {
 			local input = cast(InputText) state.elementsById[state.hoveredId]
 			if input.type == InputText {
@@ -634,16 +699,16 @@ export onMousePressed :: (state:State, mx,my:int, mbutton:int, presses:int) -> (
 					}
 				}
 
-				onMouseMoved(state, mx, my, 0, 0, begin=true)
+				state.onMouseMoved!(mx, my, 0, 0, begin=true)
 			}
 		}
 
-		if state.contextMenus and not indexOf(state.contextMenus, frame)  hideContextMenu(state)
+		if state.contextMenus and not indexOf(state.contextMenus, frame)  state.hideContextMenu!()
 		return true
 	}
 
-	hideContextMenu(state)
-	return state.activeId > 0 or getTopmostActiveModal(state) ~= NULL
+	state.hideContextMenu!()
+	return state.activeId > 0 or state.getTopmostActiveModal!() ~= NULL
 }
 
 export onMouseMoved :: (state:State, mx,my:int, dx,dy:int, begin=false, end=false) {
@@ -691,7 +756,7 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int, begin=false, end=fals
 		and (widget.type == Buttons or widget.type == Radio or widget.type == Tabs)
 		and (cast(Buttons)widget).buttons[state.activeSubid].draggable
 	) {
-		local found, ^widget = getWidgetAt(state, mx, my)
+		local found, ^widget = state.getWidgetAt!(mx, my)
 
 		state.hoveredId    = 0
 		state.hoveredSubid = 0
@@ -968,7 +1033,7 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int, begin=false, end=fals
 export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int) {
 	if state.focusId {
 		local input = cast(InputText) state.elementsById[state.focusId]
-		if input.field.mousereleased!(mx, my, mbutton)  onMouseMoved(state, mx, my, 0, 0)
+		if input.field.mousereleased!(mx, my, mbutton)  state.onMouseMoved!(mx, my, 0, 0)
 	}
 
 	-- LMB.
@@ -1071,7 +1136,7 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int) {
 				case Direction:
 					local direction = cast(Direction) widget
 
-					showContextMenuWithInput(guiState, toString(direction.angle*360/math.TAU), {"Copy angle","Paste angle"},
+					showContextMenuWithInput(state, toString(direction.angle*360/math.TAU), {"Copy angle","Paste angle"},
 						[state,direction] (i:int) {
 							if i == {
 								case 1:
@@ -1094,7 +1159,7 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int) {
 				case Slider:
 					local slider = cast(Slider) widget
 
-					showContextMenuWithInput(guiState, toString(slider.value*slider.readoutMulti), {"Copy value","Paste value"--[[,"Reset value"@Incomplete]],"Reset min/max limits"},
+					showContextMenuWithInput(state, toString(slider.value*slider.readoutMulti), {"Copy value","Paste value"--[[,"Reset value"@Incomplete]],"Reset min/max limits"},
 						[state,slider] (i:int) {
 							if i == {
 								case 1:
@@ -1136,7 +1201,7 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int) {
 						"Paste color",
 					}
 
-					showContextMenuWithInput(guiState, valueStr, items,
+					showContextMenuWithInput(state, valueStr, items,
 						[state,colorEl,component] (i:int) {
 							if i == {
 								case 1:
@@ -1174,7 +1239,7 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int) {
 
 	-- Release active ID.
 	if state.activeId and mbutton == 1 {
-		if state.elementsById[state.activeId] ~= NULL  onMouseMoved(state, mx, my, 0, 0, end=true)
+		if state.elementsById[state.activeId] ~= NULL  state.onMouseMoved!(mx, my, 0, 0, end=true)
 
 		if state.activeDragging {
 			local widget = cast(Widget) state.elementsById[state.activeId]
@@ -1202,7 +1267,7 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int) {
 		LM.setGrabbed(false)
 		LK.setKeyRepeat(true)
 
-		onMouseMoved(state, mx, my, 0, 0)
+		state.onMouseMoved!(mx, my, 0, 0)
 	}
 }
 
@@ -1214,7 +1279,7 @@ export onMouseWheel :: (state:State, dx,dy:int) -> (handled:bool) {
 
 	local mx, my = LM.getPosition()
 
-	local found, el = getElementAt(state, mx, my)
+	local found, el = state.getElementAt!(mx, my)
 	while not (el == NULL or el.type == Scrollable) {
 		el = el.parent
 	}
@@ -1231,7 +1296,7 @@ export onMouseWheel :: (state:State, dx,dy:int) -> (handled:bool) {
 }
 
 export onFocus :: (state:State, hasFocus:bool) {
-	if not hasFocus  hideContextMenu(state)
+	if not hasFocus  state.hideContextMenu!()
 }
 
 
@@ -1605,7 +1670,7 @@ local updateLayoutIfNeeded :: (state:State) {
 	for state.scrollables  limitScroll(it)
 
 	local mx, my = LM.getPosition()
-	if isOverGui(state, mx, my)  onMouseMoved(state, mx, my, 0, 0)
+	if state.isOverGui!(mx, my)  state.onMouseMoved!(mx, my, 0, 0)
 }
 
 
@@ -1626,7 +1691,7 @@ local update :: (state:State, dt:float) {
 
 	if anyScrolling {
 		local mx, my = LM.getPosition()
-		onMouseMoved(state, mx, my, 0, 0)
+		state.onMouseMoved!(mx, my, 0, 0)
 	}
 
 	if state.focusId {
@@ -2381,7 +2446,7 @@ export draw :: (state:State) {
 	updateLayoutIfNeeded(state)
 
 	local ww, wh   = LG.getDimensions()
-	local topModal = getTopmostActiveModal(state)
+	local topModal = state.getTopmostActiveModal!()
 
 	for state.frames  if it.active {
 		if it == topModal {
@@ -2416,7 +2481,7 @@ export draw :: (state:State) {
 
 
 
-export isInsideElement :: (state:State, x,y:int, el:gui.Element) -> bool {
+export isInsideElement :: (state:State, x,y:int, el:Element) -> bool {
 	if not el.active  return false
 
 	updateLayoutIfNeeded(state)
@@ -2443,7 +2508,7 @@ export isInsideElement :: (state:State, x,y:int, el:gui.Element) -> bool {
 
 export isOverGui :: (state:State, x,y:int) -> bool {
 	for state.frames {
-		if isInsideElement(state, x, y, it)  return true
+		if state.isInsideElement!(x, y, it)  return true
 	}
 	return false
 }
@@ -2462,7 +2527,7 @@ export getElementAt :: (state:State, x,y:int) -> (found:bool, el:Element) {
 
 	for < state.frames  if it.active {
 		local helper :: (state:State, el:Element, x,y:int) -> Element {
-			if not isInsideElement(state, x, y, el)  return NULL
+			if not state.isInsideElement!(x, y, el)  return NULL
 
 			if el.type == Scrollable  y -= math.round((cast(Scrollable)el).scroll)
 
@@ -2486,7 +2551,7 @@ export getElementAt :: (state:State, x,y:int) -> (found:bool, el:Element) {
 }
 
 export getWidgetAt :: (state:State, x,y:int) -> (found:bool, widget:Widget) {
-	local found, widget = getElementAt(state, x, y)
+	local found, widget = state.getElementAt!(x, y)
 	if not found  return false, NULL
 
 	if widget.type == {
@@ -2542,7 +2607,7 @@ export setActive :: (state:State, el:Element, active:bool) -> (success:bool) {
 	state.layoutNeedsUpdate = true
 
 	if not active and state.focusId and (el.id == state.focusId or hasParent(state.elementsById[state.focusId], el)) {
-		blurFocus(state, abort=false)
+		state.blurFocus!(abort=false)
 	}
 
 	if el.type == Frame {
@@ -2866,7 +2931,7 @@ export setFocus :: (state:State, name:string) {
 export setFocus :: (state:State, input:InputText) {
 	if state.focusId == input.id  return
 
-	blurFocus(state, abort=false)
+	state.blurFocus!(abort=false)
 	state.focusId = input.id
 
 	if input.field == NULL {
@@ -2944,7 +3009,7 @@ local limitMenuPosition :: (state:State, contextMenu:Frame) {
 }
 
 export showMenu :: (state:State, x,y:int, items:[]MenuItem, cb:(choice:string, data:any)) {
-	hideContextMenu(state)
+	state.hideContextMenu!()
 
 	local makeContextMenu :: (state:State, items:[]MenuItem, parentMenu:Frame, active=false) -> Frame {
 		local buttons     = state.buttons!({ name="__contextMenuButtons", vertical=true, align=Alignment.LEFT, style=Style.CONTEXT_MENU, buttonMinHeight=16 })
@@ -3012,7 +3077,7 @@ export showMenu :: (state:State, x,y:int, items:[]MenuItem, cb:(choice:string, d
 		if item.submenu  return
 
 		state.contextMenus[1].data = NULL -- So hideContextMenu() doesn't call the callback too!
-		hideContextMenu(state)
+		state.hideContextMenu!()
 		cb(item.name, item.data)
 		scheduleSaveWorkspace()
 	}
@@ -3023,7 +3088,7 @@ export showContextMenu :: (state:State, items:[]string, cb:(choice:int)) {
 	showContextMenu(state, mx, my, items, cb)
 }
 export showContextMenu :: (state:State, x,y:int, items:[]string, cb:(choice:int)) {
-	hideContextMenu(state)
+	state.hideContextMenu!()
 
 	local buttonList: []Button
 	for items {
@@ -3035,7 +3100,7 @@ export showContextMenu :: (state:State, x,y:int, items:[]string, cb:(choice:int)
 	}
 
 	local contextMenu = state.frame!({ data=cb, x=x, y=y, minWidth=CONTEXT_MENU_MIN_WIDTH, layout=Layout.FLOATING, style=Style.CONTEXT_MENU,
-		guiState.buttons!({ name="__contextMenuButtons", vertical=true, align=Alignment.LEFT, style=Style.CONTEXT_MENU, buttonMinHeight=16,
+		state.buttons!({ name="__contextMenuButtons", vertical=true, align=Alignment.LEFT, style=Style.CONTEXT_MENU, buttonMinHeight=16,
 			buttons = {unpack(buttonList)},
 		}),
 	})
@@ -3048,7 +3113,7 @@ export showContextMenu :: (state:State, x,y:int, items:[]string, cb:(choice:int)
 
 	state.onAction.__contextMenuButtons = [state,cb] (buttons:Buttons, buttonIndex:int) {
 		state.contextMenus[1].data = NULL -- So hideContextMenu() doesn't call the callback too!
-		hideContextMenu(state)
+		state.hideContextMenu!()
 		cb(buttonIndex)
 		scheduleSaveWorkspace()
 	}
@@ -3059,7 +3124,7 @@ export showContextMenuWithInput :: (state:State, value:string, items:[]string, c
 	showContextMenuWithInput(state, mx, my, value, items, cb, cbInput, inputTooltip)
 }
 export showContextMenuWithInput :: (state:State, x,y:int, value:string, items:[]string, cb:(choice:int), cbInput:(text:string), inputTooltip="") {
-	hideContextMenu(state)
+	state.hideContextMenu!()
 
 	local buttonList: []Button
 	for items {
@@ -3070,11 +3135,11 @@ export showContextMenuWithInput :: (state:State, x,y:int, value:string, items:[]
 			insert(buttonList, cast(Button){ label=it })
 	}
 
-	local input = guiState.inputText!({ name="__contextMenuInput", value=value, style=Style.CONTEXT_MENU, tooltip=inputTooltip })
+	local input = state.inputText!({ name="__contextMenuInput", value=value, style=Style.CONTEXT_MENU, tooltip=inputTooltip })
 
 	local contextMenu = state.frame!({ data=cb, x=x, y=y, minWidth=CONTEXT_MENU_MIN_WIDTH, layout=Layout.FLOATING, style=Style.CONTEXT_MENU,
 		input,
-		guiState.buttons!({ name="__contextMenuButtons", vertical=true, align=Alignment.LEFT, style=Style.CONTEXT_MENU, buttonMinHeight=16,
+		state.buttons!({ name="__contextMenuButtons", vertical=true, align=Alignment.LEFT, style=Style.CONTEXT_MENU, buttonMinHeight=16,
 			buttons = {unpack(buttonList)},
 		}),
 	})
@@ -3091,19 +3156,19 @@ export showContextMenuWithInput :: (state:State, x,y:int, value:string, items:[]
 	}
 	state.onSubmit.__contextMenuInput = [state,cb] (input:InputText) {
 		state.contextMenus[1].data = NULL -- So hideContextMenu() doesn't call the callback too!
-		hideContextMenu(state)
+		state.hideContextMenu!()
 		cb(0)
 		scheduleSaveWorkspace()
 	}
 
 	state.onAction.__contextMenuButtons = [state,cb] (buttons:Buttons, buttonIndex:int) {
 		state.contextMenus[1].data = NULL -- So hideContextMenu() doesn't call the callback too!
-		hideContextMenu(state)
+		state.hideContextMenu!()
 		cb(buttonIndex)
 		scheduleSaveWorkspace()
 	}
 
-	gui.setFocus(state, input)
+	setFocus(state, input)
 	input.field.selectAll!()
 }
 
@@ -3123,7 +3188,7 @@ export hideContextMenu :: (state:State, mayDeactivateSubmenu=false) -> (success:
 		}
 	}
 
-	for contextMenus  delete(state, it)
+	for contextMenus  state.delete!(it)
 	state.contextMenus = {}
 
 	state.onAction    .__contextMenuButtons = nil
