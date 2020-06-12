@@ -38,6 +38,7 @@
 	setActive
 	setFocus, blurFocus
 	showMenu, showContextMenu, showContextMenuWithInput, hideContextMenu
+	update
 
 --============================================================]]
 
@@ -160,23 +161,18 @@ export State :: struct {
 	text         :: (state:State, el:Text)         -> type_of(el) { return cast(type_of(el)) register(state, el, type_of(el)) },
 	vbox         :: (state:State, el:Vbox)         -> type_of(el) { return cast(type_of(el)) register(state, el, type_of(el)) },
 
-	-- @Cleanup: Methods!  (@Compiler @Incomplete: Maybe actually support aliases for overloads?)
-	-- getElement :: _getElement,
-	-- isElementVisible :: _isElementVisible,
-	-- refresh :: _refresh,
-	-- refreshRecursively :: _refreshRecursively,
-	-- setActive :: _setActive,
-	-- setFocus :: _setFocus,
-	-- showContextMenu :: _showContextMenu,
-	-- showContextMenuWithInput :: _showContextMenuWithInput,
+	-- @Cleanup: Use !self here istead of _*, maybe.  (@Compiler: We get redeclaration error becase !self.getElement etc. isn't a simple identifier.)
 	blurFocus :: _blurFocus,
 	delete :: _delete,
 	draw :: _draw,
 	findParent :: _findParent,
+	getElement :: _getElement,
 	getElementAt :: _getElementAt,
+	getScrollOffset :: _getScrollOffset,
 	getTopmostActiveModal :: _getTopmostActiveModal,
 	getWidgetAt :: _getWidgetAt,
 	hideContextMenu :: _hideContextMenu,
+	isElementVisible :: _isElementVisible,
 	isInsideElement :: _isInsideElement,
 	isOverGui :: _isOverGui,
 	onFocus :: _onFocus,
@@ -188,27 +184,28 @@ export State :: struct {
 	onMouseWheel :: _onMouseWheel,
 	onTextInput :: _onTextInput,
 	pressButton :: _pressButton,
+	refresh :: _refresh,
 	refreshAll :: _refreshAll,
+	refreshRecursively :: _refreshRecursively,
+	setActive :: _setActive,
+	setFocus :: _setFocus,
+	showContextMenu :: _showContextMenu,
+	showContextMenuWithInput :: _showContextMenuWithInput,
 	showMenu :: _showMenu,
+	update :: _update,
 }
 
--- @Cleanup: Methods!  (@Compiler @Incomplete: Maybe actually support aliases for overloads?)
--- local _getElement :: getElement
--- local _isElementVisible :: isElementVisible
--- local _refresh :: refresh
--- local _refreshRecursively :: refreshRecursively
--- local _setActive :: setActive
--- local _setFocus :: setFocus
--- local _showContextMenu :: showContextMenu
--- local _showContextMenuWithInput :: showContextMenuWithInput
 local _blurFocus :: blurFocus
 local _delete :: delete
 local _draw :: draw
 local _findParent :: findParent
+local _getElement :: getElement
 local _getElementAt :: getElementAt
+local _getScrollOffset :: getScrollOffset
 local _getTopmostActiveModal :: getTopmostActiveModal
 local _getWidgetAt :: getWidgetAt
 local _hideContextMenu :: hideContextMenu
+local _isElementVisible :: isElementVisible
 local _isInsideElement :: isInsideElement
 local _isOverGui :: isOverGui
 local _onFocus :: onFocus
@@ -220,8 +217,15 @@ local _onMouseReleased :: onMouseReleased
 local _onMouseWheel :: onMouseWheel
 local _onTextInput :: onTextInput
 local _pressButton :: pressButton
+local _refresh :: refresh
 local _refreshAll :: refreshAll
+local _refreshRecursively :: refreshRecursively
+local _setActive :: setActive
+local _setFocus :: setFocus
+local _showContextMenu :: showContextMenu
+local _showContextMenuWithInput :: showContextMenuWithInput
 local _showMenu :: showMenu
+local _update :: update
 
 
 
@@ -655,7 +659,7 @@ export onMousePressed :: (state:State, mx,my:int, mbutton:int, presses:int) -> (
 		if (mbutton == 1 or mbutton == 2) and state.hoveredId and not state.focusId {
 			local input = cast(InputText) state.elementsById[state.hoveredId]
 			if input.type == InputText {
-				setFocus(state, input)
+				state.setFocus!(input)
 				input.field.mousepressed!(mx-(input.layoutX+SPACING), my-(input.layoutY+getScrollOffset(input)), mbutton, presses)
 			}
 		}
@@ -1136,7 +1140,7 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int) {
 				case Direction:
 					local direction = cast(Direction) widget
 
-					showContextMenuWithInput(state, toString(direction.angle*360/math.TAU), {"Copy angle","Paste angle"},
+					state.showContextMenuWithInput!(toString(direction.angle*360/math.TAU), {"Copy angle","Paste angle"},
 						[state,direction] (i:int) {
 							if i == {
 								case 1:
@@ -1159,7 +1163,7 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int) {
 				case Slider:
 					local slider = cast(Slider) widget
 
-					showContextMenuWithInput(state, toString(slider.value*slider.readoutMulti), {"Copy value","Paste value"--[[,"Reset value"@Incomplete]],"Reset min/max limits"},
+					state.showContextMenuWithInput!(toString(slider.value*slider.readoutMulti), {"Copy value","Paste value"--[[,"Reset value"@Incomplete]],"Reset min/max limits"},
 						[state,slider] (i:int) {
 							if i == {
 								case 1:
@@ -1201,7 +1205,7 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int) {
 						"Paste color",
 					}
 
-					showContextMenuWithInput(state, valueStr, items,
+					state.showContextMenuWithInput!(valueStr, items,
 						[state,colorEl,component] (i:int) {
 							if i == {
 								case 1:
@@ -1675,7 +1679,7 @@ local updateLayoutIfNeeded :: (state:State) {
 
 
 
-local update :: (state:State, dt:float) {
+export update :: (state:State, dt:float) {
 	local anyScrolling = false
 
 	for state.scrollables {
@@ -2598,7 +2602,7 @@ export setActive :: (state:State, name:string, active:bool) -> (success:bool) {
 		return false
 	}
 
-	return setActive(state, el, active)
+	return state.setActive!(el, active)
 }
 export setActive :: (state:State, el:Element, active:bool) -> (success:bool) {
 	if el.active == active  return true
@@ -2661,6 +2665,10 @@ local limitScroll :: (scrollable:Scrollable) {
 	local limit             = math.max(scrollable.contentHeight - scrollable.layoutHeight + 2*SPACING, 0)
 	scrollable.scrollTarget = math.clamp(scrollable.scrollTarget, -limit, 0)
 	scrollable.scroll       = math.clamp(scrollable.scroll,       -limit, 0)
+}
+
+export getScrollOffset :: (state:State, el:Element) -> int {
+	return getScrollOffset(el)
 }
 
 export getScrollOffset :: (el:Element) -> int {
@@ -2874,7 +2882,7 @@ export refresh :: (state:State, name:string) {
 export refreshRecursively :: (state:State, el:Element, onlyActive=true) {
 	triggerRefreshEvent(state, el)
 	for el  if not (onlyActive and not it.active) {
-		refreshRecursively(state, it, onlyActive)
+		state.refreshRecursively!(it, onlyActive)
 	}
 }
 export refreshRecursively :: (state:State, name:string, onlyActive=true) {
@@ -2886,13 +2894,13 @@ export refreshRecursively :: (state:State, name:string, onlyActive=true) {
 
 	triggerRefreshEvent(state, el)
 	for el  if not (onlyActive and not it.active) {
-		refreshRecursively(state, it, onlyActive)
+		state.refreshRecursively!(it, onlyActive)
 	}
 }
 
 export refreshAll :: (state:State, onlyActive=true) {
 	for state.frames  if not (onlyActive and not it.active) {
-		refreshRecursively(state, it, onlyActive)
+		state.refreshRecursively!(it, onlyActive)
 	}
 }
 
@@ -2905,6 +2913,10 @@ export isElementVisible :: (el:Element) -> bool {
 	}
 
 	return el.active
+}
+
+export isElementVisible :: (state:State, el:Element) -> bool {
+	return isElementVisible(el)
 }
 
 export isElementVisible :: (state:State, name:string) -> bool {
@@ -2926,7 +2938,7 @@ export setFocus :: (state:State, name:string) {
 		return
 	}
 
-	setFocus(state, input)
+	state.setFocus!(input)
 }
 export setFocus :: (state:State, input:InputText) {
 	if state.focusId == input.id  return
@@ -3085,7 +3097,7 @@ export showMenu :: (state:State, x,y:int, items:[]MenuItem, cb:(choice:string, d
 
 export showContextMenu :: (state:State, items:[]string, cb:(choice:int)) {
 	local mx, my = LM.getPosition()
-	showContextMenu(state, mx, my, items, cb)
+	state.showContextMenu!(mx, my, items, cb)
 }
 export showContextMenu :: (state:State, x,y:int, items:[]string, cb:(choice:int)) {
 	state.hideContextMenu!()
@@ -3121,7 +3133,7 @@ export showContextMenu :: (state:State, x,y:int, items:[]string, cb:(choice:int)
 
 export showContextMenuWithInput :: (state:State, value:string, items:[]string, cb:(choice:int), cbInput:(text:string), inputTooltip="") {
 	local mx, my = LM.getPosition()
-	showContextMenuWithInput(state, mx, my, value, items, cb, cbInput, inputTooltip)
+	state.showContextMenuWithInput!(mx, my, value, items, cb, cbInput, inputTooltip)
 }
 export showContextMenuWithInput :: (state:State, x,y:int, value:string, items:[]string, cb:(choice:int), cbInput:(text:string), inputTooltip="") {
 	state.hideContextMenu!()
@@ -3168,7 +3180,7 @@ export showContextMenuWithInput :: (state:State, x,y:int, value:string, items:[]
 		scheduleSaveWorkspace()
 	}
 
-	setFocus(state, input)
+	state.setFocus!(input)
 	input.field.selectAll!()
 }
 

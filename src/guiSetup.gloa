@@ -498,7 +498,7 @@ export panelStack: []string
 
 export pushPanel :: (name:string) {
 	assert(not indexOf(panelStack, name))
-	if not gui.setActive(guiState, name, true)  return
+	if not guiState.setActive!(name, true)  return
 
 	insert(panelStack, name)
 }
@@ -557,8 +557,8 @@ export popPanel :: (nameForAssert="") -> (success:bool) {
 	if nameForAssert  assert(name == nameForAssert)
 	if not ok  return false
 
-	local frame = gui.getElement(guiState, name, gui.Frame)
-	gui.setActive(guiState, frame, false)
+	local frame = guiState.getElement!(name, gui.Frame)
+	guiState.setActive!(frame, false)
 
 	if frame.temp  guiState.delete!(frame)
 	return true
@@ -599,7 +599,7 @@ export setupGuiCallbacks :: () {
 	guiState.onOption.projects = (tabs:gui.Tabs, projectIndex:int) {
 		if projectIndex == #tabs.buttons  return
 
-		gui.showContextMenu(guiState, {"Close\t"..ctrlText.."+W","Duplicate"}, [projectIndex] (choice:int) {
+		guiState.showContextMenu!({"Close\t"..ctrlText.."+W","Duplicate"}, [projectIndex] (choice:int) {
 			if choice == {
 				case 1:
 					confirmCloseProject(projectIndex)
@@ -608,7 +608,7 @@ export setupGuiCallbacks :: () {
 					local project = app.projects[projectIndex].clone!()
 					insert(app.projects, projectIndex+1, project)
 
-					gui.refreshRecursively(guiState, "projects")
+					guiState.refreshRecursively!("projects")
 					setCurrentProject(projectIndex+1, force=true)
 			}
 		})
@@ -644,7 +644,7 @@ export setupGuiCallbacks :: () {
 	guiState.onRefresh.menuAndSettingsButtons = (buttons:gui.Buttons) {
 		local _, button = itemWith(buttons.buttons, "name", "toggleProjectSettings")
 		button.image    = app.showProjectSettings ? "iconUp" : "iconDown"
-		gui.setActive(guiState, "projectSettings", app.showProjectSettings)
+		guiState.setActive!("projectSettings", app.showProjectSettings)
 	}
 	guiState.onAction.menu = (buttons:gui.Buttons, buttonIndex:int) {
 		showMainMenu()
@@ -653,7 +653,7 @@ export setupGuiCallbacks :: () {
 		app.showProjectSettings = not app.showProjectSettings
 		local _, button         = itemWith(buttons.buttons, "name", "toggleProjectSettings")
 		button.image            = app.showProjectSettings ? "iconUp" : "iconDown"
-		gui.setActive(guiState, "projectSettings", app.showProjectSettings)
+		guiState.setActive!("projectSettings", app.showProjectSettings)
 	}
 
 	-- Undo/redo.
@@ -719,7 +719,7 @@ export setupGuiCallbacks :: () {
 				[system, valueNew, onUpdateValue] (project:Project) {  onUpdateValue(project, system, valueNew)  },
 				[system, valueOld, onUpdateValue] (project:Project) {  onUpdateValue(project, system, valueOld)  },
 				[system, name,     finalize]      (project:Project) {
-					if gui.isElementVisible(guiState, name)  gui.refreshRecursively(guiState, name)
+					if guiState.isElementVisible!(name)  guiState.refreshRecursively!(name)
 					if finalize ~= NULL  finalize(project, system)
 				}
 			)
@@ -755,7 +755,7 @@ export setupGuiCallbacks :: () {
 				[system, valueOld, onUpdateValue  ] (project:Project) {  onUpdateValue(project, system, valueOld)  },
 				[system, name, finalize, forSystem] (project:Project) {
 					if not (forSystem and not isSystemCurrent(system)) {
-						if gui.isElementVisible(guiState, name)  gui.refreshRecursively(guiState, name)
+						if guiState.isElementVisible!(name)  guiState.refreshRecursively!(name)
 					}
 					if finalize ~= NULL  finalize(project, system)
 				}
@@ -794,7 +794,7 @@ export setupGuiCallbacks :: () {
 				[system, valueOld, component, onUpdateValue] (project:Project) {  onUpdateValue(project, system, component, valueOld)  },
 				[system, name, finalize, forSystem         ] (project:Project) {
 					if not (forSystem and not isSystemCurrent(system)) {
-						if gui.isElementVisible(guiState, name)  gui.refreshRecursively(guiState, name)
+						if guiState.isElementVisible!(name)  guiState.refreshRecursively!(name)
 					}
 					if finalize ~= NULL  finalize(project, system)
 				}
@@ -817,7 +817,7 @@ export setupGuiCallbacks :: () {
 			recordChange(changeLabel,
 				[system, valueNew, onUpdateValue] (project:Project) {  onUpdateValue(project, system, valueNew)  },
 				[system, valueOld, onUpdateValue] (project:Project) {  onUpdateValue(project, system, valueOld)  },
-				[name                           ] (project:Project) {  if gui.isElementVisible(guiState, name)  gui.refreshRecursively(guiState, name)  }
+				[name                           ] (project:Project) {  if guiState.isElementVisible!(name)  guiState.refreshRecursively!(name)  }
 			)
 		}
 	}
@@ -830,7 +830,7 @@ export setupGuiCallbacks :: () {
 			recordChange(changeLabel,
 				[system, valueNew, onUpdateValue] (project:Project) {  onUpdateValue(project, system,     valueNew)  },
 				[system, valueNew, onUpdateValue] (project:Project) {  onUpdateValue(project, system, not valueNew)  },
-				[name                           ] (project:Project) {  if gui.isElementVisible(guiState, name)  gui.refreshRecursively(guiState, name)  }
+				[name                           ] (project:Project) {  if guiState.isElementVisible!(name)  guiState.refreshRecursively!(name)  }
 			)
 		}
 	}
@@ -970,7 +970,7 @@ export setupGuiCallbacks :: () {
 		recordChange("Add particle system",
 			[system] (project:Project) {  insert(project.systems, system) ; setCurrentSystem(#project.systems)  },
 			--[[  ]] (project:Project) {  remove(project.systems)         ; setCurrentSystem(math.min(project.systemIndex, #project.systems))  },
-			--[[  ]] (project:Project) {  gui.refreshRecursively(guiState, "systems")  }
+			--[[  ]] (project:Project) {  guiState.refreshRecursively!("systems")  }
 		)
 	}
 	guiState.onOption.systems = (tabs:gui.Tabs, systemIndex:int) {
@@ -979,7 +979,7 @@ export setupGuiCallbacks :: () {
 		local project = app.projects[app.currentProjectIndex]
 		local system  = project.systems[systemIndex]
 
-		gui.showContextMenuWithInput(guiState, system.title, inputTooltip="Particle system title", {"Delete\t"..ctrlText.."+Delete","Duplicate\t"..ctrlText.."+D"},
+		guiState.showContextMenuWithInput!(system.title, inputTooltip="Particle system title", {"Delete\t"..ctrlText.."+Delete","Duplicate\t"..ctrlText.."+D"},
 			[systemIndex] (choice:int) {
 				if choice == {
 					case 1: confirmDeleteSystem(systemIndex)
@@ -1046,7 +1046,7 @@ export setupGuiCallbacks :: () {
 		recordChange("Reorder particle systems",
 			[systemsNew, systemsOld] (project:Project) {  _, project.systemIndex = indexOf(systemsNew, project.systems[project.systemIndex]) ; project.systems = systemsNew  },
 			[systemsNew, systemsOld] (project:Project) {  _, project.systemIndex = indexOf(systemsOld, project.systems[project.systemIndex]) ; project.systems = systemsOld  },
-			--[[                  ]] (project:Project) {  gui.refreshRecursively(guiState, "systems") ; setCurrentSystem(project.systemIndex, force=true)  }
+			--[[                  ]] (project:Project) {  guiState.refreshRecursively!("systems") ; setCurrentSystem(project.systemIndex, force=true)  }
 		)
 	}
 
@@ -1085,7 +1085,7 @@ export setupGuiCallbacks :: () {
 			insert(items, "(no recent files)")
 		}
 
-		gui.showContextMenu(guiState, items, [items] (choice:int) {
+		guiState.showContextMenu!(items, [items] (choice:int) {
 			if choice <= 1 or not app.recentTextures {
 				-- void
 			} elseif choice == #items {
@@ -1183,7 +1183,7 @@ export setupGuiCallbacks :: () {
 				[system] (project:Project) {
 					updateParticleParams(project, system)
 					if system.psEmitterContinuous  system.particles.start!()
-					gui.refreshRecursively(guiState, "emitterContinuous")
+					guiState.refreshRecursively!("emitterContinuous")
 				}
 			)
 		},
@@ -1195,7 +1195,7 @@ export setupGuiCallbacks :: () {
 		onEnd = (project:Project, system:System) {
 			if lastContinuousChange ~= NULL {
 				lastContinuousChange.bundle = project.changes[#project.changes].bundle
-				gui.refreshRecursively(guiState, "undoRedoText")
+				guiState.refreshRecursively!("undoRedoText")
 			}
 		}
 	)
@@ -1243,14 +1243,14 @@ export setupGuiCallbacks :: () {
 		local found, i        = indexWith(radio.buttons, "value", system.psEmissionAreaDistribution)
 		assert(found)
 		radio.index = i
-		gui.setActive(guiState, "areaParams", (i > 1))
+		guiState.setActive!("areaParams", (i > 1))
 	}
 	addEventHandlersForRadio("areaDistribution", LG.AreaSpreadDistribution, "Distribution",
 		(project:Project, system:System, value:LG.AreaSpreadDistribution) {
 			system.psEmissionAreaDistribution = value
 			updateParticleParams(project, system)
-			gui.setActive(guiState, "areaParams", (value == LG.AreaSpreadDistribution.NONE))
-			if value ~= LG.AreaSpreadDistribution.NONE  gui.refreshRecursively(guiState, "areaParams")
+			guiState.setActive!("areaParams", (value == LG.AreaSpreadDistribution.NONE))
+			if value ~= LG.AreaSpreadDistribution.NONE  guiState.refreshRecursively!("areaParams")
 		}
 	)
 	guiState.onRefresh.areaAngle = (direction:gui.Direction) {
@@ -1437,7 +1437,7 @@ export setupGuiCallbacks :: () {
 	-- Sizes.
 	guiState.onRefresh.sizesSection = (section:gui.Section) {
 		local project, system = getCurrentProjectAndSystem()
-		for 1, 8  gui.setActive(guiState, format("sizeContainer%d", it), (system.psSizes[it] ~= NULL))
+		for 1, 8  guiState.setActive!(format("sizeContainer%d", it), (system.psSizes[it] ~= NULL))
 	}
 	guiState.onAction.sizeAdd = (buttons:gui.Buttons, buttonIndex:int) {
 		local project, system = getCurrentProjectAndSystem()
@@ -1456,8 +1456,8 @@ export setupGuiCallbacks :: () {
 				if isSystemCurrent(system)  for j = i, 8 {
 					local name   = format("sizeContainer%d", j)
 					local active = j <= #system.psSizes
-					gui.setActive(guiState, name, active)
-					if active  gui.refreshRecursively(guiState, name)
+					guiState.setActive!(name, active)
+					if active  guiState.refreshRecursively!(name)
 				}
 			}
 		)
@@ -1474,7 +1474,7 @@ export setupGuiCallbacks :: () {
 			recordChange("Remove size",
 				[system          ] (project:Project) {  system.psSizes[1] = 1         },
 				[system, valueOld] (project:Project) {  system.psSizes[1] = valueOld  },
-				[system          ] (project:Project) {  updateParticleParams(project, system) ; gui.refreshRecursively(guiState, "sizeContainer1")  }
+				[system          ] (project:Project) {  updateParticleParams(project, system) ; guiState.refreshRecursively!("sizeContainer1")  }
 			)
 		} else {
 			recordChange("Remove size",
@@ -1485,8 +1485,8 @@ export setupGuiCallbacks :: () {
 					if isSystemCurrent(system)  for j = i, 8 {
 						local name   = format("sizeContainer%d", j)
 						local active = j <= #system.psSizes
-						gui.setActive(guiState, name, active)
-						if active  gui.refreshRecursively(guiState, name)
+						guiState.setActive!(name, active)
+						if active  guiState.refreshRecursively!(name)
 					}
 				}
 			)
@@ -1511,7 +1511,7 @@ export setupGuiCallbacks :: () {
 	guiState.onRefresh.colors = (box:gui.Vbox) {
 		local project, system = getCurrentProjectAndSystem()
 		local colors          = system.colors
-		for 1, 8  gui.setActive(guiState, format("colorContainer%d", it), (colors[it*4] ~= NULL))
+		for 1, 8  guiState.setActive!(format("colorContainer%d", it), (colors[it*4] ~= NULL))
 	}
 	guiState.onAction.colorAdd = (buttons:gui.Buttons, buttonIndex:int) {
 		local project, system = getCurrentProjectAndSystem()
@@ -1546,8 +1546,8 @@ export setupGuiCallbacks :: () {
 				if isSystemCurrent(system)  for j = i, 8 {
 					local name   = format("colorContainer%d", j)
 					local active = j*4 <= #system.colors
-					gui.setActive(guiState, name, active)
-					if active  gui.refreshRecursively(guiState, name)
+					guiState.setActive!(name, active)
+					if active  guiState.refreshRecursively!(name)
 				}
 			}
 		)
@@ -1579,7 +1579,7 @@ export setupGuiCallbacks :: () {
 					system.colors[4] = aOld
 				},
 				[system] (project:Project) {
-					updateParticleColors(system) ; gui.refreshRecursively(guiState, "colorContainer1")
+					updateParticleColors(system) ; guiState.refreshRecursively!("colorContainer1")
 				}
 			)
 		} else {
@@ -1603,8 +1603,8 @@ export setupGuiCallbacks :: () {
 					if isSystemCurrent(system)  for j = i, 8 {
 						local name   = format("colorContainer%d", j)
 						local active = j*4 <= #system.colors
-						gui.setActive(guiState, name, active)
-						if active  gui.refreshRecursively(guiState, name)
+						guiState.setActive!(name, active)
+						if active  guiState.refreshRecursively!(name)
 					}
 				}
 			)
@@ -1617,12 +1617,12 @@ export setupGuiCallbacks :: () {
 		system.colors         = {unpack(system.colors)}
 	}
 	guiState.onDrag.colorMove = (buttons:gui.Buttons, buttonIndex:int, mx,my:int) {
-		local dragContainer = gui.getElement(guiState, "colors", gui.Vbox)
+		local dragContainer = guiState.getElement!("colors", gui.Vbox)
 
 		local project, system = getCurrentProjectAndSystem()
 		local colors          = system.colors
 		local i               = cast(int) buttons.data
-		local targetIndex     = math.clamp(math.floor(1 + (my - (dragContainer.layoutY + gui.getScrollOffset(dragContainer))) / (dragContainer[1].layoutHeight + gui.SPACING)), 1, #colors//4)
+		local targetIndex     = math.clamp(math.floor(1 + (my - (dragContainer.layoutY + guiState.getScrollOffset!(dragContainer))) / (dragContainer[1].layoutHeight + gui.SPACING)), 1, #colors//4)
 		if targetIndex == i  return
 
 		local dir = math.getSign(targetIndex-i)
@@ -1639,7 +1639,7 @@ export setupGuiCallbacks :: () {
 		guiState.activeId  = dragContainer[targetIndex][1].id -- @Volatile
 		guiState.hoveredId = guiState.activeId
 
-		gui.refreshRecursively(guiState, dragContainer)
+		guiState.refreshRecursively!(dragContainer)
 	}
 	guiState.onDragEnd.colorMove = (buttons:gui.Buttons, buttonIndex:int) {
 		local project, system = getCurrentProjectAndSystem()
@@ -1659,7 +1659,7 @@ export setupGuiCallbacks :: () {
 			[system, colorsNew] (project:Project) {  system.colors = colorsNew  },
 			[system, colorsOld] (project:Project) {  system.colors = colorsOld  },
 			[system           ] (project:Project) {
-				if isSystemCurrent(system)  gui.refreshRecursively(guiState, "colors")
+				if isSystemCurrent(system)  guiState.refreshRecursively!("colors")
 				updateParticleColors(system)
 			}
 		)
@@ -1694,7 +1694,7 @@ export setupGuiCallbacks :: () {
 		(project:Project, system:System, value:LG.BlendMode) {
 			system.blendMode = value
 			updateParticleParams(project, system)
-			gui.getElement(guiState, "colorPreview", gui.ColorPreview).blendMode = value
+			guiState.getElement!("colorPreview", gui.ColorPreview).blendMode = value
 		}
 	)
 
@@ -1729,7 +1729,7 @@ export setupGuiCallbacks :: () {
 
 			local ok, i = indexOf(app.projects, (currentProject.preview ? lastProjectBeforeTemp : currentProject))
 			assert(ok)
-			gui.refreshRecursively(guiState, "projects")
+			guiState.refreshRecursively!("projects")
 			setCurrentProject(i, force=true)
 
 			lastProjectBeforeTemp = NULL
@@ -1754,13 +1754,13 @@ export setupGuiCallbacks :: () {
 			dirCurrent  = dir
 			dirFallback = getSaveDirectory()
 
-			local filenameInput = gui.getElement(guiState, (isSave ? "saveProjectAs_filename" : "openProject_filename"), gui.InputText)
+			local filenameInput = guiState.getElement!((isSave ? "saveProjectAs_filename" : "openProject_filename"), gui.InputText)
 			filenameInput.value = filename
 
-			gui.refreshRecursively(guiState, (isSave ? "saveProjectAs_bookmarks" : "openProject_bookmarks"))
-			gui.refreshRecursively(guiState, (isSave ? "saveProjectAs_recent"    : "openProject_recent"))
-			gui.refreshRecursively(guiState, (isSave ? "saveProjectAs_items"     : "openProject_items"))
-			gui.setFocus(guiState, filenameInput)
+			guiState.refreshRecursively!((isSave ? "saveProjectAs_bookmarks" : "openProject_bookmarks"))
+			guiState.refreshRecursively!((isSave ? "saveProjectAs_recent"    : "openProject_recent"))
+			guiState.refreshRecursively!((isSave ? "saveProjectAs_items"     : "openProject_items"))
+			guiState.setFocus!(filenameInput)
 
 			local basename, ext = splitBasenameAndExtension(filename)
 			filenameInput.field.setSelection!(0, utf8.getLength(basename))
@@ -1785,18 +1785,18 @@ export setupGuiCallbacks :: () {
 		guiState.onAction.saveProjectAs_bookmarks = (buttons:gui.Buttons, buttonIndex:int) {
 			local isSave = (buttons.frame.name == "saveProjectAs")
 			dirCurrent   = app.bookmarkedFolders[buttonIndex]
-			gui.refreshRecursively(guiState, (isSave ? "saveProjectAs_items" : "openProject_items"))
+			guiState.refreshRecursively!((isSave ? "saveProjectAs_items" : "openProject_items"))
 		}
 		guiState.onAction.openProject_bookmarks = guiState.onAction.saveProjectAs_bookmarks
 
 		guiState.onOption.saveProjectAs_bookmarks = (buttons:gui.Buttons, indexToRemove:int) {
 			local isSave = (buttons.frame.name == "saveProjectAs")
 
-			gui.showContextMenu(guiState, {"Remove bookmark"}, [indexToRemove,isSave] (choice:int) {
+			guiState.showContextMenu!({"Remove bookmark"}, [indexToRemove,isSave] (choice:int) {
 				if choice == {
 					case 1:
 						remove(app.bookmarkedFolders, indexToRemove)
-						gui.refreshRecursively(guiState, (isSave ? "saveProjectAs_bookmarks" : "openProject_bookmarks"))
+						guiState.refreshRecursively!((isSave ? "saveProjectAs_bookmarks" : "openProject_bookmarks"))
 				}
 			})
 		}
@@ -1807,7 +1807,7 @@ export setupGuiCallbacks :: () {
 
 			if insertIfUnique(app.bookmarkedFolders, dirCurrent) {
 				sort(app.bookmarkedFolders)
-				gui.refreshRecursively(guiState, (isSave ? "saveProjectAs_bookmarks" : "openProject_bookmarks"))
+				guiState.refreshRecursively!((isSave ? "saveProjectAs_bookmarks" : "openProject_bookmarks"))
 			}
 		}
 		guiState.onAction.openProject_addBookmark = guiState.onAction.saveProjectAs_addBookmark
@@ -1824,14 +1824,14 @@ export setupGuiCallbacks :: () {
 		guiState.onAction.saveProjectAs_recent = (buttons:gui.Buttons, buttonIndex:int) {
 			local isSave = (buttons.frame.name == "saveProjectAs")
 			dirCurrent   = app.recentFolders[buttonIndex]
-			gui.refreshRecursively(guiState, (isSave ? "saveProjectAs_items" : "openProject_items"))
+			guiState.refreshRecursively!((isSave ? "saveProjectAs_items" : "openProject_items"))
 		}
 		guiState.onAction.openProject_recent = guiState.onAction.saveProjectAs_recent
 
 		guiState.onAction.saveProjectAs_clearRecent = (buttons:gui.Buttons, buttonIndex:int) {
 			local isSave      = (buttons.frame.name == "saveProjectAs")
 			app.recentFolders = {}
-			gui.refreshRecursively(guiState, (isSave ? "saveProjectAs_recent" : "openProject_recent"))
+			guiState.refreshRecursively!((isSave ? "saveProjectAs_recent" : "openProject_recent"))
 		}
 		guiState.onAction.openProject_clearRecent = guiState.onAction.saveProjectAs_clearRecent
 
@@ -1847,7 +1847,7 @@ export setupGuiCallbacks :: () {
 			if not dirObj.isAbsolute  return
 
 			dirCurrent = dirObj.toString!()
-			gui.refreshRecursively(guiState, (isSave ? "saveProjectAs_items" : "openProject_items"))
+			guiState.refreshRecursively!((isSave ? "saveProjectAs_items" : "openProject_items"))
 		}
 		guiState.onSubmit.openProject_directory = guiState.onSubmit.saveProjectAs_directory
 
@@ -1910,7 +1910,7 @@ export setupGuiCallbacks :: () {
 				})
 			}
 
-			gui.refreshRecursively(guiState, (isSave ? "saveProjectAs_directory" : "openProject_directory"))
+			guiState.refreshRecursively!((isSave ? "saveProjectAs_directory" : "openProject_directory"))
 		}
 		guiState.onRefresh.openProject_items = guiState.onRefresh.saveProjectAs_items
 
@@ -1919,7 +1919,7 @@ export setupGuiCallbacks :: () {
 			local item   = cast(Item) buttons.buttons[buttonIndex].value
 
 			if not item.isDir {
-				local input   = gui.getElement(guiState, (isSave ? "saveProjectAs_filename" : "openProject_filename"), gui.InputText)
+				local input   = guiState.getElement!((isSave ? "saveProjectAs_filename" : "openProject_filename"), gui.InputText)
 				input.value   = item.name
 				local pathObj = Path(dirCurrent)
 				insert(pathObj.path, item.name)
@@ -1928,7 +1928,7 @@ export setupGuiCallbacks :: () {
 				local ok, filename = pathObj.getFilename!()
 				if isSave and ok {
 					local basename, ext = splitBasenameAndExtension(filename)
-					gui.setFocus(guiState, input)
+					guiState.setFocus!(input)
 					input.field.setSelection!(0, utf8.getLength(basename))
 				}
 
@@ -1936,13 +1936,13 @@ export setupGuiCallbacks :: () {
 				local dirObj = Path(dirCurrent)
 				dirObj.pop!()
 				dirCurrent = dirObj.toString!()
-				gui.refreshRecursively(guiState, (isSave ? "saveProjectAs_items" : "openProject_items"))
+				guiState.refreshRecursively!((isSave ? "saveProjectAs_items" : "openProject_items"))
 
 			} else {
 				local dirObj = Path(dirCurrent)
 				insert(dirObj.path, item.name)
 				dirCurrent = dirObj.toString!()
-				gui.refreshRecursively(guiState, buttons)
+				guiState.refreshRecursively!(buttons)
 			}
 		}
 		guiState.onAction.openProject_items = guiState.onAction.saveProjectAs_items
@@ -1952,13 +1952,13 @@ export setupGuiCallbacks :: () {
 		guiState.onSubmit.saveProjectAs_filename = (input:gui.InputText)                  { save() }
 		guiState.onAction.saveProjectAs_save     = (buttons:gui.Buttons, buttonIndex:int) { save() }
 		local save :: () {
-			local input   = gui.getElement(guiState, "saveProjectAs_filename", gui.InputText)
+			local input   = guiState.getElement!("saveProjectAs_filename", gui.InputText)
 			input.value   = trim(input.value)
 			local pathObj = Path(input.value)
 			input.value   = pathObj.toString!()
 
 			if pathObj.isEmpty!() {
-				gui.setFocus(guiState, input)
+				guiState.setFocus!(input)
 				return
 			}
 
@@ -1966,7 +1966,7 @@ export setupGuiCallbacks :: () {
 
 			local ok, filename = pathObj.getFilename!()
 			if not ok {
-				gui.setFocus(guiState, input)
+				guiState.setFocus!(input)
 				return
 			}
 
@@ -2005,13 +2005,13 @@ export setupGuiCallbacks :: () {
 		guiState.onSubmit.openProject_filename = (input:gui.InputText)                  { open() }
 		guiState.onAction.openProject_open     = (buttons:gui.Buttons, buttonIndex:int) { open() }
 		local open :: () {
-			local input   = gui.getElement(guiState, "openProject_filename", gui.InputText)
+			local input   = guiState.getElement!("openProject_filename", gui.InputText)
 			input.value   = trim(input.value)
 			local pathObj = Path(input.value)
 			input.value   = pathObj.toString!()
 
 			if pathObj.isEmpty!() {
-				gui.setFocus(guiState, input)
+				guiState.setFocus!(input)
 				return
 			}
 
@@ -2020,7 +2020,7 @@ export setupGuiCallbacks :: () {
 			local path        = pathObj.toString!()
 			local ok, project = openProject(pathObj.toString!())
 			if not ok {
-				gui.setFocus(guiState, input)
+				guiState.setFocus!(input)
 				return
 			}
 
@@ -2035,7 +2035,7 @@ export setupGuiCallbacks :: () {
 			if #app.projects == 2 and isProjectEmpty(app.projects[1]) {
 				remove(app.projects, 1)
 
-				gui.refreshRecursively(guiState, "projects")
+				guiState.refreshRecursively!("projects")
 				setCurrentProject(1)
 			}
 		}
@@ -2046,7 +2046,7 @@ export setupGuiCallbacks :: () {
 	--==============================================================
 
 	guiState.onActive.exportProject = (frame:gui.Frame) {
-		gui.refreshRecursively(guiState, "exportProject")
+		guiState.refreshRecursively!("exportProject")
 	}
 
 	-- Files.
@@ -2238,14 +2238,14 @@ export setupGuiCallbacks :: () {
 		input.value                 = Path(trim(input.value)).toString!()
 		project.exportBaseDirectory = input.value
 		markEdited(project)
-		gui.refreshRecursively(guiState, "exportProject_baseDirectoryResult")
-		gui.refreshRecursively(guiState, "exportProject_baseDirectoryResultInfo")
-		gui.refreshRecursively(guiState, "exportProject_particles_path")
-		gui.refreshRecursively(guiState, "exportProject_particles_pathResult")
-		gui.refreshRecursively(guiState, "exportProject_particles_pathResultInfo")
-		gui.refreshRecursively(guiState, "exportProject_textures_directory")
-		gui.refreshRecursively(guiState, "exportProject_textures_pathResults")
-		gui.refreshRecursively(guiState, "exportProject_textures_pathResultsInfo")
+		guiState.refreshRecursively!("exportProject_baseDirectoryResult")
+		guiState.refreshRecursively!("exportProject_baseDirectoryResultInfo")
+		guiState.refreshRecursively!("exportProject_particles_path")
+		guiState.refreshRecursively!("exportProject_particles_pathResult")
+		guiState.refreshRecursively!("exportProject_particles_pathResultInfo")
+		guiState.refreshRecursively!("exportProject_textures_directory")
+		guiState.refreshRecursively!("exportProject_textures_pathResults")
+		guiState.refreshRecursively!("exportProject_textures_pathResultsInfo")
 	}
 	guiState.onRefresh.exportProject_baseDirectoryResult = (textEl:gui.Text) {
 		local project  = app.projects[app.currentProjectIndex]
@@ -2259,7 +2259,7 @@ export setupGuiCallbacks :: () {
 		textEl.text = path
 	}
 	guiState.onRefresh.exportProject_baseDirectoryResultInfo = (buttons:gui.Buttons) {
-		buttons.tooltip = gui.getElement(guiState, "exportProject_baseDirectoryResult", gui.Text).text
+		buttons.tooltip = guiState.getElement!("exportProject_baseDirectoryResult", gui.Text).text
 	}
 
 	-- Particles file.
@@ -2271,8 +2271,8 @@ export setupGuiCallbacks :: () {
 		local project           = app.projects[app.currentProjectIndex]
 		project.exportParticles = checkbox.checked
 		markEdited(project)
-		gui.refreshRecursively(guiState, "exportProject_particles_pathResult")
-		gui.refreshRecursively(guiState, "exportProject_particles_pathResultInfo")
+		guiState.refreshRecursively!("exportProject_particles_pathResult")
+		guiState.refreshRecursively!("exportProject_particles_pathResultInfo")
 	}
 
 	guiState.onRefresh.exportProject_particles_overwrite = (checkbox:gui.Checkbox) {
@@ -2294,8 +2294,8 @@ export setupGuiCallbacks :: () {
 		input.value                 = Path(trim(input.value)).toString!()
 		project.exportParticlesPath = input.value
 		markEdited(project)
-		gui.refreshRecursively(guiState, "exportProject_particles_pathResult")
-		gui.refreshRecursively(guiState, "exportProject_particles_pathResultInfo")
+		guiState.refreshRecursively!("exportProject_particles_pathResult")
+		guiState.refreshRecursively!("exportProject_particles_pathResultInfo")
 	}
 	guiState.onRefresh.exportProject_particles_pathResult = (textEl:gui.Text) {
 		local project = app.projects[app.currentProjectIndex]
@@ -2315,7 +2315,7 @@ export setupGuiCallbacks :: () {
 		textEl.text = path
 	}
 	guiState.onRefresh.exportProject_particles_pathResultInfo = (buttons:gui.Buttons) {
-		buttons.tooltip = gui.getElement(guiState, "exportProject_particles_pathResult", gui.Text).text
+		buttons.tooltip = guiState.getElement!("exportProject_particles_pathResult", gui.Text).text
 	}
 
 	guiState.onRefresh.exportProject_particles_template = (buttons:gui.Buttons) {
@@ -2327,7 +2327,7 @@ export setupGuiCallbacks :: () {
 			local project                   = app.projects[app.currentProjectIndex]
 			project.exportParticlesTemplate = templateName
 			markEdited(project)
-			gui.refreshRecursively(guiState, "exportProject_particles_template")
+			guiState.refreshRecursively!("exportProject_particles_template")
 		})
 	}
 	local showTemplateDropdownMenu :: (buttons:gui.Buttons, cb:(templateName:string)) {
@@ -2343,9 +2343,9 @@ export setupGuiCallbacks :: () {
 		if not templateNames  return
 
 		local x = buttons.layoutX
-		local y = buttons.layoutY + buttons.layoutHeight + gui.getScrollOffset(buttons)
+		local y = buttons.layoutY + buttons.layoutHeight + guiState.getScrollOffset!(buttons)
 
-		gui.showContextMenu(guiState, x, y, templateNames, [templateNames,cb] (choice:int) {
+		guiState.showContextMenu!(x, y, templateNames, [templateNames,cb] (choice:int) {
 			if choice > 0  cb(templateNames[choice])
 		})
 	}
@@ -2359,8 +2359,8 @@ export setupGuiCallbacks :: () {
 		local project          = app.projects[app.currentProjectIndex]
 		project.exportTextures = checkbox.checked
 		markEdited(project)
-		gui.refreshRecursively(guiState, "exportProject_textures_pathResults")
-		gui.refreshRecursively(guiState, "exportProject_textures_pathResultsInfo")
+		guiState.refreshRecursively!("exportProject_textures_pathResults")
+		guiState.refreshRecursively!("exportProject_textures_pathResultsInfo")
 	}
 
 	guiState.onRefresh.exportProject_textures_overwrite = (checkbox:gui.Checkbox) {
@@ -2382,8 +2382,8 @@ export setupGuiCallbacks :: () {
 		input.value                     = Path(trim(input.value)).toString!()
 		project.exportTexturesDirectory = input.value
 		markEdited(project)
-		gui.refreshRecursively(guiState, "exportProject_textures_pathResults")
-		gui.refreshRecursively(guiState, "exportProject_textures_pathResultsInfo")
+		guiState.refreshRecursively!("exportProject_textures_pathResults")
+		guiState.refreshRecursively!("exportProject_textures_pathResultsInfo")
 	}
 
 	guiState.onRefresh.exportProject_textures_pathResults = (textEl:gui.Text) {
@@ -2414,7 +2414,7 @@ export setupGuiCallbacks :: () {
 		textEl.text = concatinate(paths, ", ")
 	}
 	guiState.onRefresh.exportProject_textures_pathResultsInfo = (buttons:gui.Buttons) {
-		buttons.tooltip = gui.getElement(guiState, "exportProject_textures_pathResults", gui.Text).text
+		buttons.tooltip = guiState.getElement!("exportProject_textures_pathResults", gui.Text).text
 	}
 	guiState.onAction.exportProject_exportFiles = (buttons:gui.Buttons, buttonIndex:int) {
 		local project = app.projects[app.currentProjectIndex]
@@ -2775,7 +2775,7 @@ export setupGuiCallbacks :: () {
 			local project                   = app.projects[app.currentProjectIndex]
 			project.exportClipboardTemplate = templateName
 			markEdited(project)
-			gui.refreshRecursively(guiState, "exportProject_clipboard_template")
+			guiState.refreshRecursively!("exportProject_clipboard_template")
 		})
 	}
 
@@ -2806,12 +2806,12 @@ export setupGuiCallbacks :: () {
 			local project, system = getCurrentProjectAndSystem()
 
 			for PARAMS {
-				local input     = gui.getElement(guiState, it, gui.InputText)
+				local input     = guiState.getElement!(it, gui.InputText)
 				local ok, value = getGuiValue(system, it)
 				if ok  input.value = value
 			}
 
-			gui.refreshRecursively(guiState, "animation_frames")
+			guiState.refreshRecursively!("animation_frames")
 		}
 
 		guiState.onDraw.animation_preview = (canvasEl:gui.Canvas, cw,ch:int) {
@@ -2863,7 +2863,7 @@ export setupGuiCallbacks :: () {
 			system.frames = {}
 
 			markEdited(project)
-			gui.refreshRecursively(guiState, "animation_frames")
+			guiState.refreshRecursively!("animation_frames")
 			updateParticleAnimation(system)
 		}
 
@@ -2910,11 +2910,11 @@ export setupGuiCallbacks :: () {
 			local project, system = getCurrentProjectAndSystem()
 			local iw, ih          = system.currentImage.getDimensions!()
 
-			local areaPosStr   = trim(gui.getElement(guiState, "animation_sequence_areaPosition", gui.InputText).value)
-			local areaSizeStr  = trim(gui.getElement(guiState, "animation_sequence_areaSize",     gui.InputText).value)
-			local paddingStr   = trim(gui.getElement(guiState, "animation_sequence_framePadding", gui.InputText).value)
-			local spacingStr   = trim(gui.getElement(guiState, "animation_sequence_frameSpacing", gui.InputText).value)
-			local frameSizeStr = trim(gui.getElement(guiState, "animation_sequence_frameSize",    gui.InputText).value)
+			local areaPosStr   = trim(guiState.getElement!("animation_sequence_areaPosition", gui.InputText).value)
+			local areaSizeStr  = trim(guiState.getElement!("animation_sequence_areaSize",     gui.InputText).value)
+			local paddingStr   = trim(guiState.getElement!("animation_sequence_framePadding", gui.InputText).value)
+			local spacingStr   = trim(guiState.getElement!("animation_sequence_frameSpacing", gui.InputText).value)
+			local frameSizeStr = trim(guiState.getElement!("animation_sequence_frameSize",    gui.InputText).value)
 
 			local ok, areaX, areaY = parseTwoInts(areaPosStr)
 			if not ok { setErrorText("Invalid area position format") ; return }
@@ -2958,25 +2958,25 @@ export setupGuiCallbacks :: () {
 			}
 
 			for PARAMS {
-				local input = gui.getElement(guiState, it, gui.InputText)
+				local input = guiState.getElement!(it, gui.InputText)
 				setGuiValue(system, it, input.value)
 			}
 
 			markEdited(project)
 			updateParticleAnimation(system)
-			gui.refreshRecursively(guiState, "animation_frames")
+			guiState.refreshRecursively!("animation_frames")
 		}
 
 		guiState.onAction.animation_sequence_generateFromDivision = (buttons:gui.Buttons, buttonIndex:int) {
 			local project, system = getCurrentProjectAndSystem()
 			local iw, ih          = system.currentImage.getDimensions!()
 
-			local areaPosStr   = trim(gui.getElement(guiState, "animation_sequence_areaPosition", gui.InputText).value)
-			local areaSizeStr  = trim(gui.getElement(guiState, "animation_sequence_areaSize",     gui.InputText).value)
-			local paddingStr   = trim(gui.getElement(guiState, "animation_sequence_framePadding", gui.InputText).value)
-			local spacingStr   = trim(gui.getElement(guiState, "animation_sequence_frameSpacing", gui.InputText).value)
-			local rowsStr      = trim(gui.getElement(guiState, "animation_sequence_rows",         gui.InputText).value)
-			local colsStr      = trim(gui.getElement(guiState, "animation_sequence_columns",      gui.InputText).value)
+			local areaPosStr   = trim(guiState.getElement!("animation_sequence_areaPosition", gui.InputText).value)
+			local areaSizeStr  = trim(guiState.getElement!("animation_sequence_areaSize",     gui.InputText).value)
+			local paddingStr   = trim(guiState.getElement!("animation_sequence_framePadding", gui.InputText).value)
+			local spacingStr   = trim(guiState.getElement!("animation_sequence_frameSpacing", gui.InputText).value)
+			local rowsStr      = trim(guiState.getElement!("animation_sequence_rows",         gui.InputText).value)
+			local colsStr      = trim(guiState.getElement!("animation_sequence_columns",      gui.InputText).value)
 
 			local ok, areaX, areaY = parseTwoInts(areaPosStr)
 			if not ok { setErrorText("Invalid area position format") ; return }
@@ -3025,13 +3025,13 @@ export setupGuiCallbacks :: () {
 			}
 
 			for PARAMS {
-				local input = gui.getElement(guiState, it, gui.InputText)
+				local input = guiState.getElement!(it, gui.InputText)
 				setGuiValue(system, it, input.value)
 			}
 
 			markEdited(project)
 			updateParticleAnimation(system)
-			gui.refreshRecursively(guiState, "animation_frames")
+			guiState.refreshRecursively!("animation_frames")
 		}
 
 		guiState.onRefresh.animation_frames = (vbox:gui.Vbox) {
@@ -3069,7 +3069,7 @@ export setupGuiCallbacks :: () {
 
 			markEdited(project)
 			updateParticleAnimation(system)
-			gui.refreshRecursively(guiState, "animation_frames")
+			guiState.refreshRecursively!("animation_frames")
 		}
 		guiState.onAction.animation_add = (buttons:gui.Buttons, buttonIndex:int) {
 			local project, system = getCurrentProjectAndSystem()
@@ -3085,7 +3085,7 @@ export setupGuiCallbacks :: () {
 
 			markEdited(project)
 			updateParticleAnimation(system)
-			gui.refreshRecursively(guiState, "animation_frames")
+			guiState.refreshRecursively!("animation_frames")
 		}
 		guiState.onAction.animation_xywh = (input:gui.InputText, _:int) {
 			local project, system = getCurrentProjectAndSystem()
@@ -3094,7 +3094,7 @@ export setupGuiCallbacks :: () {
 			local ok, x, y, w, h = parseFourInts(input.value)
 			if not ok {
 				setErrorText("Invalid frame values format")
-				gui.getElement(guiState, format("animation_message%d", i), gui.Text).text = "Error!"
+				guiState.getElement!(format("animation_message%d", i), gui.Text).text = "Error!"
 				return
 			}
 
@@ -3105,16 +3105,16 @@ export setupGuiCallbacks :: () {
 
 			markEdited(project)
 			updateParticleAnimation(system)
-			gui.getElement(guiState, format("animation_message%d", i), gui.Text).text = ""
+			guiState.getElement!(format("animation_message%d", i), gui.Text).text = ""
 		}
 		guiState.onDrag.animation_move = (buttons:gui.Buttons, buttonIndex:int, mx,my:int) {
 			local project, system = getCurrentProjectAndSystem()
 			local animFrame, i    = getAnimationFrame(buttons)
 
-			local dragContainer = gui.getElement(guiState, "animation_frames", gui.Vbox)
+			local dragContainer = guiState.getElement!("animation_frames", gui.Vbox)
 
 			local frames      = system.frames
-			local targetIndex = math.clamp(math.floor(1 + (my - (dragContainer.layoutY + gui.getScrollOffset(dragContainer))) / (dragContainer[1].layoutHeight + gui.SPACING)), 1, #frames)
+			local targetIndex = math.clamp(math.floor(1 + (my - (dragContainer.layoutY + guiState.getScrollOffset!(dragContainer))) / (dragContainer[1].layoutHeight + gui.SPACING)), 1, #frames)
 			if targetIndex == i  return
 
 			local dir = math.getSign(targetIndex-i)
@@ -3125,7 +3125,7 @@ export setupGuiCallbacks :: () {
 
 			markEdited(project)
 			updateParticleAnimation(system)
-			gui.refreshRecursively(guiState, dragContainer)
+			guiState.refreshRecursively!(dragContainer)
 
 			guiState.activeId  = dragContainer[targetIndex][1].id -- Must happen after refreshRecursively() as all elements are replaced! @Volatile
 			guiState.hoveredId = guiState.activeId
@@ -3137,7 +3137,7 @@ export setupGuiCallbacks :: () {
 	--==============================================================
 
 	guiState.onActive.preferences = (frame:gui.Frame) {
-		gui.refreshRecursively(guiState, frame)
+		guiState.refreshRecursively!(frame)
 	}
 
 	guiState.onRefresh.preferences_maxBufferSize = (input:gui.InputText, _:int) {

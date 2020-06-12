@@ -1098,7 +1098,7 @@ local onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool) 
 		case "c-e":      pushPanel("exportProject")
 		case "c-o":      pushPanel("openProject")
 		case "c-s-t":    openRecentProject()
-		case "c-n":      addNewProject() ; gui.refreshRecursively(guiState, "projects") ; setCurrentProject(#app.projects) ; scheduleSaveWorkspace()
+		case "c-n":      addNewProject() ; guiState.refreshRecursively!("projects") ; setCurrentProject(#app.projects) ; scheduleSaveWorkspace()
 		case "c-w":      if not (#app.projects == 1 and not (app.projects[1].path or app.projects[1].edited))  confirmCloseProject(app.currentProjectIndex)
 
 		case "tab":      setCurrentSystem ((project.systemIndex     - 0) % #project.systems + 1)
@@ -1108,7 +1108,7 @@ local onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool) 
 
 		case "h":        system.visible = not system.visible
 
-		case "p":        !if DEV  gui.setActive(guiState, "main", not gui.getElement(guiState, "main").active)
+		case "p":        !if DEV  guiState.setActive!("main", not guiState.getElement!("main").active)
 
 		case "c-delete": confirmDeleteSystem(project.systemIndex)
 		case "c-d":      duplicateSystem(project.systemIndex)
@@ -1396,7 +1396,7 @@ local onUpdate :: (dt:float) {
 		math.abs(project.zoomTarget - project.zoomSource) * dt / 0.05
 	)
 
-	gui.update(guiState, dt)
+	guiState.update!(dt)
 
 	!if GIF_RECORDING_MODE  for < visualMousePresses {
 		it.progress += dt/.20
@@ -1413,13 +1413,13 @@ local getVisibilityFlags :: () -> bool, bool, bool, bool {
 	static hoverTimeAreaDistribution   = -9999.00
 
 	local isHoveringTextureOffset
-		=  math.max(guiState.activeId, guiState.hoveredId) == gui.getElement(guiState, "textureOffsetX").id
-		or math.max(guiState.activeId, guiState.hoveredId) == gui.getElement(guiState, "textureOffsetY").id
+		=  math.max(guiState.activeId, guiState.hoveredId) == guiState.getElement!("textureOffsetX").id
+		or math.max(guiState.activeId, guiState.hoveredId) == guiState.getElement!("textureOffsetY").id
 
 	local isHoveringAreaDistribution
-		=  math.max(guiState.activeId, guiState.hoveredId) == gui.getElement(guiState, "areaDistribution").id
-		or math.max(guiState.activeId, guiState.hoveredId) == gui.getElement(guiState, "areaDx").id
-		or math.max(guiState.activeId, guiState.hoveredId) == gui.getElement(guiState, "areaDy").id
+		=  math.max(guiState.activeId, guiState.hoveredId) == guiState.getElement!("areaDistribution").id
+		or math.max(guiState.activeId, guiState.hoveredId) == guiState.getElement!("areaDx").id
+		or math.max(guiState.activeId, guiState.hoveredId) == guiState.getElement!("areaDy").id
 
 	if isHoveringTextureOffset ~= wasHoveringTextureOffset {
 		wasHoveringTextureOffset = isHoveringTextureOffset
@@ -1433,7 +1433,7 @@ local getVisibilityFlags :: () -> bool, bool, bool, bool {
 	local DELAY :: 4/60
 	local showTextureOffset    = (isHoveringTextureOffset    and LT.getTime() - hoverTimeTextureOffset    > DELAY)
 	local showAreaDistribution = (isHoveringAreaDistribution and LT.getTime() - hoverTimeAreaDistribution > DELAY)
-	local showAnimationFrames  = gui.getElement(guiState, "animation").active
+	local showAnimationFrames  = guiState.getElement!("animation").active
 	local showWorld            = not (showTextureOffset or showAnimationFrames)
 
 	static didShowWorld = true
@@ -1947,11 +1947,11 @@ export setCurrentProject :: (i:int, force=false) {
 	if app.currentProjectIndex == i and not force  return
 
 	app.currentProjectIndex = i
-	gui.getElement(guiState, "projects", gui.Tabs).index = i
+	guiState.getElement!("projects", gui.Tabs).index = i
 
-	gui.refreshRecursively(guiState, "projectSettings")
-	gui.refreshRecursively(guiState, "systems")
-	gui.refreshRecursively(guiState, "undoRedoText")
+	guiState.refreshRecursively!("projectSettings")
+	guiState.refreshRecursively!("systems")
+	guiState.refreshRecursively!("undoRedoText")
 
 	scheduleRecreateCanvases = true
 	updateParticleImageFilters()
@@ -1966,9 +1966,9 @@ export setCurrentSystem :: (i:int, force=true) {
 	if project.systemIndex == i and not force  return
 
 	project.systemIndex = i
-	gui.getElement(guiState, "systems", gui.Tabs).index = i
+	guiState.getElement!("systems", gui.Tabs).index = i
 
-	gui.refreshRecursively(guiState, "system")
+	guiState.refreshRecursively!("system")
 }
 
 export isSystemCurrent :: (system:System) -> bool {
@@ -2039,7 +2039,7 @@ export openProject :: (path:string, asPreview=false) -> (success:bool, project:P
 		remove(app.projects, app.currentProjectIndex)
 	}
 
-	gui.refreshRecursively(guiState, "projects")
+	guiState.refreshRecursively!("projects")
 	setCurrentProject(#app.projects, force=true)
 	scheduleSaveWorkspace()
 
@@ -2067,7 +2067,7 @@ export confirmCloseProject :: (projectIndex:int) {
 		else
 			app.currentProjectIndex = math.min(app.currentProjectIndex, #app.projects)
 
-		gui.refreshRecursively(guiState, "projects")
+		guiState.refreshRecursively!("projects")
 		if isCurrent  setCurrentProject(app.currentProjectIndex, force=true)
 		scheduleSaveWorkspace()
 	}
@@ -2133,13 +2133,13 @@ export confirmDeleteSystem :: (systemIndexToDelete:int) {
 			recordChange("Delete particle system",
 				[emptySystem] (project:Project) {  project.systems[1] = emptySystem  },
 				[system     ] (project:Project) {  project.systems[1] = system       },
-				--[[       ]] (project:Project) {  gui.refreshRecursively(guiState, "systems") ; setCurrentSystem(1, force=true)  }
+				--[[       ]] (project:Project) {  guiState.refreshRecursively!("systems") ; setCurrentSystem(1, force=true)  }
 			)
 		} else {
 			recordChange("Delete particle system",
 				[systemIndexToDelete        ] (project:Project) {  remove(project.systems, systemIndexToDelete) ; project.systemIndex = math.min(project.systemIndex, #project.systems)  },
 				[systemIndexToDelete, system] (project:Project) {  insert(project.systems, systemIndexToDelete, system)  },
-				--[[                       ]] (project:Project) {  gui.refreshRecursively(guiState, "systems") ; setCurrentSystem(project.systemIndex, force=true)  }
+				--[[                       ]] (project:Project) {  guiState.refreshRecursively!("systems") ; setCurrentSystem(project.systemIndex, force=true)  }
 			)
 		}
 	})
@@ -2152,7 +2152,7 @@ export duplicateSystem :: (systemIndex:int) {
 	recordChange("Duplicate particle system",
 		[systemIndex, system] (project:Project) {  insert(project.systems, systemIndex+1, system) ; project.systemIndex = systemIndex+1  },
 		[systemIndex        ] (project:Project) {  remove(project.systems, systemIndex+1)         ; project.systemIndex = math.min(project.systemIndex, #project.systems)  },
-		--[[               ]] (project:Project) {  gui.refreshRecursively(guiState, "systems") ; setCurrentSystem(project.systemIndex, force=true)  }
+		--[[               ]] (project:Project) {  guiState.refreshRecursively!("systems") ; setCurrentSystem(project.systemIndex, force=true)  }
 	)
 }
 
@@ -2216,7 +2216,7 @@ export setTexturePath :: (project:Project, system:System, path:string) {
 	recordChange("Texture path",
 		[system, valueNew] (project:Project) {  system.texturePath = valueNew  },
 		[system, valueOld] (project:Project) {  system.texturePath = valueOld  },
-		[system          ] (project:Project) {  updateParticleTexture(project, system, saveRecent=true) ; gui.refreshRecursively(guiState, "texturePath")  }
+		[system          ] (project:Project) {  updateParticleTexture(project, system, saveRecent=true) ; guiState.refreshRecursively!("texturePath")  }
 	)
 }
 
@@ -2226,7 +2226,7 @@ export markEdited :: (project:Project) {
 	if project.edited  return
 
 	project.edited = true
-	gui.refreshRecursively(guiState, "projects")
+	guiState.refreshRecursively!("projects")
 
 	updateWindowTitle()
 }
@@ -2320,7 +2320,7 @@ export recordChange :: (label:string, onDo:(project:Project), onUndo:(project:Pr
 	-- }
 
 	markEdited(project)
-	gui.refreshRecursively(guiState, "undoRedoText")
+	guiState.refreshRecursively!("undoRedoText")
 	scheduleSaveWorkspace()
 
 	return change
@@ -2355,7 +2355,7 @@ export undo :: () {
 	setActionText("Undo: "..concatinate(labels, ", "), clearMessage=false)
 
 	markEdited(project)
-	gui.refreshRecursively(guiState, "undoRedoText")
+	guiState.refreshRecursively!("undoRedoText")
 	scheduleSaveWorkspace()
 }
 
@@ -2387,7 +2387,7 @@ export redo :: () {
 	setActionText("Redo: "..concatinate(labels, ", "), clearMessage=false)
 
 	markEdited(project)
-	gui.refreshRecursively(guiState, "undoRedoText")
+	guiState.refreshRecursively!("undoRedoText")
 	scheduleSaveWorkspace()
 }
 
@@ -2434,12 +2434,12 @@ export showMainMenu :: () {
 		{label="Exit",                name="exit",        shortcut=ctrlText.."+Q"},
 	}
 
-	local buttons = gui.getElement(guiState, "menuAndSettingsButtons", gui.Buttons)
+	local buttons = guiState.getElement!("menuAndSettingsButtons", gui.Buttons)
 
 	guiState.showMenu!(buttons.layoutX, buttons.layoutY+buttons.layoutHeight, items, (choice:string, data:any) {
 		local project = app.projects[app.currentProjectIndex]
 		if choice == {
-			case "new":         addNewProject() ; gui.refreshRecursively(guiState, "projects") ; setCurrentProject(#app.projects) ; scheduleSaveWorkspace()
+			case "new":         addNewProject() ; guiState.refreshRecursively!("projects") ; setCurrentProject(#app.projects) ; scheduleSaveWorkspace()
 			case "open":        pushPanel("openProject")
 			case "openLast":    openRecentProject()
 			case "openRecent":  openProject(cast(string)data)

@@ -269,7 +269,7 @@ export saveProject :: (project:Project, overwrite=false) -> (success:bool, fileE
 	project.displayedName = filename
 	project.edited        = false
 
-	gui.refreshRecursively(guiState, "projects")
+	guiState.refreshRecursively!("projects")
 	updateWindowTitle()
 	setMessageText("Saved '%s'", project.displayedName)
 
