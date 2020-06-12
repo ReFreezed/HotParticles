@@ -2226,8 +2226,8 @@ export markEdited :: (project:Project) {
 	if project.edited  return
 
 	project.edited = true
-	guiState.refreshRecursively!("projects")
 
+	guiState.refreshRecursively!("projects")
 	updateWindowTitle()
 }
 

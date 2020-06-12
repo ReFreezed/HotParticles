@@ -339,8 +339,10 @@ export setupGuiFrames :: () {
 
 			guiState.separator!({ thick=true }),
 			guiState.inputText!({ name="openProject_filename" }),
-			guiState.buttons!({ height=BIG_BUTTON_HEIGHT,
-				buttons = {{name="openProject_open",label="Open"},{name="util_popPanel",label="Cancel"}},
+			guiState.buttons!({ height=BIG_BUTTON_HEIGHT, buttons={
+				{name="openProject_open", label="Open"},
+				{name="util_popPanel",    label="Cancel"},
+			},
 			}),
 		}),
 
@@ -372,8 +374,10 @@ export setupGuiFrames :: () {
 
 			guiState.separator!({ thick=true }),
 			guiState.inputText!({ name="saveProjectAs_filename" }),
-			guiState.buttons!({ height=BIG_BUTTON_HEIGHT,
-				buttons = {{name="saveProjectAs_save",label="Save"},{name="util_popPanel",label="Cancel"}},
+			guiState.buttons!({ height=BIG_BUTTON_HEIGHT, buttons={
+				{name="saveProjectAs_save", label="Save"},
+				{name="util_popPanel",      label="Cancel"},
+			},
 			}),
 		}),
 
@@ -485,9 +489,10 @@ export setupGuiFrames :: () {
 			guiState.scrollable!({
 				guiState.vbox!({ name="animation_frames", inset=25 }),
 			}),
-			guiState.buttons!({ height=BIG_BUTTON_HEIGHT,
-				buttons = {{name="util_popPanel",label="Close"}},
-			}),
+			guiState.buttons!({ height=BIG_BUTTON_HEIGHT, buttons={
+				{name="animation_ok",     label="OK"},
+				{name="animation_cancel", label="Cancel"},
+			}}),
 		}),
 	}
 }
@@ -2802,8 +2807,14 @@ export setupGuiCallbacks :: () {
 			"animation_sequence_columns",
 		}
 
+		static savedFrames: []AnimationFrame = NULL
+		static savedEdited: bool             = NULL
+
 		guiState.onActive.animation = (frame:gui.Frame) {
 			local project, system = getCurrentProjectAndSystem()
+			savedFrames           = system.frames
+			savedEdited           = project.edited
+			system.frames         = copyArray(system.frames)
 
 			for PARAMS {
 				local input     = guiState.getElement!(it, gui.InputText)
@@ -2812,6 +2823,30 @@ export setupGuiCallbacks :: () {
 			}
 
 			guiState.refreshRecursively!("animation_frames")
+		}
+
+		guiState.onAction.animation_ok = (buttons:gui.Buttons, buttonIndex:int) {
+			local project, system = getCurrentProjectAndSystem()
+			local framesNew       = system.frames
+			local framesOld       = savedFrames
+
+			recordChange("Animation",
+				[system, framesNew] (project:Project) {  system.frames = framesNew  },
+				[system, framesOld] (project:Project) {  system.frames = framesOld  },
+				[system           ] (project:Project) {  updateParticleAnimation(system)  }
+			)
+
+			popPanel()
+		}
+		guiState.onAction.animation_cancel = (buttons:gui.Buttons, buttonIndex:int) {
+			local project, system = getCurrentProjectAndSystem()
+			system.frames         = savedFrames
+			project.edited        = savedEdited
+
+			updateParticleAnimation(system)
+			popPanel()
+			guiState.refreshRecursively!("projects")
+			updateWindowTitle()
 		}
 
 		guiState.onDraw.animation_preview = (canvasEl:gui.Canvas, cw,ch:int) {
