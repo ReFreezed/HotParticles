@@ -2,14 +2,17 @@ Hot Particles - a particle editor for LÖVE
 Developed by Marcus 'ReFreezed' Thunström
 
 1. Disclaimer
-2. Info and controls
-3. Shortcuts
-4. Exporting
-5. Template API
+2. Intro
+3. Controls
+4. Shortcuts
+5. Parameters
+6. Exporting
+7. Template API
+
 
 
 1. Disclaimer
-------------------------------------------------------------------------------
+==============================================================================
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
@@ -20,8 +23,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 
-2. Info and controls
-------------------------------------------------------------------------------
+
+2. Intro
+==============================================================================
 
 The program operates using "projects". Projects are saved in *.hotparticles
 files. Each project contains one or more particle systems that are rendered
@@ -33,6 +37,11 @@ choose from, but you can also specify your own. There are some additional
 parameters, like "ScaleAll" which affects multiple standard parameters, and
 "kick-start steps" which fast-forwards the particle systems at start time
 which is useful for continuous particle effects (like rain or fire).
+
+
+
+3. Controls
+==============================================================================
 
 Press the particle viewing area to move the particle emitter.
 
@@ -49,8 +58,9 @@ value. Hold Ctrl or Shift to go slower or faster.
 Zoom in and out with the mouse wheel.
 
 
-3. Shortcuts
-------------------------------------------------------------------------------
+
+4. Shortcuts
+==============================================================================
 
 (In macOS, press Cmd instead of Ctrl)
 
@@ -88,8 +98,117 @@ Ctrl+Z          Undo
 Ctrl+Shift+Z    Redo
 
 
-4. Exporting
+
+5. Parameters
+==============================================================================
+
+
+Project settings
 ------------------------------------------------------------------------------
+
+Pixelate:
+- World: Enable pixel art mode. Zoom in on the particles to see the effect.
+- Textures: Enable nearest neighbor filtering on textures. Linear filtering is
+    used by default.
+
+Background: Change the background of the particle viewing area.
+- Pattern: Change the opacity of the checker pattern in the background.
+
+Emitter movement: Automatically move the emitter in a pattern.
+- Scale: Specify how much the emitter should move. Set one axis to 0% to use
+    linear movement.
+- Speed: The speed of the emitter's movement.
+
+Global scale: Scale time, space and/or size parameters for all particle
+    systems in the project.
+
+
+Particle system parameters
+------------------------------------------------------------------------------
+
+Texture: Choose a built-in texture preset or specify a path to an image file.
+- Offset: Choose where the anchor point of the texture should be for each
+    particle. The anchor point is the point the particle rotates around, among
+    other things.
+- Animation: Set up quads used for particle animation. You can also use a
+    single quad to crop the texture if, for example, your texture contains
+    graphics for many different particles.
+
+Scale all: Scale time, space and/or size parameters in the current particle
+    system.
+
+Spawn:
+- Layer: Choose where new particles should spawn relative to existing
+    particles.
+- Rate: How fast particles should spawn.
+- Emit at start: How many particles should spawn immediately when the particle
+    system starts.
+- Kick-start steps: How many times the particle system should update when the
+    particle system starts. (The delta time for each update is calculated
+    automatically using the particles lifetime.) A higher value will look
+    nicer but takes longer to execute.
+
+Lifetime:
+- Emitter: For how long the emitter should emit. Continuous emitters run
+    forever.
+- Particle: The lifetime of each individual particle.
+
+Area: Distribution of the particles when they spawn.
+- Angle: Angle of the distribution area.
+- dx/dy: The size of the distribution area.
+- Direction relative to area center: Enabling this will make the Direction
+    parameter be relative to the distribution area's center point.
+
+Direction: Initial movement direction of each particle.
+- Spread: Maximum random deviation from the specified direction.
+
+Speed: The initial speed of particles in the specified direction.
+
+Acceleration:
+- Linear: Acceleration in the world along the X and Y axis respectively.
+- Radial: Acceleration away from, or towards, the emitter's position.
+- Tangent: Acceleration perpendicular to the direction of the emitter. You can
+    use this together with damping and radial acceleration to create an
+    orbital effect.
+
+Damping: Linear deceleration for each particle.
+
+Rotation: Initial rotation of the texture (around the offset/anchor point).
+- Rotation relative to direction: Enabling this will make the Rotation
+    parameter be relative to the travel direction of the particle.
+
+Spin: How fast particles should spin.
+
+Size: The size of particles. You can specify up to 8 sizes to animate the
+    size over each particle's lifetime.
+
+Color: The color of particles. You can specify up to 8 colors to animate the
+    color over each particle's lifetime. You can see a preview of the color
+    over time on the right hand side.
+- Blend mode: The blend mode for the particle system.
+
+
+Animation dialog
+------------------------------------------------------------------------------
+
+Remove all frames: Disable any existing animation.
+
+Sequence: Tool used for quickly generating quads based on a rectangular area
+    in the texture.
+- Area x/y: The top left corner of the area.
+- Area size: The width and height of the area.
+- Padding: Amount of empty space around each quad. The space between quads
+    will be double the padding.
+- Spacing: Amount of empty space between quads (in addition to any padding).
+- Frame size: The size of each quad, if using generation method #1.
+- Rows/columns: How many quads the area should be divided in, if using
+    generation method #2. (Note that the calculated width and height for each
+    quad will be rounded down if they don't result in integers.)
+
+
+
+6. Exporting
+==============================================================================
 
 It's possible to export particle system information and textures (the original
 files are copied). You can export to files or to the clipboard.
@@ -102,8 +221,9 @@ edit existing scripts or make completely new ones to fit your game (see the
 "Template API" section).
 
 
-5. Template API
-------------------------------------------------------------------------------
+
+7. Template API
+==============================================================================
 
 Templates are normal Lua scripts in the "exportTemplates" folder. Some of the
 standard Lua globals and modules are available, but not all. Note that trying
@@ -166,4 +286,5 @@ Values:
     pixelateTextures
         Boolean. True if textures are set to be pixelated (i.e. use nearest
         neighbor filtering), false otherwise (linear filtering).
+
 
