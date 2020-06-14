@@ -1093,10 +1093,10 @@ local onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool) 
 
 	-- Keys in normal view.
 	if modAndKey == {
-		case "c-s":      if project.fileIsSaved  saveProject(project, overwrite=true)  else  pushPanel("saveProjectAs")
-		case "c-s-s":    pushPanel("saveProjectAs")
+		case "c-s":      if project.fileIsSaved  saveProject(project, overwrite=true)  else  showSaveProjectAsDialog()
+		case "c-s-s":    showSaveProjectAsDialog()
 		case "c-e":      pushPanel("exportProject")
-		case "c-o":      pushPanel("openProject")
+		case "c-o":      showOpenProjectDialog()
 		case "c-s-t":    openRecentProject()
 		case "c-n":      addNewProject() ; guiState.refreshRecursively!("projects") ; setCurrentProject(#app.projects) ; scheduleSaveWorkspace()
 		case "c-w":      if not (#app.projects == 1 and not (app.projects[1].path or app.projects[1].edited))  confirmCloseProject(app.currentProjectIndex)
@@ -2440,17 +2440,155 @@ export showMainMenu :: () {
 		local project = app.projects[app.currentProjectIndex]
 		if choice == {
 			case "new":         addNewProject() ; guiState.refreshRecursively!("projects") ; setCurrentProject(#app.projects) ; scheduleSaveWorkspace()
-			case "open":        pushPanel("openProject")
+			case "open":        showOpenProjectDialog()
 			case "openLast":    openRecentProject()
 			case "openRecent":  openProject(cast(string)data)
 			case "clearRecent": app.recentFiles = {}
-			case "save":        if project.fileIsSaved  saveProject(project, overwrite=true)  else  pushPanel("saveProjectAs")
-			case "saveAs":      pushPanel("saveProjectAs")
+			case "save":        if project.fileIsSaved  saveProject(project, overwrite=true)  else  showSaveProjectAsDialog()
+			case "saveAs":      showSaveProjectAsDialog()
 			case "export":      pushPanel("exportProject")
 			case "preferences": pushPanel("preferences")
 			case "exit":        pushQuitEvent()
 		}
 	})
+}
+
+
+
+local projectBeingSaved:     Project = NULL
+local lastProjectBeforeTemp: Project = NULL
+
+local loadPreview :: (path:string) {
+	local lastIndex = app.currentProjectIndex
+
+	local ok, project = openProject(path, asPreview=true)
+	if not ok  return
+
+	if lastProjectBeforeTemp == NULL {
+		lastProjectBeforeTemp = app.projects[lastIndex]
+	}
+}
+
+local unloadPreview :: () {
+	local currentProject = app.projects[app.currentProjectIndex]
+
+	for < app.projects  if it.preview {
+		remove(app.projects, itIndex)
+	}
+
+	local ok, i = indexOf(app.projects, (currentProject.preview ? lastProjectBeforeTemp : currentProject))
+	assert(ok)
+	guiState.refreshRecursively!("projects")
+	setCurrentProject(i, force=true)
+
+	lastProjectBeforeTemp = NULL
+	scheduleSaveWorkspace()
+}
+
+export showSaveProjectAsDialog :: () {
+	local project = app.projects[app.currentProjectIndex]
+	local pathObj = Path(project.path)
+
+	local ok, dir, filename = pathObj.getDirectoryAndFilename!()
+	if not ok {
+		dir      = getSaveDirectory().."/projects"
+		filename = "untitled.hotparticles"
+	}
+
+	projectBeingSaved = project -- Needed as we load previews even in the save dialog, which means app.currentProjectIndex may change.
+
+	showFileDialog(isSave=true, "Save project", dir, filename, filenamePattern="%.hotparticles$",
+		(pathObj:Path) {
+			loadPreview(pathObj.toString!())
+
+			local ok, filename = pathObj.getFilename!()
+			if ok {
+				local basename, ext = splitBasenameAndExtension(filename)
+				local input         = guiState.getElement!("fileDialog_filename", gui.InputText)
+				guiState.setFocus!(input)
+				input.field.setSelection!(0, utf8.getLength(basename))
+			}
+		},
+		(pathObj:Path) {
+			local _, filename = pathObj.getFilename!()
+
+			if not findPattern(filename, "%.hotparticles$") {
+				filename    = filename..".hotparticles"
+				local input = guiState.getElement!("fileDialog_filename", gui.InputText)
+				input.value = input.value..".hotparticles"
+				pathObj.setFilename!(filename)
+			}
+
+			projectBeingSaved.path = pathObj.toString!()
+
+			local ok, fileExists = saveProject(projectBeingSaved)
+			if ok {
+				updateParticleTextures(projectBeingSaved) -- In case any texture uses a relative path.
+				popPanel()
+
+			} elseif fileExists {
+				local BUTTONS: []gui.Button : {{label="Overwrite"},{label="Cancel"}}
+
+				pushTempChoiceDialog("Confirm save as", filename.." already exists. Overwite it?", BUTTONS, submitIndex=1, (choice:int) {
+					if choice ~= 1  return
+
+					saveProject(projectBeingSaved, overwrite=true)
+
+					updateParticleTextures(projectBeingSaved) -- In case any texture uses a relative path.
+					popPanel("fileDialog")
+				})
+
+			} else {
+				-- void  Stay in the dialog.
+			}
+		},
+		() {
+			unloadPreview()
+			projectBeingSaved = NULL
+		}
+	)
+}
+
+export showOpenProjectDialog :: () {
+	local project = app.projects[app.currentProjectIndex]
+	local pathObj = Path(project.path)
+
+	local ok, dir = pathObj.getDirectoryAndFilename!()
+	if not ok  dir = getSaveDirectory().."/projects"
+
+	showFileDialog("Open project", dir, "", filenamePattern="%.hotparticles$",
+		(pathObj:Path) {
+			loadPreview(pathObj.toString!())
+		},
+		(pathObj:Path) {
+			local path        = pathObj.toString!()
+			local ok, project = openProject(path)
+			if not ok {
+				local input = guiState.getElement!("fileDialog_filename", gui.InputText)
+				guiState.setFocus!(input)
+				return
+			}
+
+			project.preview = false -- In case the project was already opened as a preview (which it probably always is).
+			popPanel()
+
+			local _, dir = pathObj.getDirectory!()
+			addRecent(app.recentFolders, dir,  app.maxRecentFolders)
+			addRecent(app.recentFiles,   path, app.maxRecentFiles)
+
+			-- Make sure the loaded project replaces any single empty project.
+			if #app.projects == 2 and isProjectEmpty(app.projects[1]) {
+				remove(app.projects, 1)
+
+				guiState.refreshRecursively!("projects")
+				setCurrentProject(1)
+			}
+		},
+		() {
+			unloadPreview()
+			projectBeingSaved = NULL
+		}
+	)
 }
 
 

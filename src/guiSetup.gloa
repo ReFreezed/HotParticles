@@ -311,72 +311,37 @@ export setupGuiFrames :: () {
 			}),
 		}),
 
-		guiState.frame!({ name="openProject", width=MAIN_PANEL_WIDTH, active=false,
-			guiState.text!({ text="Open", size=3 }),
+		guiState.frame!({ name="fileDialog", width=MAIN_PANEL_WIDTH, active=false,
+			guiState.text!({ name="fileDialog_title", size=3 }),
 
 			guiState.separator!({ thick=true }),
 			guiState.hbox!({
 				guiState.text!({ text="Recent", weight=1 }),
-				guiState.buttons!({ name="openProject_clearRecent", buttons={{label="Clear",tooltip="Clear history"}} }),
+				guiState.buttons!({ name="fileDialog_clearRecent", buttons={{label="Clear",tooltip="Clear history"}} }),
 			}),
 			guiState.separator!({ thick=false }),
-			guiState.buttons!({ name="openProject_recent", vertical=true, align=gui.Alignment.LEFT, style=gui.Style.LIST }),
+			guiState.buttons!({ name="fileDialog_recent", vertical=true, align=gui.Alignment.LEFT, style=gui.Style.LIST }),
 
 			guiState.separator!({ thick=true }),
 			guiState.hbox!({
 				guiState.text!({ text="Bookmarks", weight=1 }),
-				guiState.buttons!({ name="openProject_addBookmark", buttons={{image="iconAdd",tooltip="Add current folder to bookmarks"}} }),
+				guiState.buttons!({ name="fileDialog_addBookmark", buttons={{image="iconAdd",tooltip="Add current folder to bookmarks"}} }),
 			}),
 			guiState.scrollable!({ height=80,
-				guiState.buttons!({ name="openProject_bookmarks", vertical=true, align=gui.Alignment.LEFT, style=gui.Style.LIST }),
+				guiState.buttons!({ name="fileDialog_bookmarks", vertical=true, align=gui.Alignment.LEFT, style=gui.Style.LIST }),
 			}),
 
 			guiState.separator!({ thick=true }),
-			guiState.inputText!({ name="openProject_directory" }),
+			guiState.inputText!({ name="fileDialog_directory" }),
 			guiState.scrollable!({
-				guiState.buttons!({ name="openProject_items", vertical=true, align=gui.Alignment.LEFT, style=gui.Style.LIST, buttonMinHeight=MEDIUM_BUTTON_HEIGHT }),
+				guiState.buttons!({ name="fileDialog_items", vertical=true, align=gui.Alignment.LEFT, style=gui.Style.LIST, buttonMinHeight=MEDIUM_BUTTON_HEIGHT }),
 			}),
 
 			guiState.separator!({ thick=true }),
-			guiState.inputText!({ name="openProject_filename" }),
-			guiState.buttons!({ height=BIG_BUTTON_HEIGHT, buttons={
-				{name="openProject_open", label="Open"},
-				{name="util_popPanel",    label="Cancel"},
-			},
-			}),
-		}),
-
-		guiState.frame!({ name="saveProjectAs", width=MAIN_PANEL_WIDTH, active=false,
-			guiState.text!({ text="Save as", size=3 }),
-
-			guiState.separator!({ thick=true }),
-			guiState.hbox!({
-				guiState.text!({ text="Recent", weight=1 }),
-				guiState.buttons!({ name="saveProjectAs_clearRecent", buttons={{label="Clear",tooltip="Clear history"}} }),
-			}),
-			guiState.separator!({ thick=false }),
-			guiState.buttons!({ name="saveProjectAs_recent", vertical=true, align=gui.Alignment.LEFT, style=gui.Style.LIST }),
-
-			guiState.separator!({ thick=true }),
-			guiState.hbox!({
-				guiState.text!({ text="Bookmarks", weight=1 }),
-				guiState.buttons!({ name="saveProjectAs_addBookmark", buttons={{image="iconAdd",tooltip="Add current folder to bookmarks"}} }),
-			}),
-			guiState.scrollable!({ height=80,
-				guiState.buttons!({ name="saveProjectAs_bookmarks", vertical=true, align=gui.Alignment.LEFT, style=gui.Style.LIST }),
-			}),
-
-			guiState.separator!({ thick=true }),
-			guiState.inputText!({ name="saveProjectAs_directory" }),
-			guiState.scrollable!({
-				guiState.buttons!({ name="saveProjectAs_items", vertical=true, align=gui.Alignment.LEFT, style=gui.Style.LIST, buttonMinHeight=MEDIUM_BUTTON_HEIGHT }),
-			}),
-
-			guiState.separator!({ thick=true }),
-			guiState.inputText!({ name="saveProjectAs_filename" }),
-			guiState.buttons!({ height=BIG_BUTTON_HEIGHT, buttons={
-				{name="saveProjectAs_save", label="Save"},
-				{name="util_popPanel",      label="Cancel"},
+			guiState.inputText!({ name="fileDialog_filename" }),
+			guiState.buttons!({ name="fileDialog_buttons", height=BIG_BUTTON_HEIGHT, buttons={
+				{name="fileDialog_choose"},
+				{name="util_popPanel", label="Cancel"},
 			},
 			}),
 		}),
@@ -567,6 +532,30 @@ export popPanel :: (nameForAssert="") -> (success:bool) {
 
 	if frame.temp  guiState.delete!(frame)
 	return true
+}
+
+
+
+local fileDialog_isSave          = false
+local fileDialog_dir             = ""
+local fileDialog_filename        = ""
+local fileDialog_filenamePattern = ""
+local fileDialog_onHighlight:    = cast((path:Path)) NULL
+local fileDialog_onChoose:       = cast((path:Path)) NULL
+local fileDialog_onClose:        = cast(()) NULL
+
+export showFileDialog :: (title:string, dir,filename:string, onHighlight:(path:Path), onChoose:(path:Path), onClose:(), isSave=false, filenamePattern="") {
+	fileDialog_isSave          = isSave
+	fileDialog_dir             = dir
+	fileDialog_filename        = filename
+	fileDialog_filenamePattern = filenamePattern
+	fileDialog_onHighlight     = onHighlight
+	fileDialog_onChoose        = onChoose
+	fileDialog_onClose         = onClose
+
+	guiState.getElement!("fileDialog_title", gui.Text).text = title
+
+	pushPanel("fileDialog")
 }
 
 
@@ -1704,162 +1693,102 @@ export setupGuiCallbacks :: () {
 	)
 
 	--==============================================================
-	--= Save/open project
+	--= Save/open project  asdf
 	--==============================================================
 	do {
 		local Item :: struct { isDir=false, name="" }
 		static dirCurrent:  string = NULL
 		static dirFallback: string = NULL
-		static projectBeingSaved: Project = NULL
 
-		static lastProjectBeforeTemp: Project = NULL
-
-		local loadPreview :: (path:string) {
-			local lastIndex = app.currentProjectIndex
-
-			local ok, project = openProject(path, asPreview=true)
-			if not ok  return
-
-			if lastProjectBeforeTemp == NULL {
-				lastProjectBeforeTemp = app.projects[lastIndex]
-			}
-		}
-
-		local unloadPreview :: () {
-			local currentProject = app.projects[app.currentProjectIndex]
-
-			for < app.projects  if it.preview {
-				remove(app.projects, itIndex)
-			}
-
-			local ok, i = indexOf(app.projects, (currentProject.preview ? lastProjectBeforeTemp : currentProject))
-			assert(ok)
-			guiState.refreshRecursively!("projects")
-			setCurrentProject(i, force=true)
-
-			lastProjectBeforeTemp = NULL
-			scheduleSaveWorkspace()
-		}
-
-		guiState.onActive.saveProjectAs = (frame:gui.Frame) {
-			local isSave  = (frame.name == "saveProjectAs")
-			local project = app.projects[app.currentProjectIndex]
-			local pathObj = Path(project.path)
-
-			if isSave  projectBeingSaved = project -- Needed as we load previews even in the save dialog, which means app.currentProjectIndex may change.
-
-			local ok, dir, filename = pathObj.getDirectoryAndFilename!()
-			if not ok {
-				dir      = getSaveDirectory().."/projects"
-				filename = "untitled.hotparticles"
-			}
-
-			if not isSave  filename = ""
-
-			dirCurrent  = dir
+		guiState.onActive.fileDialog = (frame:gui.Frame) {
+			dirCurrent  = fileDialog_dir
 			dirFallback = getSaveDirectory()
 
-			local filenameInput = guiState.getElement!((isSave ? "saveProjectAs_filename" : "openProject_filename"), gui.InputText)
-			filenameInput.value = filename
+			do {
+				local buttons   = guiState.getElement!("fileDialog_buttons", gui.Buttons)
+				local _, button = itemWith(buttons.buttons, "name", "fileDialog_choose")
+				button.label    = fileDialog_isSave ? "Save" : "Open"
+			}
 
-			guiState.refreshRecursively!((isSave ? "saveProjectAs_bookmarks" : "openProject_bookmarks"))
-			guiState.refreshRecursively!((isSave ? "saveProjectAs_recent"    : "openProject_recent"))
-			guiState.refreshRecursively!((isSave ? "saveProjectAs_items"     : "openProject_items"))
+			local filenameInput = guiState.getElement!("fileDialog_filename", gui.InputText)
+			filenameInput.value = fileDialog_filename
+
+			guiState.refreshRecursively!("fileDialog_bookmarks")
+			guiState.refreshRecursively!("fileDialog_recent")
+			guiState.refreshRecursively!("fileDialog_items")
 			guiState.setFocus!(filenameInput)
 
-			local basename, ext = splitBasenameAndExtension(filename)
+			local basename, ext = splitBasenameAndExtension(fileDialog_filename)
 			filenameInput.field.setSelection!(0, utf8.getLength(basename))
 		}
-		guiState.onActive.openProject = guiState.onActive.saveProjectAs
 
-		guiState.onInactive.saveProjectAs = (frame:gui.Frame) {
-			unloadPreview()
-			projectBeingSaved = NULL
+		guiState.onInactive.fileDialog = (frame:gui.Frame) {
+			fileDialog_onClose()
 		}
-		guiState.onInactive.openProject = guiState.onInactive.saveProjectAs
 
 		-- Bookmarks.
-		guiState.onRefresh.saveProjectAs_bookmarks = (buttons:gui.Buttons) {
+		guiState.onRefresh.fileDialog_bookmarks = (buttons:gui.Buttons) {
 			buttons.buttons = {}
 			for app.bookmarkedFolders {
 				insert(buttons.buttons, cast(gui.Button){ value=it, label=it, image="iconFolder" })
 			}
 		}
-		guiState.onRefresh.openProject_bookmarks = guiState.onRefresh.saveProjectAs_bookmarks
 
-		guiState.onAction.saveProjectAs_bookmarks = (buttons:gui.Buttons, buttonIndex:int) {
-			local isSave = (buttons.frame.name == "saveProjectAs")
-			dirCurrent   = app.bookmarkedFolders[buttonIndex]
-			guiState.refreshRecursively!((isSave ? "saveProjectAs_items" : "openProject_items"))
+		guiState.onAction.fileDialog_bookmarks = (buttons:gui.Buttons, buttonIndex:int) {
+			dirCurrent = app.bookmarkedFolders[buttonIndex]
+			guiState.refreshRecursively!("fileDialog_items")
 		}
-		guiState.onAction.openProject_bookmarks = guiState.onAction.saveProjectAs_bookmarks
 
-		guiState.onOption.saveProjectAs_bookmarks = (buttons:gui.Buttons, indexToRemove:int) {
-			local isSave = (buttons.frame.name == "saveProjectAs")
-
-			guiState.showContextMenu!({"Remove bookmark"}, [indexToRemove,isSave] (choice:int) {
+		guiState.onOption.fileDialog_bookmarks = (buttons:gui.Buttons, indexToRemove:int) {
+			guiState.showContextMenu!({"Remove bookmark"}, [indexToRemove] (choice:int) {
 				if choice == {
 					case 1:
 						remove(app.bookmarkedFolders, indexToRemove)
-						guiState.refreshRecursively!((isSave ? "saveProjectAs_bookmarks" : "openProject_bookmarks"))
+						guiState.refreshRecursively!("fileDialog_bookmarks")
 				}
 			})
 		}
-		guiState.onOption.openProject_bookmarks = guiState.onOption.saveProjectAs_bookmarks
 
-		guiState.onAction.saveProjectAs_addBookmark = (buttons:gui.Buttons, buttonIndex:int) {
-			local isSave = (buttons.frame.name == "saveProjectAs")
-
-			if insertIfUnique(app.bookmarkedFolders, dirCurrent) {
-				sort(app.bookmarkedFolders)
-				guiState.refreshRecursively!((isSave ? "saveProjectAs_bookmarks" : "openProject_bookmarks"))
-			}
+		guiState.onAction.fileDialog_addBookmark = (buttons:gui.Buttons, buttonIndex:int) {
+			if not insertIfUnique(app.bookmarkedFolders, dirCurrent)  return
+			sort(app.bookmarkedFolders)
+			guiState.refreshRecursively!("fileDialog_bookmarks")
 		}
-		guiState.onAction.openProject_addBookmark = guiState.onAction.saveProjectAs_addBookmark
 
 		-- Recent.
-		guiState.onRefresh.saveProjectAs_recent = (buttons:gui.Buttons) {
+		guiState.onRefresh.fileDialog_recent = (buttons:gui.Buttons) {
 			buttons.buttons = {}
 			for app.recentFolders {
 				insert(buttons.buttons, cast(gui.Button){ value=it, label=it, image="iconFolder" })
 			}
 		}
-		guiState.onRefresh.openProject_recent = guiState.onRefresh.saveProjectAs_recent
 
-		guiState.onAction.saveProjectAs_recent = (buttons:gui.Buttons, buttonIndex:int) {
-			local isSave = (buttons.frame.name == "saveProjectAs")
-			dirCurrent   = app.recentFolders[buttonIndex]
-			guiState.refreshRecursively!((isSave ? "saveProjectAs_items" : "openProject_items"))
+		guiState.onAction.fileDialog_recent = (buttons:gui.Buttons, buttonIndex:int) {
+			dirCurrent = app.recentFolders[buttonIndex]
+			guiState.refreshRecursively!("fileDialog_items")
 		}
-		guiState.onAction.openProject_recent = guiState.onAction.saveProjectAs_recent
 
-		guiState.onAction.saveProjectAs_clearRecent = (buttons:gui.Buttons, buttonIndex:int) {
-			local isSave      = (buttons.frame.name == "saveProjectAs")
+		guiState.onAction.fileDialog_clearRecent = (buttons:gui.Buttons, buttonIndex:int) {
 			app.recentFolders = {}
-			guiState.refreshRecursively!((isSave ? "saveProjectAs_recent" : "openProject_recent"))
+			guiState.refreshRecursively!("fileDialog_recent")
 		}
-		guiState.onAction.openProject_clearRecent = guiState.onAction.saveProjectAs_clearRecent
 
 		-- Directory.
-		guiState.onRefresh.saveProjectAs_directory = (input:gui.InputText, buttonIndex:int) {
+		guiState.onRefresh.fileDialog_directory = (input:gui.InputText, buttonIndex:int) {
 			input.value = dirCurrent
 		}
-		guiState.onRefresh.openProject_directory = guiState.onRefresh.saveProjectAs_directory
 
-		guiState.onSubmit.saveProjectAs_directory = (input:gui.InputText, buttonIndex:int) {
-			local isSave = (input.frame.name == "saveProjectAs")
+		guiState.onSubmit.fileDialog_directory = (input:gui.InputText, buttonIndex:int) {
 			local dirObj = Path(trim(input.value))
 			if not dirObj.isAbsolute  return
 
 			dirCurrent = dirObj.toString!()
-			guiState.refreshRecursively!((isSave ? "saveProjectAs_items" : "openProject_items"))
+			guiState.refreshRecursively!("fileDialog_items")
 		}
-		guiState.onSubmit.openProject_directory = guiState.onSubmit.saveProjectAs_directory
 
 		-- Directory items.
-		guiState.onRefresh.saveProjectAs_items = (buttons:gui.Buttons) {
-			local isSave = (buttons.frame.name == "saveProjectAs")
-			local dir    = dirCurrent
+		guiState.onRefresh.fileDialog_items = (buttons:gui.Buttons) {
+			local dir = dirCurrent
 
 			if not connectToRemoteDirectory(dir) {
 				dir = dirFallback
@@ -1889,7 +1818,7 @@ export setupGuiCallbacks :: () {
 				} elseif info.type == LF.FileType.DIRECTORY {
 					if not findPattern(it, "^%$")  insert(dirs, it)
 				} elseif info.type == LF.FileType.FILE {
-					if findPattern(it, "%.hotparticles$")  insert(filenames, it)
+					if not fileDialog_filenamePattern or findPattern(it, fileDialog_filenamePattern)  insert(filenames, it)
 				}
 			}
 
@@ -1915,33 +1844,25 @@ export setupGuiCallbacks :: () {
 				})
 			}
 
-			guiState.refreshRecursively!((isSave ? "saveProjectAs_directory" : "openProject_directory"))
+			guiState.refreshRecursively!("fileDialog_directory")
 		}
-		guiState.onRefresh.openProject_items = guiState.onRefresh.saveProjectAs_items
 
-		guiState.onAction.saveProjectAs_items = (buttons:gui.Buttons, buttonIndex:int) {
-			local isSave = (buttons.frame.name == "saveProjectAs")
-			local item   = cast(Item) buttons.buttons[buttonIndex].value
+		guiState.onAction.fileDialog_items = (buttons:gui.Buttons, buttonIndex:int) {
+			local item = cast(Item) buttons.buttons[buttonIndex].value
 
 			if not item.isDir {
-				local input   = guiState.getElement!((isSave ? "saveProjectAs_filename" : "openProject_filename"), gui.InputText)
-				input.value   = item.name
+				local input = guiState.getElement!("fileDialog_filename", gui.InputText)
+				input.value = item.name
+
 				local pathObj = Path(dirCurrent)
 				insert(pathObj.path, item.name)
-				loadPreview(pathObj.toString!())
-
-				local ok, filename = pathObj.getFilename!()
-				if isSave and ok {
-					local basename, ext = splitBasenameAndExtension(filename)
-					guiState.setFocus!(input)
-					input.field.setSelection!(0, utf8.getLength(basename))
-				}
+				fileDialog_onHighlight(pathObj)
 
 			} elseif item.name == ".." {
 				local dirObj = Path(dirCurrent)
 				dirObj.pop!()
 				dirCurrent = dirObj.toString!()
-				guiState.refreshRecursively!((isSave ? "saveProjectAs_items" : "openProject_items"))
+				guiState.refreshRecursively!("fileDialog_items")
 
 			} else {
 				local dirObj = Path(dirCurrent)
@@ -1950,14 +1871,13 @@ export setupGuiCallbacks :: () {
 				guiState.refreshRecursively!(buttons)
 			}
 		}
-		guiState.onAction.openProject_items = guiState.onAction.saveProjectAs_items
 
-		-- Save.
-		guiState.onDouble.saveProjectAs_items    = (buttons:gui.Buttons, buttonIndex:int) { if not (cast(Item) buttons.buttons[buttonIndex].value).isDir  save() }
-		guiState.onSubmit.saveProjectAs_filename = (input:gui.InputText)                  { save() }
-		guiState.onAction.saveProjectAs_save     = (buttons:gui.Buttons, buttonIndex:int) { save() }
-		local save :: () {
-			local input   = guiState.getElement!("saveProjectAs_filename", gui.InputText)
+		-- Choice.
+		guiState.onDouble.fileDialog_items    = (buttons:gui.Buttons, buttonIndex:int) { if not (cast(Item) buttons.buttons[buttonIndex].value).isDir  choosePath() }
+		guiState.onSubmit.fileDialog_filename = (input:gui.InputText)                  { choosePath() }
+		guiState.onAction.fileDialog_choose   = (buttons:gui.Buttons, buttonIndex:int) { choosePath() }
+		local choosePath :: () {
+			local input   = guiState.getElement!("fileDialog_filename", gui.InputText)
 			input.value   = trim(input.value)
 			local pathObj = Path(input.value)
 			input.value   = pathObj.toString!()
@@ -1969,80 +1889,15 @@ export setupGuiCallbacks :: () {
 
 			pathObj.prepend!(dirCurrent) -- Fails if pathObj is absolute.
 
-			local ok, filename = pathObj.getFilename!()
-			if not ok {
-				guiState.setFocus!(input)
-				return
+			if fileDialog_isSave {
+				local ok, filename = pathObj.getFilename!()
+				if not ok {
+					guiState.setFocus!(input)
+					return
+				}
 			}
 
-			if not findPattern(filename, "%.hotparticles$") {
-				filename    = filename..".hotparticles"
-				input.value = input.value..".hotparticles"
-				pathObj.setFilename!(filename)
-			}
-
-			projectBeingSaved.path = pathObj.toString!()
-
-			local ^ok, fileExists = saveProject(projectBeingSaved)
-			if ok {
-				updateParticleTextures(projectBeingSaved) -- In case any texture uses a relative path.
-				popPanel()
-
-			} elseif fileExists {
-				local BUTTONS: []gui.Button : {{label="Overwrite"},{label="Cancel"}}
-
-				pushTempChoiceDialog("Confirm save as", filename.." already exists. Overwite it?", BUTTONS, submitIndex=1, (choice:int) {
-					if choice ~= 1  return
-
-					saveProject(projectBeingSaved, overwrite=true)
-
-					updateParticleTextures(projectBeingSaved) -- In case any texture uses a relative path.
-					popPanel("saveProjectAs")
-				})
-
-			} else {
-				-- void  Stay in the dialog.
-			}
-		}
-
-		-- Open.
-		guiState.onDouble.openProject_items    = (buttons:gui.Buttons, buttonIndex:int) { if not (cast(Item) buttons.buttons[buttonIndex].value).isDir  open() }
-		guiState.onSubmit.openProject_filename = (input:gui.InputText)                  { open() }
-		guiState.onAction.openProject_open     = (buttons:gui.Buttons, buttonIndex:int) { open() }
-		local open :: () {
-			local input   = guiState.getElement!("openProject_filename", gui.InputText)
-			input.value   = trim(input.value)
-			local pathObj = Path(input.value)
-			input.value   = pathObj.toString!()
-
-			if pathObj.isEmpty!() {
-				guiState.setFocus!(input)
-				return
-			}
-
-			pathObj.prepend!(dirCurrent) -- Fails if pathObj is absolute.
-
-			local path        = pathObj.toString!()
-			local ok, project = openProject(pathObj.toString!())
-			if not ok {
-				guiState.setFocus!(input)
-				return
-			}
-
-			project.preview = false -- In case the project was already opened as a preview (which it probably always is).
-			popPanel()
-
-			local _, dir = pathObj.getDirectory!()
-			addRecent(app.recentFolders, dir,  app.maxRecentFolders)
-			addRecent(app.recentFiles,   path, app.maxRecentFiles)
-
-			-- Make sure the loaded project replaces any single empty project.
-			if #app.projects == 2 and isProjectEmpty(app.projects[1]) {
-				remove(app.projects, 1)
-
-				guiState.refreshRecursively!("projects")
-				setCurrentProject(1)
-			}
+			fileDialog_onChoose(pathObj)
 		}
 	}
 
