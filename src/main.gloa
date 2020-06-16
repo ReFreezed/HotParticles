@@ -1095,7 +1095,7 @@ local onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool) 
 
 	-- Keys in normal view.
 	if modAndKey == {
-		case "c-s":      if project.fileIsSaved  saveProject(project, overwrite=true)  else  showSaveProjectAsDialog()
+		case "c-s":      if project.fileIsSaved  saveProject(project, project.path, overwrite=true)  else  showSaveProjectAsDialog()
 		case "c-s-s":    showSaveProjectAsDialog()
 		case "c-e":      pushPanel("exportProject")
 		case "c-o":      showOpenProjectDialog()
@@ -2460,7 +2460,7 @@ export showMainMenu :: () {
 			case "openLast":    openRecentProject()
 			case "openRecent":  openProject(cast(string)data)
 			case "clearRecent": app.recentFiles = {}
-			case "save":        if project.fileIsSaved  saveProject(project, overwrite=true)  else  showSaveProjectAsDialog()
+			case "save":        if project.fileIsSaved  saveProject(project, project.path, overwrite=true)  else  showSaveProjectAsDialog()
 			case "saveAs":      showSaveProjectAsDialog()
 			case "export":      pushPanel("exportProject")
 			case "preferences": pushPanel("preferences")
@@ -2535,9 +2535,9 @@ export showSaveProjectAsDialog :: () {
 				pathObj.setFilename!(filename)
 			}
 
-			projectBeingSaved.path = pathObj.toString!()
+			local path = pathObj.toString!()
 
-			local ok, fileExists = saveProject(projectBeingSaved)
+			local ok, fileExists = saveProject(projectBeingSaved, path, overwrite=false)
 			if ok {
 				updateParticleTextures(projectBeingSaved) -- In case any texture uses a relative path.
 				popPanel()
@@ -2545,10 +2545,10 @@ export showSaveProjectAsDialog :: () {
 			} elseif fileExists {
 				local BUTTONS: []gui.Button : {{label="Overwrite"},{label="Cancel"}}
 
-				pushTempChoiceDialog("Confirm save as", filename.." already exists. Overwite it?", BUTTONS, submitIndex=1, (choice:int) {
+				pushTempChoiceDialog("Confirm save as", filename.." already exists. Overwite it?", BUTTONS, submitIndex=1, [path] (choice:int) {
 					if choice ~= 1  return
 
-					saveProject(projectBeingSaved, overwrite=true)
+					saveProject(projectBeingSaved, path, overwrite=true)
 
 					updateParticleTextures(projectBeingSaved) -- In case any texture uses a relative path.
 					popPanel("fileDialog")

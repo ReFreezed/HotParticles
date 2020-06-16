@@ -235,7 +235,7 @@ export saveWorkspace :: () {
 	if not ok  setErrorText("Could not save workspace: %s", err)
 }
 
-export saveProject :: (project:Project, overwrite=false) -> (success:bool, fileExists:bool) {
+export saveProject :: (project:Project, path:string, overwrite:bool) -> (success:bool, fileExists:bool) {
 	local setErrorMessage :: (fileExists:bool, s:string) -> (success:bool, fileExists:bool) {
 		setErrorText(s)
 		return false, fileExists
@@ -245,8 +245,8 @@ export saveProject :: (project:Project, overwrite=false) -> (success:bool, fileE
 		return false, fileExists
 	}
 
-	local ok, dir, filename = Path(project.path).getDirectoryAndFilename!()
-	if not ok  return setErrorMessage(false, "Invalid path '%s'", project.path)
+	local ok, dir, filename = Path(path).getDirectoryAndFilename!()
+	if not ok  return setErrorMessage(false, "Invalid path '%s'", path)
 
 	ok = connectToRemoteDirectory(dir)
 	if not ok  return setErrorMessage(false, "Could not access folder '%s'", dir)
@@ -264,7 +264,8 @@ export saveProject :: (project:Project, overwrite=false) -> (success:bool, fileE
 	local ^ok, err = LF.write(filename, concatinate(buffer))
 	if not ok  return setErrorMessage(false, "Could not write project to file: %s", err)
 
-	addRecent(app.recentFiles, project.path, app.maxRecentFiles)
+	project.path = path
+	addRecent(app.recentFiles, path, app.maxRecentFiles)
 
 	project.fileIsSaved   = true
 	project.displayedName = filename
