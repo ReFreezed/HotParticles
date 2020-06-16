@@ -985,11 +985,18 @@ export setupGuiCallbacks :: () {
 		local project = app.projects[app.currentProjectIndex]
 		local system  = project.systems[systemIndex]
 
-		guiState.showContextMenuWithInput!(system.title, inputTooltip="Particle system title", {"Delete\t"..ctrlText.."+Delete","Duplicate\t"..ctrlText.."+D"},
-			[systemIndex] (choice:int) {
+		local items = {
+			"Delete\t"..ctrlText.."+Delete",
+			"Duplicate\t"..ctrlText.."+D",
+			(system.visible ? "Hide\tH" : "Show\tH"),
+		}
+
+		guiState.showContextMenuWithInput!(system.title, inputTooltip="Particle system title", items,
+			[system, systemIndex] (choice:int) {
 				if choice == {
 					case 1: confirmDeleteSystem(systemIndex)
 					case 2: duplicateSystem(systemIndex)
+					case 3: system.visible = not system.visible
 				}
 			},
 			[system] (valueNew:string) {
