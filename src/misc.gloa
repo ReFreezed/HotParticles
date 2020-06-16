@@ -19,6 +19,7 @@
 	isInside
 	limitArray
 	newMonochromeImage, newImageUsingPalette
+	pcall_newImage
 	prepareSandbox
 
 --============================================================]]
@@ -409,5 +410,17 @@ export combineKeyAndModifier :: (mod:ModifierKey, key:LK.KeyConstant) -> string 
 	}
 	return PREFIXES[mod] .. key
 }
+
+
+
+-- @Compiler @Cleanup: Fix messy ImageFile* types in love module.
+-- @Compiler @Incomplete: Do something about LG.newImage() (and probably others) raising a Lua error on failure.
+export pcall_newImage :: (file:string|LF.File) -> (image:LG.Image, err:string) !foreign lua [[
+	function(file)
+		local ok, imageOrErr = pcall(love.graphics.newImage, file)
+		if not ok then  return nil, imageOrErr  end
+		return imageOrErr, nil
+	end
+]]
 
 

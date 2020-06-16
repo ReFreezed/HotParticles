@@ -174,7 +174,7 @@ export App :: struct {
 	showProjectSettings = false,
 	showPanelNumbers    = true,
 
-	recentFiles:    []string,
+	recentFiles:    []string, -- Projects, specifically. @Cleanup
 	recentFolders:  []string,
 	recentTextures: []string,
 
@@ -555,7 +555,12 @@ export updateParticleTexture :: (project:Project, system:System, saveRecent=fals
 		if saveRecent  addRecent(app.recentTextures, system.texturePath, app.maxRecentFiles)
 		-- if saveRecent  addRecent(app.recentTextures, path, app.maxRecentFiles)
 
-		local image = LG.newImage(filename)
+		local image, ^err = pcall_newImage(filename)
+		if image == NULL {
+			setErrorText("Could not load texture '%s'", filename)
+			return NULL, NULL
+		}
+
 		return cast(LF.FileData)imageData, image
 	}
 
@@ -953,11 +958,6 @@ local onFileDropped :: (file:LF.DroppedFile) {
 		return
 	}
 
-	-- @Compiler @Cleanup: Fix messy ImageFile* types in love module.
-	-- @Compiler @Incomplete: Do something about LG.newImage() (and probably others) raising a Lua error on failure.
-	local pcall_newImage :: (file:LF.File) -> LG.Image !foreign lua [[
-		function(file)  local ok, image = pcall(love.graphics.newImage, file) ; return ok and image or nil  end
-	]]
 	if pcall_newImage(file) == NULL {
 		setErrorText("Could not load '%s'", path)
 		return
@@ -1751,18 +1751,29 @@ local onDraw :: () {
 
 		-- GUI texts.
 		local drawGuiText :: (text:string, time:float, duration:float, y:int) {
-			local PADDING_X :: 15
-			local PADDING_Y :: 3
+			local PADDING_X :: 20
+			local PADDING_Y :: 8
 
 			local visibility = 1 - (LT.getTime() - time) / duration
 			if visibility <= 0  return
 
+			local anyModalVisible = (guiState.getTopmostActiveModal!() ~= NULL)
+
 			local w = fontLarge.getWidth!(text)
-			local x = (LG.getWidth() + (guiState.getTopmostActiveModal!() == NULL ? MAIN_PANEL_WIDTH : 0) - w) // 2
+			local x = (LG.getWidth() + (anyModalVisible ? 0 : MAIN_PANEL_WIDTH) - w) // 2
 			local a = visibility ^ .5
 
-			LG.setColor(0, 0, 0, a)
-			LG.print(text, x+1, y+1)
+			if anyModalVisible {
+				if findPattern(text, "^Error: ")
+					LG.setColor(.4, 0, 0, a)
+				else
+					LG.setColor(0, 0, 0, a)
+				LG.rectangle(LG.DrawMode.FILL, x-PADDING_X, y-PADDING_Y, w+2*PADDING_X, fontLarge.getHeight!()+2*PADDING_Y, 3)
+
+			} else {
+				LG.setColor(0, 0, 0, a)
+				LG.print(text, x+1, y+1)
+			}
 
 			LG.setColor(1, 1, 1, a)
 			LG.print(text, x, y)
@@ -2498,7 +2509,7 @@ export showSaveProjectAsDialog :: () {
 	projectBeingSaved = project -- Needed as we load previews even in the save dialog, which means app.currentProjectIndex may change.
 
 	showFileDialog(isSave=true, "Save project", dir, filename, filenamePattern="%.hotparticles$",
-		(pathObj:Path) {
+		onHighlight = (pathObj:Path) {
 			loadPreview(pathObj.toString!())
 
 			local ok, filename = pathObj.getFilename!()
@@ -2509,7 +2520,7 @@ export showSaveProjectAsDialog :: () {
 				input.field.setSelection!(0, utf8.getLength(basename))
 			}
 		},
-		(pathObj:Path) {
+		onChoose = (pathObj:Path) {
 			local _, filename = pathObj.getFilename!()
 
 			if not findPattern(filename, "%.hotparticles$") {
@@ -2542,7 +2553,7 @@ export showSaveProjectAsDialog :: () {
 				-- void  Stay in the dialog.
 			}
 		},
-		() {
+		onClose = () {
 			unloadPreview()
 			projectBeingSaved = NULL
 		}
@@ -2557,10 +2568,10 @@ export showOpenProjectDialog :: () {
 	if not ok  dir = getSaveDirectory().."/projects"
 
 	showFileDialog("Open project", dir, "", filenamePattern="%.hotparticles$",
-		(pathObj:Path) {
+		onHighlight = (pathObj:Path) {
 			loadPreview(pathObj.toString!())
 		},
-		(pathObj:Path) {
+		onChoose = (pathObj:Path) {
 			local path        = pathObj.toString!()
 			local ok, project = openProject(path)
 			if not ok {
@@ -2584,7 +2595,7 @@ export showOpenProjectDialog :: () {
 				setCurrentProject(1)
 			}
 		},
-		() {
+		onClose = () {
 			unloadPreview()
 			projectBeingSaved = NULL
 		}

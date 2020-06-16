@@ -187,6 +187,7 @@ export State :: struct {
 	refresh :: _refresh,
 	refreshAll :: _refreshAll,
 	refreshRecursively :: _refreshRecursively,
+	scrollTo :: _scrollTo,
 	setActive :: _setActive,
 	setFocus :: _setFocus,
 	showContextMenu :: _showContextMenu,
@@ -220,6 +221,7 @@ local _pressButton :: pressButton
 local _refresh :: refresh
 local _refreshAll :: refreshAll
 local _refreshRecursively :: refreshRecursively
+local _scrollTo :: scrollTo
 local _setActive :: setActive
 local _setFocus :: setFocus
 local _showContextMenu :: showContextMenu
@@ -1663,10 +1665,14 @@ local updateLayoutIfNeeded :: (state:State) {
 		state.extraScrollableSpace = 0
 		calculateNaturalSize(state, it)
 
-		-- We need to do calculateNaturalSize() twice to know how much scrollables can expand the frame.
-		-- Note: If there are multiple scrollables with height<=0 then things may or may not work as expected!
-		state.extraScrollableSpace = LG.getHeight() - (it.layoutY + it.layoutHeight) -- layoutNeedsUpdate better be set if the window resizes!
-		calculateNaturalSize(state, it)
+		do {
+			-- We need to do calculateNaturalSize() twice to know how much scrollables can expand the frame.
+			-- Note: If there are multiple scrollables with height<=0 then things may or may not work as expected!
+			state.extraScrollableSpace = LG.getHeight() - it.layoutHeight -- layoutNeedsUpdate better be set if the window resizes!
+			if it.layout == Layout.FLOATING  state.extraScrollableSpace -= 2*SPACING_LARGE
+
+			calculateNaturalSize(state, it)
+		}
 
 		positionAndFit(state, it, 0, 0, it.layoutWidth, it.layoutHeight)
 	}
@@ -2622,6 +2628,17 @@ export setActive :: (state:State, el:Element, active:bool) -> (success:bool) {
 		insert(state.frames, frame)
 	}
 
+	if active {
+		local resetScroll :: (el:Element) {
+			if el.type == Scrollable {
+				local scrollable = cast(Scrollable) el
+				scrollTo(scrollable, 0)
+			}
+			for el  resetScroll(it)
+		}
+		resetScroll(el)
+	}
+
 	if active
 		triggerActiveEvent(state, el)
 	else
@@ -3371,6 +3388,18 @@ local commitValueFromInput :: (state:State, colorEl:Color, component:int, text:s
 	triggerBeginEvent(state, colorEl, "", component)
 	colorEl.color[component] = value
 	triggerActionEvent(state, colorEl, "", component, alsoEnd=true)
+}
+
+
+
+export scrollTo :: (scrollable:Scrollable, scroll:int) {
+	scrollable.scroll       = scroll
+	scrollable.scrollSource = scroll
+	scrollable.scrollTarget = scroll
+}
+
+export scrollTo :: (state:State, scrollable:Scrollable, scroll:int) {
+	scrollTo(scrollable, scroll)
 }
 
 

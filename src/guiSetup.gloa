@@ -86,7 +86,10 @@ export setupGuiFrames :: () {
 						guiState.radio!({ name="textureName", labelLeft="preset" }),
 						guiState.hbox!({
 							guiState.inputText!({ name="texturePath", labelLeft="path", tooltip="Absolute path, or relative to the saved .hotparticles file", weight=1 }),
-							guiState.buttons!({ name="reloadTexture", buttons={{image="iconReload",tooltip="Reload texture"}} }),
+							guiState.buttons!({ buttons={
+								{name="chooseTexture", image="iconFolder", tooltip="Browse files"},
+								{name="reloadTexture", image="iconReload", tooltip="Reload texture"},
+							}}),
 						}),
 						guiState.hbox!({
 							guiState.slider!({ name="textureOffsetX", value=.5, min=0, max=1, limitName="textureOffset", limitCenter=.5, readoutMulti=100, readout="%d%%", weight=1, labelLeft="offset x/y" }),
@@ -333,7 +336,7 @@ export setupGuiFrames :: () {
 
 			guiState.separator!({ thick=true }),
 			guiState.inputText!({ name="fileDialog_directory" }),
-			guiState.scrollable!({
+			guiState.scrollable!({ name="fileDialog_itemsSrollable",
 				guiState.buttons!({ name="fileDialog_items", vertical=true, align=gui.Alignment.LEFT, style=gui.Style.LIST, buttonMinHeight=MEDIUM_BUTTON_HEIGHT }),
 			}),
 
@@ -544,7 +547,7 @@ local fileDialog_onHighlight:    = cast((path:Path)) NULL
 local fileDialog_onChoose:       = cast((path:Path)) NULL
 local fileDialog_onClose:        = cast(()) NULL
 
-export showFileDialog :: (title:string, dir,filename:string, onHighlight:(path:Path), onChoose:(path:Path), onClose:(), isSave=false, filenamePattern="") {
+export showFileDialog :: (title:string, dir,filename:string, onHighlight:(path:Path), onChoose:(path:Path), onClose:(), filenamePattern="", isSave=false, floating=false) {
 	fileDialog_isSave          = isSave
 	fileDialog_dir             = dir
 	fileDialog_filename        = filename
@@ -554,6 +557,15 @@ export showFileDialog :: (title:string, dir,filename:string, onHighlight:(path:P
 	fileDialog_onClose         = onClose
 
 	guiState.getElement!("fileDialog_title", gui.Text).text = title
+
+	local frame = guiState.getElement!("fileDialog", gui.Frame)
+	if floating {
+		frame.modal  = true
+		frame.layout = gui.Layout.FLOATING
+	} else {
+		frame.modal  = false
+		frame.layout = gui.Layout.DOCKED
+	}
 
 	pushPanel("fileDialog")
 }
@@ -1089,6 +1101,47 @@ export setupGuiCallbacks :: () {
 				setTexturePath(project, system, items[choice])
 			}
 		})
+	}
+
+	guiState.onAction.chooseTexture = (buttons:gui.Buttons, buttonIndex:int) {
+		local project, system = getCurrentProjectAndSystem()
+		local pathObj         = Path(system.texturePath ?: project.path)
+
+		local  ok, dir = pathObj.getDirectoryAndFilename!()
+		if not ok  dir = getSaveDirectory().."/projects"
+
+		local ^ok, filename = Path(system.texturePath).getFilename!()
+		if not ok  filename = ""
+
+		showFileDialog("Choose texture", dir, filename, floating=true,
+			onHighlight = (pathObj:Path) {
+				-- @Incomplete: Texture preview.
+				-- local path = pathObj.toString!()
+			},
+			onChoose = (pathObj:Path) {
+				local ok, dir, filename = pathObj.getDirectoryAndFilename!()
+				assert(ok)
+
+				if not connectToRemoteDirectory(dir) {
+					setErrorText("Could not access folder '%s'", dir)
+					return
+				}
+				defer disconnectFromRemoteDirectory()
+
+				addRecent(app.recentFolders, dir, app.maxRecentFolders)
+
+				local image = pcall_newImage(filename)
+				if image == NULL {
+					setErrorText("'%s' is not a valid texture file", filename)
+					return
+				}
+
+				local project, system = getCurrentProjectAndSystem()
+				setTexturePath(project, system, pathObj.toString!())
+				popPanel()
+			},
+			onClose = () {}
+		)
 	}
 
 	guiState.onAction.reloadTexture = (buttons:gui.Buttons, buttonIndex:int) {
@@ -1844,6 +1897,7 @@ export setupGuiCallbacks :: () {
 				})
 			}
 
+			guiState.scrollTo!(guiState.getElement!("fileDialog_itemsSrollable", gui.Scrollable), 0)
 			guiState.refreshRecursively!("fileDialog_directory")
 		}
 

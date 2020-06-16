@@ -192,6 +192,7 @@ export saveWorkspace :: () {
 	insert(buffer, "project")             ; writeValue(buffer, eol=true, projectIndexToSave)
 	insert(buffer, "recentFiles")         ; writeValue(buffer, eol=true, app.recentFiles)
 	insert(buffer, "recentFolders")       ; writeValue(buffer, eol=true, app.recentFolders)
+	insert(buffer, "recentTextures")      ; writeValue(buffer, eol=true, app.recentTextures)
 	insert(buffer, "bookmarkedFolders")   ; writeValue(buffer, eol=true, app.bookmarkedFolders)
 
 	insert(buffer, "maxBufferSize")    ; writeValue(buffer, eol=true, app.maxBufferSize)
@@ -474,6 +475,10 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 						local ^ok, ^ptr, paths = readStringArray(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
 						app.recentFolders = paths
+					case "recentTextures":
+						local ^ok, ^ptr, paths = readStringArray(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
+						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
+						app.recentTextures = paths
 
 					case "bookmarkedFolders":
 						local ^ok, ^ptr, paths = readStringArray(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
