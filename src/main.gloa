@@ -6,7 +6,7 @@
 --============================================================]]
 
 local GIF_RECORDING_MODE :: DEV and 1==0
-local GIF_FRAME_DELAY    :: 2 -- 100th of a second.
+local GIF_FRAME_DELAY    :: 2 -- 100th of a second. (Using 1 here seem troublesome and may make the GIF play very slowly for some reason.)
 
 export APP_VERSION_STRING :: !run (getReleaseVersion())
 
@@ -89,6 +89,8 @@ export particleImageDatas: struct { !key:string, !value:LF.FileData } -- FileDat
 export particleImages:     struct { !key:string, !value:LG.Image    }
 export guiImages:          struct { !key:string, !value:LG.Image    }
 export dummyCursors:       struct { !key:LM.CursorType, !value:DummyCursor }
+
+export textureBrowserPreviewImage: LG.Image = NULL
 
 export icon16Quads: QuadTable = NULL
 
@@ -1406,7 +1408,7 @@ local onUpdate :: (dt:float) {
 
 
 
-local getVisibilityFlags :: () -> bool, bool, bool, bool {
+local getVisibilityFlags :: () -> bool, bool, bool, bool, bool {
 	static wasHoveringTextureOffset    = false
 	static wasHoveringAreaDistribution = false
 	static hoverTimeTextureOffset      = -9999.00
@@ -1434,7 +1436,8 @@ local getVisibilityFlags :: () -> bool, bool, bool, bool {
 	local showTextureOffset    = (isHoveringTextureOffset    and LT.getTime() - hoverTimeTextureOffset    > DELAY)
 	local showAreaDistribution = (isHoveringAreaDistribution and LT.getTime() - hoverTimeAreaDistribution > DELAY)
 	local showAnimationFrames  = guiState.getElement!("animation").active
-	local showWorld            = not (showTextureOffset or showAnimationFrames)
+	local showTexturePreview   = textureBrowserPreviewImage ~= NULL
+	local showWorld            = not (showTextureOffset or showAnimationFrames or showTexturePreview)
 
 	static didShowWorld = true
 
@@ -1444,7 +1447,7 @@ local getVisibilityFlags :: () -> bool, bool, bool, bool {
 		updateParticleImageFilters()
 	}
 
-	return showWorld, showTextureOffset, showAreaDistribution, showAnimationFrames
+	return showWorld, showTextureOffset, showAreaDistribution, showAnimationFrames, showTexturePreview
 }
 
 local onDraw :: () {
@@ -1454,7 +1457,7 @@ local onDraw :: () {
 	local ww, wh  = LG.getDimensions()
 	local project = app.projects[app.currentProjectIndex]
 
-	local showWorld, showTextureOffset, showAreaDistribution, showAnimationFrames = getVisibilityFlags()
+	local showWorld, showTextureOffset, showAreaDistribution, showAnimationFrames, showTexturePreview = getVisibilityFlags()
 
 	LG.reset()
 
@@ -1553,12 +1556,12 @@ local onDraw :: () {
 
 		LG.setFont(fontNormal)
 
-		-- Texture offset/animation frames.
-		if showTextureOffset or showAnimationFrames {
+		-- Texture or animation frames.
+		if showTextureOffset or showAnimationFrames or showTexturePreview {
 			local PADDING :: 20
 
 			local system = project.systems[project.systemIndex]
-			local image  = system.currentImage
+			local image  = showTexturePreview ? textureBrowserPreviewImage : system.currentImage
 			local iw, ih = image.getDimensions!()
 
 			local scale = math.min((ww-2*PADDING-MAIN_PANEL_WIDTH)/iw, (wh-2*PADDING)/ih)
@@ -1566,11 +1569,11 @@ local onDraw :: () {
 			local x0 = (ww - iw*scale + MAIN_PANEL_WIDTH) // 2
 			local y0 = (wh - ih*scale                   ) // 2
 
-			if showTextureOffset {
+			if showTextureOffset or showTexturePreview {
 				local w = iw
 				local h = ih
 
-				if system.frames {
+				if showTextureOffset and system.frames {
 					local quads        = system.particles.getQuads!()
 					local quad         = getAnimationPreviewQuad(system.particles, quads)
 					local _, _, qw, qh = quads[1].getViewport!()
@@ -1591,16 +1594,18 @@ local onDraw :: () {
 					LG.draw(image, x0, y0, 0, scale)
 				}
 
-				local HALF_WIDTH  :: 3
-				local HALF_LENGTH :: 20
-				local x = math.round(x0 + w*scale*system.offsetX)
-				local y = math.round(y0 + h*scale*system.offsetY)
-				LG.setColor(0, 0, 0, .9)
-				LG.rectangle(LG.DrawMode.FILL, x-HALF_WIDTH-1, y-HALF_LENGTH-1, 2*HALF_WIDTH+2, 2*HALF_LENGTH+2)
-				LG.rectangle(LG.DrawMode.FILL, x-HALF_LENGTH-1, y-HALF_WIDTH-1, 2*HALF_LENGTH+2, 2*HALF_WIDTH+2)
-				LG.setColor(1, 1, 1)
-				LG.rectangle(LG.DrawMode.FILL, x-HALF_WIDTH, y-HALF_LENGTH, 2*HALF_WIDTH, 2*HALF_LENGTH)
-				LG.rectangle(LG.DrawMode.FILL, x-HALF_LENGTH, y-HALF_WIDTH, 2*HALF_LENGTH, 2*HALF_WIDTH)
+				if showTextureOffset {
+					local HALF_WIDTH  :: 3
+					local HALF_LENGTH :: 20
+					local x = math.round(x0 + w*scale*system.offsetX)
+					local y = math.round(y0 + h*scale*system.offsetY)
+					LG.setColor(0, 0, 0, .9)
+					LG.rectangle(LG.DrawMode.FILL, x-HALF_WIDTH-1, y-HALF_LENGTH-1, 2*HALF_WIDTH+2, 2*HALF_LENGTH+2)
+					LG.rectangle(LG.DrawMode.FILL, x-HALF_LENGTH-1, y-HALF_WIDTH-1, 2*HALF_LENGTH+2, 2*HALF_WIDTH+2)
+					LG.setColor(1, 1, 1)
+					LG.rectangle(LG.DrawMode.FILL, x-HALF_WIDTH, y-HALF_LENGTH, 2*HALF_WIDTH, 2*HALF_LENGTH)
+					LG.rectangle(LG.DrawMode.FILL, x-HALF_LENGTH, y-HALF_WIDTH, 2*HALF_LENGTH, 2*HALF_WIDTH)
+				}
 			}
 
 			if showAnimationFrames {

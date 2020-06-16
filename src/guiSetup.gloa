@@ -1113,10 +1113,23 @@ export setupGuiCallbacks :: () {
 		local ^ok, filename = Path(system.texturePath).getFilename!()
 		if not ok  filename = ""
 
-		showFileDialog("Choose texture", dir, filename, floating=true,
+		showFileDialog("Choose texture", dir, filename,
 			onHighlight = (pathObj:Path) {
-				-- @Incomplete: Texture preview.
-				-- local path = pathObj.toString!()
+				textureBrowserPreviewImage = NULL
+
+				local _, dir, filename = pathObj.getDirectoryAndFilename!()
+				if not connectToRemoteDirectory(dir)  return
+				defer disconnectFromRemoteDirectory()
+
+				local ^textureBrowserPreviewImage, err = pcall_newImage(filename)
+				if textureBrowserPreviewImage == NULL {
+					print(err)
+					return
+				}
+
+				local project = app.projects[app.currentProjectIndex]
+				local filter  = project.pixelateTextures ? LG.FilterMode.NEAREST : LG.FilterMode.LINEAR
+				textureBrowserPreviewImage.setFilter!(filter, filter)
 			},
 			onChoose = (pathObj:Path) {
 				local ok, dir, filename = pathObj.getDirectoryAndFilename!()
@@ -1140,7 +1153,9 @@ export setupGuiCallbacks :: () {
 				setTexturePath(project, system, pathObj.toString!())
 				popPanel()
 			},
-			onClose = () {}
+			onClose = () {
+				textureBrowserPreviewImage = NULL
+			}
 		)
 	}
 
