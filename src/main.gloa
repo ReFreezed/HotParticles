@@ -2003,6 +2003,7 @@ export scheduleSaveWorkspace :: () {
 
 export openProject :: (path:string, asPreview=false) -> (success:bool, project:Project, isNew:bool) {
 	local pathObj = Path(path)
+	path          = pathObj.toString!()
 
 	local ok, dir, filename = pathObj.getDirectoryAndFilename!()
 	if not ok {
@@ -2011,10 +2012,9 @@ export openProject :: (path:string, asPreview=false) -> (success:bool, project:P
 		return false, NULL, NULL
 	}
 
-	path = pathObj.toString!()
-
 	for app.projects  if it.path == path {
 		setCurrentProject(itIndex)
+		if not asPreview  addRecent(app.recentFiles, path, app.maxRecentFiles)
 		return true, it, false
 	}
 
