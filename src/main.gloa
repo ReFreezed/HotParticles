@@ -207,6 +207,7 @@ export Project :: struct {
 
 	bgColor: []float = {0,0,.15}, -- HSV
 	bgChecker = 0.0,
+	bgSize    = 8,
 
 	pixelateWorld    = false,
 	pixelateTextures = false,
@@ -283,6 +284,7 @@ export Project :: struct {
 		local project: Project = {
 			bgColor                  = {source.bgColor[1], source.bgColor[2], source.bgColor[3]},
 			bgChecker                = source.bgChecker,
+			bgSize                   = source.bgSize,
 			pixelateWorld            = source.pixelateWorld,
 			pixelateTextures         = source.pixelateTextures,
 			zoomLevel                = source.zoomLevel,
@@ -1468,12 +1470,12 @@ local onDraw :: () {
 		local r, g, b = hsvToRgb(project.bgColor)
 		LG.clear(r, g, b)
 
-		if project.bgChecker {
+		if math.abs(project.bgChecker) > .9/255 {
 			if project.bgChecker > 0
 				LG.setColor(1, 1, 1, project.bgChecker)
 			else
 				LG.setColor(0, 0, 0, -project.bgChecker)
-			gui.drawChecker(0, 0, ww, wh, 2)
+			gui.drawChecker(0, 0, ww, wh, project.bgSize/4)
 		}
 
 		if showWorld {
