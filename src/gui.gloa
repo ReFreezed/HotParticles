@@ -3220,6 +3220,9 @@ export hideContextMenu :: (state:State, mayDeactivateSubmenu=false) -> (success:
 	for contextMenus  state.delete!(it)
 	state.contextMenus = {}
 
+	local mx, my = LM.getPosition()
+	state.onMouseMoved!(mx, my, 0, 0)
+
 	state.onAction    .__contextMenuButtons = nil
 	state.onMouseEnter.__contextMenuButtons = nil
 

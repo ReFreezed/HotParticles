@@ -111,6 +111,7 @@ local writeProject :: (buffer:[]string, project:Project, isSavingWorkspace:bool)
 		insert(buffer, "scaleSize")         ; writeValue(buffer, eol=true, system.scaleSize)
 		insert(buffer, "scaleSpace")        ; writeValue(buffer, eol=true, system.scaleSpace)
 		insert(buffer, "scaleTime")         ; writeValue(buffer, eol=true, system.scaleTime)
+		insert(buffer, "shaderPath")        ; writeValue(buffer, eol=true, system.shaderPath)
 		insert(buffer, "sizes")             ; writeValue(buffer, eol=true, system.psSizes)
 		insert(buffer, "sizeVariation")     ; writeValue(buffer, eol=true, system.psSizeVariation)
 		insert(buffer, "spinVariation")     ; writeValue(buffer, eol=true, system.psSpinVariation)
@@ -194,6 +195,7 @@ export saveWorkspace :: () {
 	insert(buffer, "recentFiles")         ; writeValue(buffer, eol=true, app.recentFiles)
 	insert(buffer, "recentFolders")       ; writeValue(buffer, eol=true, app.recentFolders)
 	insert(buffer, "recentTextures")      ; writeValue(buffer, eol=true, app.recentTextures)
+	insert(buffer, "recentShaders")       ; writeValue(buffer, eol=true, app.recentShaders)
 	insert(buffer, "bookmarkedFolders")   ; writeValue(buffer, eol=true, app.bookmarkedFolders)
 
 	insert(buffer, "maxBufferSize")    ; writeValue(buffer, eol=true, app.maxBufferSize)
@@ -481,6 +483,10 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 						local ^ok, ^ptr, paths = readStringArray(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
 						app.recentTextures = paths
+					case "recentShaders":
+						local ^ok, ^ptr, paths = readStringArray(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
+						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
+						app.recentShaders = paths
 
 					case "bookmarkedFolders":
 						local ^ok, ^ptr, paths = readStringArray(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
@@ -767,6 +773,12 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 						if not ok                 return parsingError(path, ln, "Bad value format: %s", line)
 						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
 						system.scaleSize = scale
+
+					case "shaderPath":
+						local ^ok, ^ptr, shaderPath = readString(version, line, cast(int)ptr)
+						if not ok                 return parsingError(path, ln, "Bad value format: %s", line)
+						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
+						system.shaderPath = shaderPath
 
 					case "kickStartEmit":
 						local ^ok, ^ptr, count = readInt(version, line, cast(int)ptr)

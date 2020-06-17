@@ -179,6 +179,7 @@ export App :: struct {
 	recentFiles:    []string, -- Projects, specifically. @Cleanup
 	recentFolders:  []string,
 	recentTextures: []string,
+	recentShaders:  []string,
 
 	bookmarkedFolders: []string,
 
@@ -363,6 +364,8 @@ export System :: struct {
 	offsetX     = .5,
 	offsetY     = .5,
 
+	shaderPath = "",
+
 	scaleTime  = 1.0,
 	scaleSpace = 1.0,
 	scaleSize  = 1.0,
@@ -383,6 +386,8 @@ export System :: struct {
 
 	currentImageData: LF.FileData = NULL,
 	currentImage:     LG.Image    = NULL,
+
+	currentShader: LG.Shader = NULL,
 
 	!call :: () -> System {
 		local system: System
@@ -478,6 +483,7 @@ export updateParticles :: (project:Project, system:System) {
 	updateParticleParams(project, system)
 	updateParticleColors(system)
 	updateParticleTexture(project, system)
+	updateParticleShader(project, system)
 }
 
 export updateParticleParams :: (project:Project, s:System) {
@@ -561,6 +567,7 @@ export updateParticleTexture :: (project:Project, system:System, saveRecent=fals
 
 		local image, ^err = pcall_newImage(filename)
 		if image == NULL {
+			print(err)
 			setErrorText("Could not load texture '%s'", filename)
 			return NULL, NULL
 		}
@@ -572,7 +579,7 @@ export updateParticleTexture :: (project:Project, system:System, saveRecent=fals
 	local image:     LG.Image    = NULL
 	local loadedCustomTexture    = true
 
-	if system.texturePath  imageData, image = loadParticleTexture(project, system, true) -- @Speed: Don't reload the texture if there's no change.
+	if system.texturePath  imageData, image = loadParticleTexture(project, system, saveRecent) -- @Speed: Don't reload the texture if there's no change.
 
 	if imageData == NULL {
 		imageData           = particleImageDatas[system.textureName]
@@ -590,6 +597,46 @@ export updateParticleTexture :: (project:Project, system:System, saveRecent=fals
 	image.setFilter!(filter, filter)
 
 	return loadedCustomTexture
+}
+
+export updateParticleShader :: (project:Project, system:System, saveRecent=false) {
+	local loadParticleShader :: (project:Project, system:System, saveRecent:bool) -> LG.Shader {
+		local ok, path, isDangling = getShaderFullPath(project, system)
+		if not ok {
+			if isDangling
+				setErrorText("Relative paths require the project to be saved: %s", path)
+			else
+				setErrorText("Bad shader path '%s'", path)
+			return NULL
+		}
+
+		local ^ok, dir, filename = Path(path).getDirectoryAndFilename!()
+		assert(ok)
+
+		if not connectToRemoteDirectory(dir) {
+			setErrorText("Could not access folder '%s'", dir)
+			return NULL
+		}
+		defer disconnectFromRemoteDirectory()
+
+		if saveRecent  addRecent(app.recentShaders, system.shaderPath, app.maxRecentFiles)
+		-- if saveRecent  addRecent(app.recentShaders, path, app.maxRecentFiles)
+
+		local shader, err = pcall_newShader(filename)
+		if shader == NULL {
+			print(err) -- @UX: Show shader errors to the user.
+			setErrorText("Could not load shader '%s'", filename)
+			return NULL
+		}
+
+		return shader
+	}
+
+	local shader: LG.Shader = NULL
+
+	if system.shaderPath  shader = loadParticleShader(project, system, saveRecent) -- @Speed: Don't reload the shader if there's no change.
+
+	system.currentShader = shader
 }
 
 export updateParticleAnimation :: (system:System) {
@@ -1485,16 +1532,18 @@ local onDraw :: () {
 			local time = LT.getTime()
 
 			LG.setColor(1, 1, 1)
-			for project.systems {
-				if it.visible {
-					LG.setBlendMode(it.blendMode)
-					LG.draw(it.particles)
+			for system: project.systems {
+				if system.visible {
+					LG.setShader(system.currentShader)
+					LG.setBlendMode(system.blendMode)
+					LG.draw(system.particles)
 				}
 			}
 
 			particleDrawTime = LT.getTime()-time -- Not sure how accurate this actually is. This value is still very low even while the actual FPS is tanking a lot.
 			-- !if DEV  LG.getStats(statsWorld)
 
+			LG.setShader()
 			LG.setBlendMode(LG.BlendMode.ALPHA)
 
 			if showAreaDistribution {
@@ -2225,16 +2274,52 @@ export getTextureFullPath :: (project:Project, system:System) -> (success:bool, 
 	}
 }
 
-export setTexturePath :: (project:Project, system:System, path:string) {
-	local valueOld = system.texturePath
-	local valueNew = path
+export setTexturePath :: (project:Project, system:System, pathNew:string) {
+	local pathOld = system.texturePath
+	if pathNew == pathOld  return
 
-	if valueNew == valueOld  return
+	local saveRecent = true
 
 	recordChange("Texture path",
-		[system, valueNew] (project:Project) {  system.texturePath = valueNew  },
-		[system, valueOld] (project:Project) {  system.texturePath = valueOld  },
-		[system          ] (project:Project) {  updateParticleTexture(project, system, saveRecent=true) ; guiState.refreshRecursively!("texturePath")  }
+		[system, pathNew            ] (project:Project) {  system.texturePath = pathNew  },
+		[system, pathOld, saveRecent] (project:Project) {  system.texturePath = pathOld ; saveRecent = false  },
+		[system,          saveRecent] (project:Project) {  updateParticleTexture(project, system, saveRecent) ; saveRecent = false ; guiState.refreshRecursively!("texturePath")  }
+	)
+}
+
+
+
+export getShaderFullPath :: (project:Project, system:System) -> (success:bool, path:string, isDanglingRelativePath:bool) {
+	local path = system.shaderPath
+
+	if not path {
+		return false, "", false
+
+	} elseif Path(path).isAbsolute {
+		if not Path(path).getFilename!()  return false, "", false
+		return true, path, false
+
+	} elseif project.fileIsSaved {
+		local pathObj = Path(project.path)
+		pathObj.pop!() -- @Robustness: Should we check if the path empty after this?
+		pathObj.append!(path)
+		return true, pathObj.toString!(), false
+
+	} else {
+		return false, path, true
+	}
+}
+
+export setShaderPath :: (project:Project, system:System, pathNew:string) {
+	local pathOld = system.shaderPath
+	if pathNew == pathOld  return
+
+	local saveRecent = true
+
+	recordChange("Shader path",
+		[system, pathNew            ] (project:Project) {  system.shaderPath = pathNew  },
+		[system, pathOld, saveRecent] (project:Project) {  system.shaderPath = pathOld ; saveRecent = false  },
+		[system,          saveRecent] (project:Project) {  updateParticleShader(project, system, saveRecent) ; saveRecent = false ; guiState.refreshRecursively!("shaderPath")  }
 	)
 }
 

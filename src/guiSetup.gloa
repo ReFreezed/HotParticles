@@ -313,6 +313,18 @@ export setupGuiFrames :: () {
 							},
 						}),
 					}),
+
+					guiState.separator!({ thick=true }),
+
+					guiState.section!({ name="shaderSection", label="Shader", icon16="", -- @Incomplete: Icon.
+						guiState.hbox!({
+							guiState.inputText!({ name="shaderPath", labelLeft="path", tooltip="Absolute path, or relative to the saved .hotparticles file", weight=1 }),
+							guiState.buttons!({ buttons={
+								{name="chooseShader", image="iconFolder", tooltip="Browse files"},
+								{name="reloadShader", image="iconReload", tooltip="Reload shader"},
+							}}),
+						}),
+					}),
 				}),
 			}),
 		}),
@@ -1123,10 +1135,21 @@ export setupGuiCallbacks :: () {
 
 	guiState.onAction.chooseTexture = (buttons:gui.Buttons, buttonIndex:int) {
 		local project, system = getCurrentProjectAndSystem()
-		local pathObj         = Path(system.texturePath ?: project.path)
+		local pathObj         = Path(system.texturePath)
+		local ok, dir         = pathObj.getDirectory!()
 
-		local  ok, dir = pathObj.getDirectoryAndFilename!()
-		if not ok  dir = getSaveDirectory().."/projects"
+		if not ok {
+			dir = getSaveDirectory().."/projects"
+
+		} else {
+			local dirObj = Path(dir)
+
+			if not dirObj.isAbsolute {
+				ok, dir = Path(project.path).getDirectory!()
+				dirObj.prepend!(ok ? dir : getSaveDirectory().."/projects")
+				dir = dirObj.toString!()
+			}
+		}
 
 		local ^ok, filename = Path(system.texturePath).getFilename!()
 		if not ok  filename = ""
@@ -1778,8 +1801,93 @@ export setupGuiCallbacks :: () {
 		}
 	)
 
+	-- Shader.
+	guiState.onRefresh.shaderPath = (input:gui.InputText) {
+		local project, system = getCurrentProjectAndSystem()
+		input.value           = system.shaderPath
+	}
+	guiState.onAction.shaderPath = (input:gui.InputText) {
+		local project, system = getCurrentProjectAndSystem()
+		setShaderPath(project, system, Path(trim(input.value)).toString!())
+	}
+	guiState.onOption.shaderPath = (input:gui.InputText, _:int) {
+		local items = {"Recent shaders:"}
+
+		if app.recentShaders {
+			for app.recentShaders  insert(items, it)
+			insert(items, "Clear history")
+		} else {
+			insert(items, "(no recent files)")
+		}
+
+		guiState.showContextMenu!(items, [items] (choice:int) {
+			if choice <= 1 or not app.recentShaders {
+				-- void
+			} elseif choice == #items {
+				app.recentShaders = {}
+			} else {
+				local project, system = getCurrentProjectAndSystem()
+				setShaderPath(project, system, items[choice])
+			}
+		})
+	}
+
+	guiState.onAction.chooseShader = (buttons:gui.Buttons, buttonIndex:int) {
+		local project, system = getCurrentProjectAndSystem()
+		local pathObj         = Path(system.shaderPath)
+		local ok, dir         = pathObj.getDirectory!()
+
+		if not ok {
+			dir = getSaveDirectory().."/projects"
+
+		} else {
+			local dirObj = Path(dir)
+
+			if not dirObj.isAbsolute {
+				ok, dir = Path(project.path).getDirectory!()
+				dirObj.prepend!(ok ? dir : getSaveDirectory().."/projects")
+				dir = dirObj.toString!()
+			}
+		}
+
+		local ^ok, filename = Path(system.shaderPath).getFilename!()
+		if not ok  filename = ""
+
+		showFileDialog("Choose shader", dir, filename,
+			onHighlight = (pathObj:Path) {},
+			onChoose = (pathObj:Path) {
+				local ok, dir, filename = pathObj.getDirectoryAndFilename!()
+				assert(ok)
+
+				if not connectToRemoteDirectory(dir) {
+					setErrorText("Could not access folder '%s'", dir)
+					return
+				}
+				defer disconnectFromRemoteDirectory()
+
+				addRecent(app.recentFolders, dir, app.maxRecentFolders)
+
+				local shader = pcall_newShader(filename)
+				if shader == NULL {
+					setErrorText("'%s' is not a valid shader file", filename)
+					return
+				}
+
+				local project, system = getCurrentProjectAndSystem()
+				setShaderPath(project, system, pathObj.toString!())
+				popPanel()
+			},
+			onClose = () {}
+		)
+	}
+
+	guiState.onAction.reloadShader = (buttons:gui.Buttons, buttonIndex:int) {
+		local project, system = getCurrentProjectAndSystem()
+		if system.shaderPath  updateParticleShader(project, system)
+	}
+
 	--==============================================================
-	--= Save/open project  asdf
+	--= Save/open project
 	--==============================================================
 	do {
 		local Item :: struct { isDir=false, name="" }
