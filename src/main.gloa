@@ -442,6 +442,7 @@ export System :: struct {
 			textureName                 = source.textureName,
 			offsetX                     = source.offsetX,
 			offsetY                     = source.offsetY,
+			shaderPath                  = source.shaderPath,
 			scaleTime                   = source.scaleTime,
 			scaleSpace                  = source.scaleSpace,
 			scaleSize                   = source.scaleSize,
