@@ -72,7 +72,7 @@ export setupGuiFrames :: () {
 
 				guiState.separator!({ thick=false }),
 
-				guiState.section!({ name="scaleGlobalSection", label="GlobalScale", icon16="scale",
+				guiState.section!({ name="scaleGlobalSection", label="GlobalScale", icon16="scaleGlobal",
 					guiState.slider!({ name="scaleGlobalTime",  labelLeft="time",  min=0, max=4, exponential=true, limitName="scaleGlobalTime",  readoutMulti=100, readout="%d%%" }),
 					guiState.slider!({ name="scaleGlobalSpace", labelLeft="space", min=0, max=4, exponential=true, limitName="scaleGlobalSpace", readoutMulti=100, readout="%d%%", linkMultiDrag={"scaleGlobalSize"} }),
 					guiState.slider!({ name="scaleGlobalSize",  labelLeft="size",  min=0, max=4, exponential=true, limitName="scaleGlobalSize",  readoutMulti=100, readout="%d%%", linkMultiDrag={"scaleGlobalSpace"} }),
@@ -316,7 +316,7 @@ export setupGuiFrames :: () {
 
 					guiState.separator!({ thick=true }),
 
-					guiState.section!({ name="shaderSection", label="Shader", icon16="", -- @Incomplete: Icon.
+					guiState.section!({ name="shaderSection", label="Shader", icon16="shader",
 						guiState.hbox!({
 							guiState.inputText!({ name="shaderPath", labelLeft="path", tooltip="Absolute path, or relative to the saved .hotparticles file", weight=1 }),
 							guiState.buttons!({ buttons={
