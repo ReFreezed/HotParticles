@@ -444,6 +444,18 @@ export setupGuiFrames :: () {
 			guiState.buttons!({ height=BIG_BUTTON_HEIGHT, buttons={{name="util_popPanel",label="Close"}} }),
 		}),
 
+		guiState.frame!({ name="log", width=LOG_DIALOG_WIDTH, modal=true, layout=gui.Layout.FLOATING, active=false,
+			guiState.text!({ text="Log", size=3 }),
+
+			guiState.separator!({ thick=false }),
+			guiState.scrollable!({
+				guiState.text!({ name="log_text" }),
+			}),
+
+			guiState.separator!({ thick=true }),
+			guiState.buttons!({ height=BIG_BUTTON_HEIGHT, buttons={{name="util_popPanel",label="Close"}} }),
+		}),
+
 		guiState.frame!({ name="animation", width=MAIN_PANEL_WIDTH, active=false,
 			guiState.text!({ text="Animation", size=3 }),
 			guiState.canvas!({ name="animation_preview", width=100, height=100 }),
@@ -1164,7 +1176,7 @@ export setupGuiCallbacks :: () {
 
 				local ^textureBrowserPreviewImage, err = pcall_newImage(filename)
 				if textureBrowserPreviewImage == NULL {
-					print(err)
+					log(err)
 					return
 				}
 
@@ -3225,7 +3237,7 @@ export setupGuiCallbacks :: () {
 		guiState.refreshRecursively!(frame)
 	}
 
-	guiState.onRefresh.preferences_maxBufferSize = (input:gui.InputText, _:int) {
+	guiState.onRefresh.preferences_maxBufferSize = (input:gui.InputText) {
 		input.value = format("%.0f", app.maxBufferSize)
 	}
 	guiState.onAction.preferences_maxBufferSize = (input:gui.InputText, _:int) {
@@ -3244,7 +3256,7 @@ export setupGuiCallbacks :: () {
 		}
 	}
 
-	guiState.onRefresh.preferences_maxRecentFiles = (input:gui.InputText, _:int) {
+	guiState.onRefresh.preferences_maxRecentFiles = (input:gui.InputText) {
 		input.value = format("%.0f", app.maxRecentFiles)
 	}
 	guiState.onAction.preferences_maxRecentFiles = (input:gui.InputText, _:int) {
@@ -3258,7 +3270,7 @@ export setupGuiCallbacks :: () {
 		input.value        = format("%.0f", n)
 		scheduleSaveWorkspace()
 	}
-	guiState.onRefresh.preferences_maxRecentFolders = (input:gui.InputText, _:int) {
+	guiState.onRefresh.preferences_maxRecentFolders = (input:gui.InputText) {
 		input.value = format("%.0f", app.maxRecentFolders)
 	}
 	guiState.onAction.preferences_maxRecentFolders = (input:gui.InputText, _:int) {
@@ -3273,7 +3285,7 @@ export setupGuiCallbacks :: () {
 		scheduleSaveWorkspace()
 	}
 
-	guiState.onRefresh.preferences_maxChanges = (input:gui.InputText, _:int) {
+	guiState.onRefresh.preferences_maxChanges = (input:gui.InputText) {
 		input.value = format("%.0f", app.maxChanges)
 	}
 	guiState.onAction.preferences_maxChanges = (input:gui.InputText, _:int) {
@@ -3286,6 +3298,20 @@ export setupGuiCallbacks :: () {
 		app.maxChanges = n
 		input.value    = format("%.0f", n)
 		scheduleSaveWorkspace()
+	}
+
+	--==============================================================
+	--= Log
+	--==============================================================
+
+	guiState.onActive.log = (frame:gui.Frame) {
+		guiState.refreshRecursively!(frame)
+	}
+
+	guiState.onRefresh.log_text = (textEl:gui.Text) {
+		local s        = concatinate(logStrings, "\n")
+		local _, lines = fontNormal.getWrap!(s, LOG_DIALOG_WIDTH-20) -- @Ugly
+		textEl.text    = concatinate(lines, "\n")
 	}
 
 	--==============================================================

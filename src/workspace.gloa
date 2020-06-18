@@ -170,7 +170,7 @@ local writeProject :: (buffer:[]string, project:Project, isSavingWorkspace:bool)
 export saveWorkspace :: () {
 	if not workspaceSaveScheduled  return
 
-	-- print("Saving workspace.")
+	-- log("Saving workspace.")
 
 	workspaceSaveScheduled = false
 	workspaceSaveDelay     = 0
@@ -285,7 +285,7 @@ export saveProject :: (project:Project, path:string, overwrite:bool) -> (success
 
 
 local parsingError :: (path:string, ln:int, s:string, ...:int|float|string) -> (success:bool, gotError:bool, app:App) {
-	printf("Error: %s:%d: "..s, path, ln, ...)
+	log("Error: %s:%d: "..s, path, ln, ...)
 	return false, true, NULL
 }
 

@@ -352,6 +352,8 @@ export Text :: struct {
 
 	text = "",
 	size = 2, -- 1=small, 2=normal, 3=large
+
+	textHeight = 0,
 }
 
 export Separator :: struct {
@@ -1259,7 +1261,7 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int) {
 					triggerDragEndEvent(state, buttons, button.name, state.activeSubid)
 
 				case:
-					printf("Error: triggerDragEndEvent: Unhandled element type '%d'.", widget.type)
+					log("Error: triggerDragEndEvent: Unhandled element type '%d'.", widget.type)
 					triggerDragEndEvent(state, widget, "", state.activeSubid)
 			}
 
@@ -1397,8 +1399,11 @@ local calculateNaturalSize :: (state:State, el:Element) {
 		case Text:
 			local textEl        = cast(Text) el
 			local font          = textEl.size == 3 ? fontLarge : textEl.size == 1 ? fontSmall : fontNormal
+			local fontH         = font.getHeight!()
+			local lineCount     = 1 + countString(textEl.text, "\n")
+			textEl.textHeight   = math.ceil(fontH + (lineCount-1) * fontH * font.getLineHeight!())
 			textEl.layoutWidth  = font.getWidth!(textEl.text) + (textEl.size == 3 ? 1 : 0)
-			textEl.layoutHeight = font.getHeight!()
+			textEl.layoutHeight = textEl.textHeight
 
 		case Separator:
 			local separator        = cast(Separator) el
@@ -1652,7 +1657,7 @@ local updateLayoutIfNeeded :: (state:State) {
 	if not state.layoutNeedsUpdate  return
 	state.layoutNeedsUpdate = false
 
-	-- print("Updating layout.")
+	-- log("Updating layout.")
 
 	local updateParents :: (el:Element, frame:Frame, parent:Element) {
 		el.frame  = frame
@@ -1866,7 +1871,7 @@ local drawElement :: (state:State, el:Element) {
 		case Text:
 			local textEl = cast(Text) el
 			local font   = textEl.size == 3 ? fontLarge : textEl.size == 1 ? fontSmall : fontNormal
-			local textY  = textEl.layoutY + (textEl.layoutHeight - font.getHeight!()) // 2
+			local textY  = textEl.layoutY + (textEl.layoutHeight - textEl.textHeight) // 2
 
 			LG.pushAll()
 			intersectScissor(textEl.layoutX, 0, textEl.layoutWidth, LG.getHeight())
@@ -2604,7 +2609,7 @@ export findParent :: (state:State, el:Element, name:string) -> (found:bool, pare
 export setActive :: (state:State, name:string, active:bool) -> (success:bool) {
 	local el = state.elementsByName[name]
 	if el == NULL {
-		printf("Error: No element '%s'.", name)
+		log("Error: No element '%s'.", name)
 		return false
 	}
 
@@ -2889,7 +2894,7 @@ export refresh :: (state:State, el:Element) {
 export refresh :: (state:State, name:string) {
 	local el = state.elementsByName[name]
 	if el == NULL {
-		printf("Error: No element '%s'.", name)
+		log("Error: No element '%s'.", name)
 		return
 	}
 
@@ -2905,7 +2910,7 @@ export refreshRecursively :: (state:State, el:Element, onlyActive=true) {
 export refreshRecursively :: (state:State, name:string, onlyActive=true) {
 	local el = state.elementsByName[name]
 	if el == NULL {
-		printf("Error: No element '%s'.", name)
+		log("Error: No element '%s'.", name)
 		return
 	}
 
@@ -2946,12 +2951,12 @@ export isElementVisible :: (state:State, name:string) -> bool {
 export setFocus :: (state:State, name:string) {
 	local input = cast(InputText) state.elementsByName[name]
 	if input == NULL {
-		printf("Error: No element '%s'.", name)
+		log("Error: No element '%s'.", name)
 		return
 	}
 
 	if input.type ~= InputText {
-		printf("Error: Element '%s' is not InputText.", name)
+		log("Error: Element '%s' is not InputText.", name)
 		return
 	}
 
@@ -3004,18 +3009,18 @@ export getTopmostActiveModal :: (state:State) -> Frame {
 export pressButton :: (state:State, buttonsElementName:string, i:int) {
 	local buttons = cast(Buttons) state.elementsByName[buttonsElementName]
 	if buttons == NULL {
-		printf("Error: No element '%s'.", buttonsElementName)
+		log("Error: No element '%s'.", buttonsElementName)
 		return
 	}
 
 	if not (buttons.type == Buttons or buttons.type == Radio or buttons.type == Tabs) {
-		printf("Error: '%s' is not a buttons element.", buttonsElementName)
+		log("Error: '%s' is not a buttons element.", buttonsElementName)
 		return
 	}
 
 	local button = buttons.buttons[i]
 	if button == NULL or true {
-		printf("Error: No button at index %d in '%s'.", i, buttonsElementName)
+		log("Error: No button at index %d in '%s'.", i, buttonsElementName)
 		return
 	}
 

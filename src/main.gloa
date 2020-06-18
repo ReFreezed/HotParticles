@@ -12,6 +12,7 @@ export APP_VERSION_STRING :: !run (getReleaseVersion())
 
 export MAIN_PANEL_WIDTH     :: 450
 export DIALOG_WIDTH         :: 400
+export LOG_DIALOG_WIDTH     :: 700
 export WORKSPACE_SAVE_DELAY :: 1.00
 
 export WINDOW_TITLE :: !run format("Hot Particles %s%s", APP_VERSION_STRING, (DEV ? " [DEBUG]" : ""))
@@ -568,7 +569,7 @@ export updateParticleTexture :: (project:Project, system:System, saveRecent=fals
 
 		local image, ^err = pcall_newImage(filename)
 		if image == NULL {
-			print(err)
+			log(err)
 			setErrorText("Could not load texture '%s'", filename)
 			return NULL, NULL
 		}
@@ -623,10 +624,35 @@ export updateParticleShader :: (project:Project, system:System, saveRecent=false
 		if saveRecent  addRecent(app.recentShaders, system.shaderPath, app.maxRecentFiles)
 		-- if saveRecent  addRecent(app.recentShaders, path, app.maxRecentFiles)
 
-		local shader, err = pcall_newShader(filename)
+		local shaderCode: string = NULL
+		do {
+			local _shaderCode, err = LF.read(filename)
+			if _shaderCode == nil {
+				setErrorText("Could not read '%s': %s", filename, err)
+				return NULL
+			}
+			shaderCode = cast(string) _shaderCode
+		}
+
+		-- Note: wrap_GraphicsShader.lua in LÖVE is used as reference for some things here.
+
+		local versionLine = ""
+		if findPattern(shaderCode, "^#pragma language %w") {
+			local _, _versionLine, _shaderCode = matchPattern(shaderCode, "^([^\n]+\n?)(.*)")
+			versionLine = cast(string) _versionLine
+			shaderCode  = cast(string) _shaderCode
+		}
+
+		shaderCode =
+			versionLine.."\z
+			#define HOT_PARTICLES\n\z
+			uniform float hotParticlesTime;\n\z
+			"..shaderCode
+
+		local shader, err = pcall_newShader(shaderCode)
 		if shader == NULL {
-			print(err) -- @UX: Show shader errors to the user.
-			setErrorText("Could not load shader '%s'", filename)
+			log(err) -- @Incomplete: Fix line numbers.
+			setErrorText("Could not load shader '%s' (see File > Log)", filename)
 			return NULL
 		}
 
@@ -786,7 +812,7 @@ export setActionText :: (s:string, v,...:int|float|string) {
 }
 
 export setMessageText :: (s:string) {
-	if messageText ~= s  print(s)
+	if messageText ~= s  log(s)
 
 	messageText         = s
 	messageTextTime     = LT.getTime()
@@ -798,7 +824,7 @@ export setMessageText :: (s:string, v,...:int|float|string) {
 
 export setErrorText :: (s:string) {
 	s = "Error: "..s
-	if messageText ~= s  print(s)
+	if messageText ~= s  log(s)
 
 	messageText         = s
 	messageTextTime     = LT.getTime()
@@ -1052,7 +1078,7 @@ local onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool) 
 		case "f8":
 			!if GIF_RECORDING_MODE {
 				gifRecordingActive = not gifRecordingActive
-				printf("Recording gif: %s", toString(gifRecordingActive))
+				log("Recording gif: %s", toString(gifRecordingActive))
 
 				if gifRecordingActive {
 					gifRecordingFrame     = 1
@@ -1061,7 +1087,7 @@ local onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool) 
 					LF.createDirectory(gifRecordingDirectory)
 
 				} else {
-					printf("Recorded frames: %d", gifRecordingFrame-1)
+					log("Recorded frames: %d", gifRecordingFrame-1)
 
 					local ok, err, code, cmd = os.execute(loadParams().pathMagick, {
 						"convert",
@@ -1533,12 +1559,14 @@ local onDraw :: () {
 			local time = LT.getTime()
 
 			LG.setColor(1, 1, 1)
-			for system: project.systems {
-				if system.visible {
-					LG.setShader(system.currentShader)
-					LG.setBlendMode(system.blendMode)
-					LG.draw(system.particles)
+			for system: project.systems  if system.visible {
+				local shader = system.currentShader
+				if shader ~= NULL {
+					if shader.hasUniform!"hotParticlesTime"  shader.send!("hotParticlesTime", project.particleEmitDuration)
 				}
+				LG.setShader(shader)
+				LG.setBlendMode(system.blendMode)
+				LG.draw(system.particles)
 			}
 
 			particleDrawTime = LT.getTime()-time -- Not sure how accurate this actually is. This value is still very low even while the actual FPS is tanking a lot.
@@ -2534,6 +2562,7 @@ export showMainMenu :: () {
 		{label="Export...",           name="export",      shortcut=ctrlText.."+E"},
 		{label="-"},
 		{label="Preferences",         name="preferences", shortcut=ctrlText.."+K"},
+		{label="Log",                 name="log"},
 		{label="-"},
 		{label="Exit",                name="exit",        shortcut=ctrlText.."+Q"},
 	}
@@ -2552,6 +2581,7 @@ export showMainMenu :: () {
 			case "saveAs":      showSaveProjectAsDialog()
 			case "export":      pushPanel("exportProject")
 			case "preferences": pushPanel("preferences")
+			case "log":         pushPanel("log")
 			case "exit":        pushQuitEvent()
 		}
 	})
