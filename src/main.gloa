@@ -2202,6 +2202,7 @@ export confirmDeleteSystem :: (systemIndexToDelete:int) {
 		LG.setColor(1, 1, 1)
 
 		LG.clear(r, g, b)
+		LG.setShader(system.currentShader)
 		LG.setBlendMode(system.blendMode)
 
 		LG.draw(system.particles,
@@ -2210,6 +2211,7 @@ export confirmDeleteSystem :: (systemIndexToDelete:int) {
 			0, scale
 		)
 
+		LG.setShader()
 		LG.setBlendMode(LG.BlendMode.ALPHA)
 	}
 
