@@ -30,6 +30,12 @@ export setupGuiFrames :: () {
 			guiState.separator!({ thick=true }),
 
 			guiState.vbox!({ name="projectSettings",
+				guiState.section!({ label="Custom data",
+					guiState.inputText!({ name="customDataProject" }),
+				}),
+
+				guiState.separator!({ thick=false }),
+
 				guiState.section!({ label="Pixelate",
 					guiState.hbox!({
 						guiState.checkbox!({ name="pixelateWorld",    label="world"    }),
@@ -85,6 +91,12 @@ export setupGuiFrames :: () {
 				guiState.tabs!({ name="systems", specialLastTab=true }),
 
 				guiState.scrollable!({
+					guiState.section!({ label="Custom data",
+						guiState.inputText!({ name="customDataSystem" }),
+					}),
+
+					guiState.separator!({ thick=true }),
+
 					guiState.section!({ name="textureSection", label="Texture", icon16="texture",
 						guiState.radio!({ name="textureName", labelLeft="preset" }),
 						guiState.hbox!({
@@ -942,6 +954,22 @@ export setupGuiCallbacks :: () {
 	addEventHandlersForSlider("emitterMovementSpeed", "Emitter movement speed",
 		(project:Project, system:System, value:float) {  project.movementSpeed = value  }
 	)
+
+	guiState.onRefresh.customDataProject = (input:gui.InputText) {
+		local project = app.projects[app.currentProjectIndex]
+		input.value   = project.customData
+	}
+	guiState.onAction.customDataProject = (input:gui.InputText) {
+		local project = app.projects[app.currentProjectIndex]
+		local dataOld = project.customData
+		local dataNew = input.value
+
+		recordChange("Project custom data",
+			[dataNew] (project:Project) {  project.customData = dataNew  },
+			[dataOld] (project:Project) {  project.customData = dataOld  },
+			--[[   ]] (project:Project) {  guiState.refreshRecursively!("customDataProject")  }
+		)
+	}
 
 	-- Scale global.
 	guiState.onRefresh.scaleGlobalTime = (slider:gui.Slider) {
@@ -1897,6 +1925,23 @@ export setupGuiCallbacks :: () {
 		local project, system = getCurrentProjectAndSystem()
 		if system.shaderPath  updateParticleShader(project, system)
 	}
+	--
+
+	guiState.onRefresh.customDataSystem = (input:gui.InputText) {
+		local project, system = getCurrentProjectAndSystem()
+		input.value           = system.customData
+	}
+	guiState.onAction.customDataSystem = (input:gui.InputText) {
+		local project, system = getCurrentProjectAndSystem()
+		local dataOld         = system.customData
+		local dataNew         = input.value
+
+		recordChange("Particle system custom data",
+			[system, dataNew] (project:Project) {  system.customData = dataNew  },
+			[system, dataOld] (project:Project) {  system.customData = dataOld  },
+			--[[           ]] (project:Project) {  guiState.refreshRecursively!("customDataSystem")  }
+		)
+	}
 
 	--==============================================================
 	--= Save/open project
@@ -2697,6 +2742,7 @@ export setupGuiCallbacks :: () {
 			publicParticleSystem.spread           = ps.getSpread!()
 			publicParticleSystem.texturePreset    = system.textureName
 			publicParticleSystem.title            = system.title
+			publicParticleSystem.customData       = system.customData
 
 			do { local min,max   = ps.getLinearDamping!()          ; publicParticleSystem.linearDamping          = cast(table) {min,max, min=min,max=max} }
 			do { local min,max   = ps.getParticleLifetime!()       ; publicParticleSystem.particleLifetime       = cast(table) {min,max, min=min,max=max} }
@@ -2817,6 +2863,7 @@ export setupGuiCallbacks :: () {
 					writeLuaValue(buffer, 2, v)
 			},
 
+			customData       = project.customData,
 			particleSystems  = publicParticleSystems,
 			pixelateTextures = project.pixelateTextures,
 		})

@@ -61,6 +61,7 @@ local writeProject :: (buffer:[]string, project:Project, isSavingWorkspace:bool)
 	insert(buffer, "pixelateWorld")    ; writeValue(buffer, eol=true, project.pixelateWorld)
 	insert(buffer, "pixelateTextures") ; writeValue(buffer, eol=true, project.pixelateTextures)
 	insert(buffer, "zoom")             ; writeValue(buffer, eol=true, project.zoomLevel)
+	insert(buffer, "customData")       ; writeValue(buffer, eol=true, project.customData)
 
 	insert(buffer, "exportBaseDirectory")      ; writeValue(buffer, eol=true, project.exportBaseDirectory)
 	insert(buffer, "exportParticles")          ; writeValue(buffer, eol=true, project.exportParticles)
@@ -119,6 +120,7 @@ local writeProject :: (buffer:[]string, project:Project, isSavingWorkspace:bool)
 		insert(buffer, "texture")           ; writeValue(buffer, eol=true, system.textureName)
 		insert(buffer, "texturePath")       ; writeValue(buffer, eol=true, system.texturePath)
 		insert(buffer, "title")             ; writeValue(buffer, eol=true, system.title)
+		insert(buffer, "customData")        ; writeValue(buffer, eol=true, system.customData)
 
 		insert(buffer, "linearDamping")          ; writeValues(buffer, eol=true, system.psLinearDampingMin,          system.psLinearDampingMax)
 		insert(buffer, "offset")                 ; writeValues(buffer, eol=true, system.offsetX,                     system.offsetY)
@@ -657,6 +659,12 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 						emitterX           = x
 						emitterY           = y
 
+					case "customData":
+						local ^ok, ^ptr, data = readString(version, line, cast(int)ptr)
+						if not ok                 return parsingError(path, ln, "Bad value format: %s", line)
+						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
+						project.customData = data
+
 					case "guiLimit":
 						local ^ok, ^ptr, name  = readString(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 						local ^ok, ^ptr, limit = readFloat (version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
@@ -796,6 +804,12 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 						if not ok                 return parsingError(path, ln, "Bad value format: %s", line)
 						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
 						system.title = title
+
+					case "customData":
+						local ^ok, ^ptr, data = readString(version, line, cast(int)ptr)
+						if not ok                 return parsingError(path, ln, "Bad value format: %s", line)
+						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
+						system.customData = data
 
 					case "linearDamping":
 						local ^ok, ^ptr, min = readFloat(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)

@@ -235,6 +235,8 @@ export Project :: struct {
 	scaleGlobalSpace = 1.0,
 	scaleGlobalSize  = 1.0,
 
+	customData = "",
+
 	guiLimits: struct { !key:string, !value:float },
 
 	emitterX: int, -- Load-time only.
@@ -306,6 +308,7 @@ export Project :: struct {
 			scaleGlobalTime          = source.scaleGlobalTime,
 			scaleGlobalSpace         = source.scaleGlobalSpace,
 			scaleGlobalSize          = source.scaleGlobalSize,
+			customData               = source.customData,
 			guiLimits                = copyTable(source.guiLimits),
 			edited                   = true,
 
@@ -374,7 +377,8 @@ export System :: struct {
 	kickStartEmit  = 0,
 	kickStartSteps = 0,
 
-	title = "",
+	title      = "",
+	customData = "",
 
 	frames: []AnimationFrame,
 
@@ -450,6 +454,7 @@ export System :: struct {
 			kickStartEmit               = source.kickStartEmit,
 			kickStartSteps              = source.kickStartSteps,
 			title                       = source.title,
+			customData                  = source.customData,
 			gui                         = copyTable(source.gui),
 
 			particles        = source.particles.clone!(),

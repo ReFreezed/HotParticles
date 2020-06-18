@@ -248,12 +248,17 @@ Functions:
 
 Values:
 
+    customData
+        String. Custom data for the project. Is empty by default. (Note that
+        particle systems can have their own custom data too.)
+
     particleSystems
         Array of tables with these fields:
 
         blendMode               string   The blend mode for drawing.
         bufferSize              number   An appropriate buffer size.
         colors                  table    Sequence of red/green/blue/alpha values, like this: {r1,g1,b1,a1, r2,g2,b2,a2, ...}
+        customData              string   Custom data for the particle system. Is empty by default.
         direction               number   The particle direction.
         emissionArea            table    Table with these fields: distribution (string), dx (number), dy (number), angle (number), relative (boolean). Is also an array.
         emissionRate            number   Particle spawning rate.
