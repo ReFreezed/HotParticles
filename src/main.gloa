@@ -8,14 +8,9 @@
 local GIF_RECORDING_MODE :: DEV and 1==0
 local GIF_FRAME_DELAY    :: 2 -- 100th of a second. (Using 1 here seem troublesome and may make the GIF play very slowly for some reason.)
 
-export APP_VERSION_STRING :: !run (getReleaseVersion())
-
-export MAIN_PANEL_WIDTH     :: 450
-export DIALOG_WIDTH         :: 400
-export LOG_DIALOG_WIDTH     :: 700
+export APP_VERSION_STRING   :: !run (getReleaseVersion())
 export WORKSPACE_SAVE_DELAY :: 1.00
-
-export WINDOW_TITLE :: !run format("Hot Particles %s%s", APP_VERSION_STRING, (DEV ? " [DEBUG]" : ""))
+export WINDOW_TITLE         :: !run format("Hot Particles %s%s", APP_VERSION_STRING, (DEV ? " [DEBUG]" : ""))
 
 
 
@@ -63,12 +58,12 @@ export LW :: love.window
 local  LE :: love.event
 
 export !self
+export !load "src/guiSetup"
 export !load "src/misc"
 export !load "src/workspace"
 
 export gui :: !load "src/gui"
 
-!load "src/guiSetup"
 !load "src/shared"
 
 

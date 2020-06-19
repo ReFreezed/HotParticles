@@ -50,9 +50,9 @@ export SPACING_LARGE :: 10
 local BUTTON_RADIUS    :: 3
 local BUTTON_PADDING_Y :: 2
 
-local SCROLLABLE_PADDING   :: 5 -- Vertical.
-local SCROLLBAR_WIDTH      :: 8
-local SCROLLBAR_MIN_LENGTH :: 30
+export SCROLLABLE_PADDING   :: 5 -- Vertical.
+export SCROLLBAR_WIDTH      :: 8
+export SCROLLBAR_MIN_LENGTH :: 16
 
 local SECTION_LABEL_WIDTH :: 100
 
@@ -1294,8 +1294,9 @@ export onMouseWheel :: (state:State, dx,dy:int) -> (handled:bool) {
 
 	if el ~= NULL {
 		local scrollable        = cast(Scrollable) el
+		local maxDy             = math.max(scrollable.layoutHeight - 2 * (SCROLLABLE_PADDING + SPACING), 10)
 		scrollable.scrollSource = scrollable.scroll
-		scrollable.scrollTarget = scrollable.scrollTarget + 50*dy
+		scrollable.scrollTarget = scrollable.scrollTarget + math.clamp(50*dy, -maxDy, maxDy)
 		limitScroll(scrollable)
 		return true
 	}
@@ -1798,7 +1799,7 @@ local drawElement :: (state:State, el:Element) {
 
 			-- Shadow.
 			do {
-				local shadowH = scrollable.scroll ? 30 : 10
+				local shadowH = math.min((scrollable.scroll ? 30 : 10), math.round(.4*scrollable.layoutHeight))
 				local iw, ih  = imageGradient.getDimensions!()
 				local sx      = shadowH / ih
 				local sy      = (w + SPACING - SCROLLBAR_WIDTH) / iw
@@ -2476,10 +2477,13 @@ export draw :: (state:State) {
 		local a = math.clamp01(((LT.getTime() - state.tooltipTime) - .30) / 0.20)
 
 		if a > 0 {
-			local w = fontNormal.getWidth!(state.currentTooltip) + 2*SPACING
-			local h = fontNormal.getHeight!() + 2*BUTTON_PADDING_Y
-			local x = math.max(math.min(state.tooltipX, ww-w), 0)
-			local y = state.tooltipY1 - h - 1
+			local w, lines = fontNormal.getWrap!(state.currentTooltip, 100_000)
+			local fontH    = fontNormal.getHeight!()
+
+			w       += 2*SPACING
+			local h  = fontH + math.ceil((#lines-1)*fontH*fontNormal.getLineHeight!()) + 2*BUTTON_PADDING_Y
+			local x  = math.max(math.min(state.tooltipX, ww-w), 0)
+			local y  = state.tooltipY1 - h - 1
 
 			if y < 0  y = state.tooltipY2 + 1
 

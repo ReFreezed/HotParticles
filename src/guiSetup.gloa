@@ -9,6 +9,11 @@
 --=
 --============================================================]]
 
+export MAIN_PANEL_WIDTH    :: 450
+export DIALOG_WIDTH        :: 400
+export DIALOG_WIDTH_LOG    :: 700
+export DIALOG_WIDTH_EXPORT :: 550
+
 local BIG_BUTTON_HEIGHT    :: 40
 local MEDIUM_BUTTON_HEIGHT :: 16
 
@@ -376,7 +381,7 @@ export setupGuiFrames :: () {
 			}),
 		}),
 
-		guiState.frame!({ name="exportProject", width=DIALOG_WIDTH, modal=true, layout=gui.Layout.FLOATING, active=false,
+		guiState.frame!({ name="exportProject", width=DIALOG_WIDTH_EXPORT, modal=true, layout=gui.Layout.FLOATING, active=false,
 			guiState.text!({ text="Export", size=3 }),
 
 			guiState.separator!({ thick=false }),
@@ -412,7 +417,9 @@ export setupGuiFrames :: () {
 				}),
 				guiState.inputText!({ name="exportProject_textures_directory", labelLeft="output folder", tooltip="Absolute path, or relative to base folder" }),
 				guiState.hbox!({ labelLeft="resulting paths",
-					guiState.text!({ name="exportProject_textures_pathResults", weight=1 }),
+					guiState.scrollable!({ height=fontNormal.getHeight!()+2*(gui.SCROLLABLE_PADDING+gui.SPACING), weight=1,
+						guiState.text!({ name="exportProject_textures_pathResults" }),
+					}),
 					guiState.buttons!({ name="exportProject_textures_pathResultsInfo", buttons={{image="iconEye"}} }),
 				}),
 			}),
@@ -456,7 +463,7 @@ export setupGuiFrames :: () {
 			guiState.buttons!({ height=BIG_BUTTON_HEIGHT, buttons={{name="util_popPanel",label="Close"}} }),
 		}),
 
-		guiState.frame!({ name="log", width=LOG_DIALOG_WIDTH, modal=true, layout=gui.Layout.FLOATING, active=false,
+		guiState.frame!({ name="log", width=DIALOG_WIDTH_LOG, modal=true, layout=gui.Layout.FLOATING, active=false,
 			guiState.text!({ text="Log", size=3 }),
 
 			guiState.separator!({ thick=false }),
@@ -515,13 +522,13 @@ export pushPanel :: (name:string) {
 	insert(panelStack, name)
 }
 
-export pushTempChoiceDialog :: (title:string, text:string, buttonList:[]gui.Button, cb:(choice:int), submitIndex=0, extraContent:gui.Element=NULL) {
+export pushTempChoiceDialog :: (title:string, text:string, buttonList:[]gui.Button, cb:(choice:int), submitIndex=0, extraContent:gui.Element=NULL, width=DIALOG_WIDTH) {
 	static tempN = 0 ; tempN += 1
 
 	local name        = format("temp%d", tempN)
 	local nameButtons = name.."_buttons"
 
-	local frame = guiState.frame!({ name=name, temp=true, layout=gui.Layout.FLOATING, modal=true, width=DIALOG_WIDTH, active=false })
+	local frame = guiState.frame!({ name=name, temp=true, layout=gui.Layout.FLOATING, modal=true, width=width, active=false })
 	insert(guiState.frames, frame)
 
 	if title {
@@ -2523,7 +2530,7 @@ export setupGuiCallbacks :: () {
 			}
 		}
 
-		textEl.text = concatinate(paths, ", ")
+		textEl.text = concatinate(paths, "\n")
 	}
 	guiState.onRefresh.exportProject_textures_pathResultsInfo = (buttons:gui.Buttons) {
 		buttons.tooltip = guiState.getElement!("exportProject_textures_pathResults", gui.Text).text
@@ -2662,11 +2669,11 @@ export setupGuiCallbacks :: () {
 			)
 
 			local buttonList: []gui.Button
-			for filesToConfirmOverwrite  insert(buttonList, cast(gui.Button){ label=it })
+			for filesToConfirmOverwrite  insert(buttonList, cast(gui.Button){ label=it, tooltip=it })
 
 			local fileListEl = guiState.buttons!({ vertical=true, align=gui.Alignment.LEFT, style=gui.Style.LIST, buttons=buttonList })
 
-			pushTempChoiceDialog("Confirm export", text, BUTTONS, submitIndex=1, extraContent=fileListEl, [writeExportFiles] (choice:int) {
+			pushTempChoiceDialog("Confirm export", text, BUTTONS, submitIndex=1, extraContent=fileListEl, width=DIALOG_WIDTH_EXPORT, [writeExportFiles] (choice:int) {
 				if choice ~= 1  return
 
 				writeExportFiles()
@@ -3379,7 +3386,7 @@ export setupGuiCallbacks :: () {
 
 	guiState.onRefresh.log_text = (textEl:gui.Text) {
 		local s        = concatinate(logStrings, "\n")
-		local _, lines = fontNormal.getWrap!(s, LOG_DIALOG_WIDTH-20) -- @Ugly
+		local _, lines = fontNormal.getWrap!(s, DIALOG_WIDTH_LOG-20) -- @Ugly
 		textEl.text    = concatinate(lines, "\n")
 	}
 
