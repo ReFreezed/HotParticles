@@ -1831,12 +1831,13 @@ local drawElement :: (state:State, el:Element) {
 		case Section:
 			local section = cast(Section) el
 			local hidden  = app.hiddenSections[section.name]
+			local font    = fontNormal--hidden ? fontSmall : fontNormal
 
 			if section.id == state.hoveredId {
 				local x = section.layoutX - SPACING
 				local y = section.layoutY - BUTTON_PADDING_Y
-				local w = fontNormal.getWidth!(section.label) + 2*SPACING
-				local h = fontNormal.getHeight!() + 2*BUTTON_PADDING_Y
+				local w = font.getWidth!(section.label) + 2*SPACING
+				local h = font.getHeight!() + 2*BUTTON_PADDING_Y
 				LG.setColor(1, 1, 1, .45)
 				LG.rectangle(LG.DrawMode.FILL, x, y, w, h, BUTTON_RADIUS)
 			}
@@ -1855,8 +1856,10 @@ local drawElement :: (state:State, el:Element) {
 			}
 
 			if section.label {
+				LG.setFont(font)
 				LG.setColor(1, 1, 1, TEXT_OPACITY)
 				LG.print(section.label, section.layoutX, section.layoutY)
+				LG.setFont(fontNormal)
 			}
 
 			if not hidden  drawChildren(state, section)

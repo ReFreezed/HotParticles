@@ -180,7 +180,7 @@ export App :: struct {
 
 	bookmarkedFolders: []string,
 
-	hiddenSections: struct { !key:string, !value:bool },
+	hiddenSections: struct { !key:string, !value:bool } = {scaleGlobalSection=true, scaleAllSection=true, customDataProjectSection=true, customDataSystemSection=true},
 
 	gotWindowInfo   = false, -- Load-time only.
 	windowX         = 0,

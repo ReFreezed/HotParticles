@@ -232,5 +232,13 @@ export generateIcons :: () {
 		"shader",
 		"scaleGlobal",
 		-- 4
+		"data",
+		"",
+		"",
+		"",
+		"",
+		"",
+		"",
+		"",
 	})
 }

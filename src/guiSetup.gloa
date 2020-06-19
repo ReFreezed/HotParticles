@@ -35,7 +35,7 @@ export setupGuiFrames :: () {
 			guiState.separator!({ thick=true }),
 
 			guiState.vbox!({ name="projectSettings",
-				guiState.section!({ --[[name="customDataProjectSection",]] label="Custom data",
+				guiState.section!({ name="customDataProjectSection", label="Custom data", icon16="data",
 					guiState.inputText!({ name="customDataProject" }),
 				}),
 
@@ -96,7 +96,7 @@ export setupGuiFrames :: () {
 				guiState.tabs!({ name="systems", specialLastTab=true }),
 
 				guiState.scrollable!({
-					guiState.section!({ --[[name="customDataSystemSection",]] label="Custom data",
+					guiState.section!({ name="customDataSystemSection", label="Custom data", icon16="data",
 						guiState.inputText!({ name="customDataSystem" }),
 					}),
 
@@ -105,7 +105,7 @@ export setupGuiFrames :: () {
 					guiState.section!({ name="textureSection", label="Texture", icon16="texture",
 						guiState.radio!({ name="textureName", labelLeft="preset" }),
 						guiState.hbox!({
-							guiState.inputText!({ name="texturePath", labelLeft="path", tooltip="Absolute path, or relative to the saved .hotparticles file (Right-click for recent)", weight=1 }),
+							guiState.inputText!({ name="texturePath", labelLeft="path", tooltip="Absolute path, or relative to the .hotparticles file (Right-click for recent)", weight=1 }),
 							guiState.buttons!({ buttons={
 								{name="chooseTexture", image="iconFolder", tooltip="Browse files"},
 								{name="reloadTexture", image="iconReload", tooltip="Reload texture"},
@@ -335,7 +335,7 @@ export setupGuiFrames :: () {
 
 					guiState.section!({ name="shaderSection", label="Shader", icon16="shader",
 						guiState.hbox!({
-							guiState.inputText!({ name="shaderPath", labelLeft="path", tooltip="Absolute path, or relative to the saved .hotparticles file", weight=1 }),
+							guiState.inputText!({ name="shaderPath", labelLeft="path", tooltip="Absolute path, or relative to the .hotparticles file", weight=1 }),
 							guiState.buttons!({ buttons={
 								{name="chooseShader", image="iconFolder", tooltip="Browse files"},
 								{name="reloadShader", image="iconReload", tooltip="Reload shader"},

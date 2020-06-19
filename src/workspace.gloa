@@ -515,6 +515,7 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 					case "hiddenSections":
 						local ^ok, ^ptr, names = readStringArray(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
+						app.hiddenSections = {}
 						for names  app.hiddenSections[it] = true
 
 					case "window":
