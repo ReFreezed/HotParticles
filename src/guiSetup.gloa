@@ -30,7 +30,7 @@ export setupGuiFrames :: () {
 			guiState.separator!({ thick=true }),
 
 			guiState.vbox!({ name="projectSettings",
-				guiState.section!({ label="Custom data",
+				guiState.section!({ --[[name="customDataProjectSection",]] label="Custom data",
 					guiState.inputText!({ name="customDataProject" }),
 				}),
 
@@ -91,7 +91,7 @@ export setupGuiFrames :: () {
 				guiState.tabs!({ name="systems", specialLastTab=true }),
 
 				guiState.scrollable!({
-					guiState.section!({ label="Custom data",
+					guiState.section!({ --[[name="customDataSystemSection",]] label="Custom data",
 						guiState.inputText!({ name="customDataSystem" }),
 					}),
 
@@ -2717,7 +2717,7 @@ export setupGuiCallbacks :: () {
 					local ^ok, basePath = resolveBaseOuputPath(project)
 					if ok {
 						local ^ok, texturePathObj = Path.getRelativeTo(texturePath, basePath)
-						if ok  texturePath = texturePathObj.toString!()
+						if ok and texturePathObj.path[1] ~= ".."  texturePath = texturePathObj.toString!()
 					}
 				} else {
 					texturePath = ""
@@ -2726,15 +2726,38 @@ export setupGuiCallbacks :: () {
 				publicParticleSystem.texturePath = texturePath
 			}
 
+			do {
+				local shaderPath     = ""
+				local shaderFilename = ""
+
+				local ^ok, shaderPathFull = getShaderFullPath(project, system)
+				if ok {
+					ok, shaderFilename = Path(system.shaderPath).getFilename!()
+					if not ok  shaderFilename = ""
+
+					shaderPath = shaderFilename
+
+					local ^ok, basePath = resolveBaseOuputPath(project)
+					if ok {
+						local ^ok, shaderPathObj = Path.getRelativeTo(shaderPathFull, basePath)
+						if ok and shaderPathObj.path[1] ~= ".."  shaderPath = shaderPathObj.toString!()
+					}
+				}
+
+				publicParticleSystem.shaderPath     = shaderPath
+				publicParticleSystem.shaderFilename = shaderFilename
+			}
+
 			publicParticleSystem.blendMode        = system.blendMode
 			publicParticleSystem.bufferSize       = getOptimalBufferSize(system)
+			publicParticleSystem.customData       = system.customData
 			publicParticleSystem.direction        = ps.getDirection!()
 			publicParticleSystem.emissionRate     = ps.getEmissionRate!()
 			publicParticleSystem.emitAtStart      = system.kickStartEmit
 			publicParticleSystem.emitterLifetime  = ps.getEmitterLifetime!()
 			publicParticleSystem.insertMode       = ps.getInsertMode!()
-			publicParticleSystem.kickStartSteps   = system.kickStartSteps
 			publicParticleSystem.kickStartDt      = getKickStartDt(system)
+			publicParticleSystem.kickStartSteps   = system.kickStartSteps
 			publicParticleSystem.relativeRotation = ps.hasRelativeRotation!()
 			publicParticleSystem.sizes            = cast([]float) { ps.getSizesAsVararg!() }
 			publicParticleSystem.sizeVariation    = ps.getSizeVariation!()
@@ -2742,7 +2765,6 @@ export setupGuiCallbacks :: () {
 			publicParticleSystem.spread           = ps.getSpread!()
 			publicParticleSystem.texturePreset    = system.textureName
 			publicParticleSystem.title            = system.title
-			publicParticleSystem.customData       = system.customData
 
 			do { local min,max   = ps.getLinearDamping!()          ; publicParticleSystem.linearDamping          = cast(table) {min,max, min=min,max=max} }
 			do { local min,max   = ps.getParticleLifetime!()       ; publicParticleSystem.particleLifetime       = cast(table) {min,max, min=min,max=max} }

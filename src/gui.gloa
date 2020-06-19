@@ -1649,7 +1649,7 @@ local positionAndFit :: (state:State, el:Element, x,y,w,h:int) {
 
 		case InputText:
 			local input = cast(InputText) el
-			if input.field ~= NULL  input.field.setWidth!(w)
+			if input.field ~= NULL  input.field.setWidth!(w - 2*SPACING)
 	}
 }
 
@@ -2976,6 +2976,7 @@ export setFocus :: (state:State, input:InputText) {
 	}
 
 	input.field.setText!(input.value)
+	input.field.setScroll!(0)
 }
 
 export blurFocus :: (state:State, abort=false) {

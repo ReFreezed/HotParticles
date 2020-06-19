@@ -1,8 +1,14 @@
 Text [=[
 --[[
 module = {
-	{ system=particleSystem1, kickStartSteps=steps1, kickStartDt=dt1, emitAtStart=count1, blendMode=blendMode1 },
-	{ system=particleSystem2, kickStartSteps=steps2, kickStartDt=dt2, emitAtStart=count2, blendMode=blendMode2 },
+	{
+		system=particleSystem1,
+		kickStartSteps=steps1, kickStartDt=dt1, emitAtStart=count1,
+		blendMode=blendMode1, shader=shader1,
+		texturePreset=preset1, texturePath=path1,
+		shaderPath=path1, shaderFilename=filename1
+	},
+	{ system=particleSystem2, ... },
 	...
 }
 ]]
@@ -41,6 +47,39 @@ for _, ps in ipairs(particleSystems) do
 	end
 
 	imageIdentBySystem[ps] = imageIdent
+end
+
+-- Define shaders. Some may be shared between multiple particle systems.
+local shaderIdentBySystem   = {}
+local shaderIdentByPath     = {}
+local shaderIdentByFilename = {}
+local shaderN               = 0
+
+for _, ps in ipairs(particleSystems) do
+	if ps.shaderFilename ~= "" then
+		local shaderIdentByKey = ps.shaderPath ~= "" and shaderIdentByPath or shaderIdentByFilename
+		local key              = ps.shaderPath ~= "" and ps.shaderPath     or ps.shaderFilename
+		local shaderIdent      = shaderIdentByKey[key]
+
+		if not shaderIdent then
+			shaderN               = shaderN + 1
+			shaderIdent           = "shader" .. shaderN
+			shaderIdentByKey[key] = shaderIdent
+
+			if shaderN == 1 then  Text"\n"  end
+
+			if ps.shaderPath == "" then
+				Text"local " Text(shaderIdent) Text" = ? -- Filename: " Text(ps.shaderFilename) Text"\n"
+			else
+				Text"local " Text(shaderIdent) Text" = LG.newShader(" LuaCsv(ps.shaderPath) Text")\n"
+			end
+		end
+
+		shaderIdentBySystem[ps] = shaderIdent
+
+	else
+		shaderIdentBySystem[ps] = "nil"
+	end
 end
 
 -- Define particle systems.
@@ -83,6 +122,11 @@ for _, ps in ipairs(particleSystems) do
 	Text", kickStartDt="    LuaCsv(ps.kickStartDt)
 	Text", emitAtStart="    LuaCsv(ps.emitAtStart)
 	Text", blendMode="      LuaCsv(ps.blendMode)
+	Text", shader="         Text(shaderIdentBySystem[ps])
+	Text", texturePath="    LuaCsv(ps.texturePath)
+	Text", texturePreset="  LuaCsv(ps.texturePreset)
+	Text", shaderPath="     LuaCsv(ps.shaderPath)
+	Text", shaderFilename=" LuaCsv(ps.shaderFilename)
 	Text"})\n"
 end
 

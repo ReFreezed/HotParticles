@@ -75,7 +75,11 @@ for _, ps in ipairs(particleSystems) do
 			Text"-- ps:emit(" LuaCsv(ps.emitAtStart) Text")\n"
 		end
 	end
+
 	Text"-- At draw time:\n"
+	if ps.shaderFilename ~= "" then
+		Text"-- love.graphics.setShader(?) -- " Text(ps.shaderPath ~= "" and ps.shaderPath or ps.shaderFilename) Text"\n"
+	end
 	Text"-- love.graphics.setBlendMode(" LuaCsv(ps.blendMode) Text")\n"
 	Text"-- love.graphics.draw(ps)\n"
 end

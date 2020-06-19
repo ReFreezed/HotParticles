@@ -131,7 +131,8 @@ local zoomTime = -9999.00
 
 local updateId = 0
 
-local timeForAnimationPreview = 0.00
+local timeForAnimationPreview   = 0.00
+local particleEmitDurationTotal = 0.00
 
 export isMac: bool
 export lctrl: LK.KeyConstant
@@ -652,6 +653,7 @@ export updateParticleShader :: (project:Project, system:System, saveRecent=false
 			versionLine.."\z
 			#define HOT_PARTICLES\n\z
 			uniform float hotParticlesTime;\n\z
+			uniform float hotParticlesEmitterTime;\n\z
 			"..shaderCode
 
 		local shader, err = pcall_newShader(shaderCode)
@@ -1353,6 +1355,7 @@ local onUpdate :: (dt:float) {
 		particleUpdateTime = LT.getTime()-time
 
 		project.particleEmitDuration += dtForParticles
+		particleEmitDurationTotal    += dtForParticles
 
 		for 2, particleUpdateCount {
 			project.particleEmitDuration += dtForParticles
@@ -1567,7 +1570,8 @@ local onDraw :: () {
 			for system: project.systems  if system.visible {
 				local shader = system.currentShader
 				if shader ~= NULL {
-					if shader.hasUniform!"hotParticlesTime"  shader.send!("hotParticlesTime", project.particleEmitDuration)
+					if shader.hasUniform!"hotParticlesTime"         shader.send!("hotParticlesTime",        particleEmitDurationTotal)
+					if shader.hasUniform!"hotParticlesEmitterTime"  shader.send!("hotParticlesEmitterTime", project.particleEmitDuration)
 				}
 				LG.setShader(shader)
 				LG.setBlendMode(system.blendMode)

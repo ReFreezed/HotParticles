@@ -6,8 +6,9 @@ Developed by Marcus 'ReFreezed' Thunström
 3. Controls
 4. Shortcuts
 5. Parameters
-6. Exporting
-7. Template API
+6. Custom shaders
+7. Exporting
+8. Template API
 
 
 
@@ -106,6 +107,9 @@ Ctrl+Shift+Z    Redo
 Project settings
 ------------------------------------------------------------------------------
 
+Custom data: A custom data string attached to the project that can be used by
+    an export script.
+
 Pixelate:
 - World: Enable pixel art mode. Zoom in on the particles to see the effect.
 - Textures: Enable nearest neighbor filtering on textures. Linear filtering is
@@ -113,6 +117,7 @@ Pixelate:
 
 Background: Change the background of the particle viewing area.
 - Pattern: Change the opacity of the checker pattern in the background.
+- Size: Change the size of the pattern.
 
 Emitter movement: Automatically move the emitter in a pattern.
 - Scale: Specify how much the emitter should move. Set one axis to 0% to use
@@ -125,6 +130,9 @@ Global scale: Scale time, space and/or size parameters for all particle
 
 Particle system parameters
 ------------------------------------------------------------------------------
+
+Custom data: A custom data string attached to the particle system that can be
+    used by an export script.
 
 Texture: Choose a built-in texture preset or specify a path to an image file.
 - Offset: Choose where the anchor point of the texture should be for each
@@ -187,6 +195,8 @@ Color: The color of particles. You can specify up to 8 colors to animate the
     over time on the right hand side.
 - Blend mode: The blend mode for the particle system.
 
+Shader: Path to a shader file to be used when rendering the particles.
+
 
 Animation dialog
 ------------------------------------------------------------------------------
@@ -207,7 +217,26 @@ Sequence: Tool used for quickly generating quads based on a rectangular area
 
 
 
-6. Exporting
+6. Custom shaders
+==============================================================================
+
+You can specify what shaders should be used when rendering particle systems.
+The program exposes some values that can be used in the shaders:
+
+    HOT_PARTICLES
+        This is defined for the preprocessor and can be used with #ifdef or in
+        defined().
+
+    hotParticlesTime
+        Uniform float. Contains the current time.
+
+    hotParticlesEmitterTime
+        Uniform float. Contains the current emitter time (i.e it resets along
+        with the emitter).
+
+
+
+7. Exporting
 ==============================================================================
 
 It's possible to export particle system information and textures (the original
@@ -222,7 +251,7 @@ edit existing scripts or make completely new ones to fit your game (see the
 
 
 
-7. Template API
+8. Template API
 ==============================================================================
 
 Templates are normal Lua scripts in the "exportTemplates" folder. Some of the
@@ -275,6 +304,8 @@ Values:
         radialAcceleration      table    Table with these numeric fields: min, max. Is also an array.
         relativeRotation        boolean  True if relative rotation is enabled, false otherwise
         rotation                table    Table with these numeric fields: min, max. Is also an array.
+        shaderFilename          string   Filename of the shader. Is empty if no shader has been specified. This could be used as a fallback for when shaderPath is empty.
+        shaderPath              string   Path to the shader relative to the specified base folder. Is empty if no shader has been specified or no path is available.
         sizes                   table    Sequence of sizes.
         sizeVariation           number   How varied the sizes are. The value is between 0 and 1.
         speed                   table    Table with these numeric fields: min, max. Is also an array.
