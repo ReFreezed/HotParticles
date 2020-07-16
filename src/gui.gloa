@@ -566,8 +566,8 @@ export onKeyPressed :: (state:State, key:LK.KeyConstant, scancode:LK.Scancode, i
 		case Direction:
 			local direction = cast(Direction) widget
 
-			if (mod == ModifierKey.NONE or mod == ModifierKey.S or mod == ModifierKey.C) and (key == "left" or key == "right") {
-				local delta = math.TAU * ((mod == ModifierKey.S) ? 22.5/360 : (mod == ModifierKey.C) ? 1/360 : 5/360)
+			if (mod == .NONE or mod == .S or mod == .C) and (key == "left" or key == "right") {
+				local delta = math.TAU * ((mod == .S) ? 22.5/360 : (mod == .C) ? 1/360 : 5/360)
 
 				triggerBeginEvent(state, direction, "", 0)
 				direction.angle = ((key == "left" ? direction.angle-delta : direction.angle+delta) + math.PI) % math.TAU - math.PI
@@ -579,14 +579,14 @@ export onKeyPressed :: (state:State, key:LK.KeyConstant, scancode:LK.Scancode, i
 		case Slider:
 			local slider = cast(Slider) widget
 
-			if (mod == ModifierKey.NONE or mod == ModifierKey.S or mod == ModifierKey.C) and (key == "left" or key == "right") {
+			if (mod == .NONE or mod == .S or mod == .C) and (key == "left" or key == "right") {
 				local delta = (
 					slider.isInt
-					? ((mod == ModifierKey.S) ? 20 : (mod == ModifierKey.C) ? 1 : 5)
+					? ((mod == .S) ? 20 : (mod == .C) ? 1 : 5)
 					: (
 						(slider.max - slider.min)
 						* getLimitMultiplier(slider)
-						/ ((mod == ModifierKey.S) ? 16 : (mod == ModifierKey.C) ? 1024 : 128)
+						/ ((mod == .S) ? 16 : (mod == .C) ? 1024 : 128)
 					)
 				)
 
@@ -604,13 +604,13 @@ export onKeyPressed :: (state:State, key:LK.KeyConstant, scancode:LK.Scancode, i
 		case Color:
 			local colorEl = cast(Color) widget
 
-			if (mod == ModifierKey.NONE or mod == ModifierKey.S or mod == ModifierKey.C) and (key == "left" or key == "right") {
+			if (mod == .NONE or mod == .S or mod == .C) and (key == "left" or key == "right") {
 				local component = state.hoveredSubid
 
 				local delta = (
 					component == 1
-					? ((mod == ModifierKey.S) ? 30  : (mod == ModifierKey.C) ? 1  : 6) / 360
-					: ((mod == ModifierKey.S) ? 7.5 : (mod == ModifierKey.C) ? .5 : 2) / 100
+					? ((mod == .S) ? 30  : (mod == .C) ? 1  : 6) / 360
+					: ((mod == .S) ? 7.5 : (mod == .C) ? .5 : 2) / 100
 				)
 
 				triggerBeginEvent(state, colorEl, "", component)
@@ -673,7 +673,7 @@ export onMousePressed :: (state:State, mx,my:int, mbutton:int, presses:int) -> (
 			local buttons = cast(Buttons) el
 			local slider  = cast(Slider)  el
 
-			if el.type == Buttons and (buttons.style == Style.CONTEXT_MENU or buttons.style == Style.LIST) {
+			if el.type == Buttons and (buttons.style == .CONTEXT_MENU or buttons.style == .LIST) {
 				local handled = false
 				if presses % 2 == 0 {
 					handled = triggerDoublePressEvent(state, buttons, buttons.buttons[state.hoveredSubid].name, state.hoveredSubid)
@@ -735,7 +735,7 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int, begin=false, end=fals
 			(state.activeId or state.hoveredId)
 			and state.elementsById[math.max(state.activeId, state.hoveredId)].type == Slider
 			and (cast(Slider) state.elementsById[math.max(state.activeId, state.hoveredId)]).limitName
-			and ((state.activeId and state.activeMod == ModifierKey.A) or (not state.activeId and getModifierKey() == ModifierKey.A))
+			and ((state.activeId and state.activeMod == .A) or (not state.activeId and getModifierKey() == .A))
 		) {
 			currentCursor = SIZE_VERTICAL
 
@@ -822,7 +822,7 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int, begin=false, end=fals
 		case Slider:
 			local slider = cast(Slider) widget
 
-			if state.activeMod == ModifierKey.A {
+			if state.activeMod == .A {
 				-- Change limits.
 				if dy {
 					local limitMultiplier = math.clamp(getLimitMultiplier(slider) * 0.99 ^ dy, 1e-7, 1e+7)
@@ -839,7 +839,7 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int, begin=false, end=fals
 				local max = applyLimitMultiplier(slider, slider.max)
 
 				-- Snap value to something sensible.
-				if mod == ModifierKey.C or mod == ModifierKey.CS {
+				if mod == .C or mod == .CS {
 					local getSnap :: (max:float, stepsCirca:int) -> float {
 						-- Not sure if this makes any sense... Math is hard, yo!
 						local snapBad = max / stepsCirca * .55 -- 11/16 -- !run math.sqrt(.5)
@@ -872,7 +872,7 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int, begin=false, end=fals
 				if end  triggerEndEvent(state, slider, "", 0)
 
 				-- Update linked sliders.
-				if state.activeMod == ModifierKey.S or state.activeMod == ModifierKey.CS {
+				if state.activeMod == .S or state.activeMod == .CS {
 					for slider.linkMultiDrag {
 						local other = cast(Slider) state.elementsByName[it]
 
@@ -893,7 +893,7 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int, begin=false, end=fals
 			local component = state.activeSubid
 			local value     = (mx-colorEl.layoutX) / colorEl.layoutWidth
 
-			if mod == ModifierKey.C or mod == ModifierKey.CS {
+			if mod == .C or mod == .CS {
 				local steps = component == 1 ? 24 : 16
 				value       = math.round(value*steps)/steps
 			}
@@ -907,7 +907,7 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int, begin=false, end=fals
 			}
 			if end  triggerEndEvent(state, colorEl, "", component)
 
-			if colorEl.linkMultiDrag and (state.activeMod == ModifierKey.S or state.activeMod == ModifierKey.CS) {
+			if colorEl.linkMultiDrag and (state.activeMod == .S or state.activeMod == .CS) {
 				for colorEl.linkMultiDrag {
 					local other = cast(Color) state.elementsByName[it]
 
@@ -926,9 +926,9 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int, begin=false, end=fals
 			local r :: DIRECTION_RADIUS
 			local direction = cast(Direction) widget
 			local angle     = math.atan(my - (direction.layoutY + getScrollOffset(direction) + r), mx - (direction.layoutX + r))
-			local multiDrag = direction.linkMultiDrag and (state.activeMod == ModifierKey.S or state.activeMod == ModifierKey.CS)
+			local multiDrag = direction.linkMultiDrag and (state.activeMod == .S or state.activeMod == .CS)
 
-			if mod == ModifierKey.C or mod == ModifierKey.CS {
+			if mod == .C or mod == .CS {
 				local STEPS :: 16
 				angle = math.round(angle * STEPS/math.TAU) / STEPS*math.TAU
 			}
@@ -1281,7 +1281,7 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int) {
 
 export onMouseWheel :: (state:State, dx,dy:int) -> (handled:bool) {
 	if state.activeId  return true
-	if getModifierKey() ~= ModifierKey.NONE  return false
+	if getModifierKey() ~= .NONE  return false
 
 	updateLayoutIfNeeded(state)
 
@@ -1538,10 +1538,10 @@ local positionAndFit :: (state:State, el:Element, x,y,w,h:int) {
 			local frame = cast(Frame) el
 
 			if !complete frame.layout == {
-				case Layout.DOCKED:
+				case .DOCKED:
 					x = 0
 					y = 0
-				case Layout.FLOATING:
+				case .FLOATING:
 					x = frame.x >= 0 ? frame.x : (LG.getWidth()  - w) // 2
 					y = frame.y >= 0 ? frame.y : (LG.getHeight() - h) // 2
 			}
@@ -1675,7 +1675,7 @@ local updateLayoutIfNeeded :: (state:State) {
 			-- We need to do calculateNaturalSize() twice to know how much scrollables can expand the frame.
 			-- Note: If there are multiple scrollables with height<=0 then things may or may not work as expected!
 			state.extraScrollableSpace = LG.getHeight() - it.layoutHeight -- layoutNeedsUpdate better be set if the window resizes!
-			if it.layout == Layout.FLOATING  state.extraScrollableSpace -= 2*SPACING_LARGE
+			if it.layout == .FLOATING  state.extraScrollableSpace -= 2*SPACING_LARGE
 
 			calculateNaturalSize(state, it)
 		}
@@ -1730,9 +1730,9 @@ local drawElement :: (state:State, el:Element) {
 		local textY: int = NULL
 
 		if el.labelLeftAlign == {
-			case Alignment.TOP:    textY = el.layoutY
-			case Alignment.BOTTOM: textY = el.layoutY + el.layoutHeight - fontSmall.getHeight!()
-			case:                  textY = el.layoutY + (el.layoutHeight - fontSmall.getHeight!()) // 2
+			case .TOP:    textY = el.layoutY
+			case .BOTTOM: textY = el.layoutY + el.layoutHeight - fontSmall.getHeight!()
+			case:         textY = el.layoutY + (el.layoutHeight - fontSmall.getHeight!()) // 2
 		}
 
 		LG.setFont(fontSmall)
@@ -1750,30 +1750,30 @@ local drawElement :: (state:State, el:Element) {
 			local w = frame.layoutWidth
 			local h = frame.layoutHeight
 
-			if frame.layout == Layout.FLOATING and frame.modal {
+			if frame.layout == .FLOATING and frame.modal {
 				local BORDER :: 10
 				LG.setColor(.1, .1, .1, .9)
 				LG.rectangle(LG.DrawMode.FILL, x-BORDER, y-BORDER, w+2*BORDER, h+2*BORDER, SPACING+BUTTON_RADIUS+BORDER)
 			}
 
-			if frame.style == Style.CONTEXT_MENU {
+			if frame.style == .CONTEXT_MENU {
 				LG.setColor(0, 0, 0, .6)
 				drawBoxGradient(x, y, w, h)
 			}
 
-			if frame.style == Style.CONTEXT_MENU
+			if frame.style == .CONTEXT_MENU
 				LG.setColor(.7, .7, .7)
 			else
 				LG.setColor(.2, .2, .2)
 
-			if frame.style == Style.CONTEXT_MENU
+			if frame.style == .CONTEXT_MENU
 				LG.rectangle(LG.DrawMode.FILL, x, y, w, h)
-			elseif frame.layout == Layout.FLOATING
+			elseif frame.layout == .FLOATING
 				LG.rectangle(LG.DrawMode.FILL, x, y, w, h, SPACING+BUTTON_RADIUS)
 			else
 				LG.rectangle(LG.DrawMode.FILL, x, y, w, h)
 
-			if frame.style == Style.CONTEXT_MENU {
+			if frame.style == .CONTEXT_MENU {
 				LG.setColor(.1, .1, .1)
 				LG.rectangle(LG.DrawMode.LINE, x+.5, y+.5, w-1, h-1)
 			}
@@ -1941,7 +1941,7 @@ local drawElement :: (state:State, el:Element) {
 
 				if not (buttons.id == state.hoveredId and itIndex == state.hoveredSubid) {
 					faded[itIndex] = (isRadio or isTabs) and radio.index ~= itIndex
-					if buttons.style ~= Style.NORMAL
+					if buttons.style ~= .NORMAL
 						showBg = false
 					elseif faded[itIndex]
 						LG.setColor(1, 1, 1, .1)
@@ -1985,9 +1985,9 @@ local drawElement :: (state:State, el:Element) {
 				local imageX: int = NULL
 
 				if buttons.align == {
-					case Alignment.LEFT:  imageX = bx1[itIndex] + paddingX
-					case Alignment.RIGHT: imageX = bx1[itIndex] + math.max(math.round(bw[itIndex] - paddingX - it.contentWidth), paddingX)
-					case:                 imageX = bx1[itIndex] + math.max((bw[itIndex] - it.contentWidth) // 2,                 paddingX)
+					case .LEFT:  imageX = bx1[itIndex] + paddingX
+					case .RIGHT: imageX = bx1[itIndex] + math.max(math.round(bw[itIndex] - paddingX - it.contentWidth), paddingX)
+					case:        imageX = bx1[itIndex] + math.max((bw[itIndex] - it.contentWidth) // 2,                 paddingX)
 				}
 
 				LG.draw(image,
@@ -2014,7 +2014,7 @@ local drawElement :: (state:State, el:Element) {
 				if system.visible {
 					local emitterX, emitterY: float
 
-					if project.movementPreset == Movement.NONE {
+					if project.movementPreset == .NONE {
 						emitterX, emitterY = system.particles.getPosition!()
 					}
 
@@ -2077,9 +2077,9 @@ local drawElement :: (state:State, el:Element) {
 					local textX: int = NULL
 
 					if buttons.align == {
-						case Alignment.LEFT:  textX = bx1[itIndex] + paddingX
-						case Alignment.RIGHT: textX = bx1[itIndex] + math.max(math.round(bw[itIndex] - paddingX - it.contentWidth), paddingX)
-						case:                 textX = bx1[itIndex] + math.max((bw[itIndex] - it.contentWidth) // 2,                 paddingX)
+						case .LEFT:  textX = bx1[itIndex] + paddingX
+						case .RIGHT: textX = bx1[itIndex] + math.max(math.round(bw[itIndex] - paddingX - it.contentWidth), paddingX)
+						case:        textX = bx1[itIndex] + math.max((bw[itIndex] - it.contentWidth) // 2,                 paddingX)
 					}
 
 					if it.image {
@@ -2090,7 +2090,7 @@ local drawElement :: (state:State, el:Element) {
 					local grey, a: float
 					if faded[itIndex]
 						grey, a = 1, .8
-					elseif buttons.style == Style.CONTEXT_MENU
+					elseif buttons.style == .CONTEXT_MENU
 						grey, a = 0, 1
 					else
 						grey, a = 1, 1
@@ -2154,7 +2154,7 @@ local drawElement :: (state:State, el:Element) {
 			local valueX = x + SPACING
 
 			-- Background.
-			LG.setColor(0, 0, 0, (input.style == Style.CONTEXT_MENU ? .8 : .5))
+			LG.setColor(0, 0, 0, (input.style == .CONTEXT_MENU ? .8 : .5))
 			LG.rectangle(LG.DrawMode.FILL, x, y, w, h, BUTTON_RADIUS)
 
 			LG.pushAll()
@@ -2206,7 +2206,7 @@ local drawElement :: (state:State, el:Element) {
 			local showLimits = (
 				(state.activeId or state.hoveredId)
 				and slider.id == math.max(state.activeId, state.hoveredId)
-				and ((state.activeId and state.activeMod == ModifierKey.A) or (not state.activeId and getModifierKey() == ModifierKey.A))
+				and ((state.activeId and state.activeMod == .A) or (not state.activeId and getModifierKey() == .A))
 			)
 
 			-- Line/background.
@@ -2366,7 +2366,7 @@ local drawElement :: (state:State, el:Element) {
 			LG.setShader(shader)
 			LG.setBlendMode(preview.blendMode)
 			LG.draw(imagePixel, preview.layoutX, preview.layoutY, 0, preview.layoutWidth, preview.layoutHeight)
-			LG.setBlendMode(LG.BlendMode.ALPHA)
+			LG.setBlendMode(.ALPHA)
 			LG.setShader()
 
 		case Direction:
@@ -3055,15 +3055,15 @@ export showMenu :: (state:State, x,y:int, items:[]MenuItem, cb:(choice:string, d
 	state.hideContextMenu!()
 
 	local makeContextMenu :: (state:State, items:[]MenuItem, parentMenu:Frame, active=false) -> Frame {
-		local buttons     = state.buttons!({ name="__contextMenuButtons", vertical=true, align=Alignment.LEFT, style=Style.CONTEXT_MENU, buttonMinHeight=16 })
-		local contextMenu = state.frame!({ parentFrame=parentMenu, minWidth=CONTEXT_MENU_MIN_WIDTH, layout=Layout.FLOATING, style=Style.CONTEXT_MENU, active=active, buttons })
+		local buttons     = state.buttons!({ name="__contextMenuButtons", vertical=true, align=.LEFT, style=.CONTEXT_MENU, buttonMinHeight=16 })
+		local contextMenu = state.frame!({ parentFrame=parentMenu, minWidth=CONTEXT_MENU_MIN_WIDTH, layout=.FLOATING, style=.CONTEXT_MENU, active=active, buttons })
 		insert(state.contextMenus, contextMenu)
 
 		for items {
 			if it.label == "-" {
 				insert(contextMenu, state.separator!({ thick=false }))
 
-				buttons = state.buttons!({ name="__contextMenuButtons", vertical=true, align=Alignment.LEFT, style=Style.CONTEXT_MENU, buttonMinHeight=16 })
+				buttons = state.buttons!({ name="__contextMenuButtons", vertical=true, align=.LEFT, style=.CONTEXT_MENU, buttonMinHeight=16 })
 				insert(contextMenu, buttons)
 
 			} else {
@@ -3142,8 +3142,8 @@ export showContextMenu :: (state:State, x,y:int, items:[]string, cb:(choice:int)
 			insert(buttonList, cast(Button){ label=it })
 	}
 
-	local contextMenu = state.frame!({ data=cb, x=x, y=y, minWidth=CONTEXT_MENU_MIN_WIDTH, layout=Layout.FLOATING, style=Style.CONTEXT_MENU,
-		state.buttons!({ name="__contextMenuButtons", vertical=true, align=Alignment.LEFT, style=Style.CONTEXT_MENU, buttonMinHeight=16,
+	local contextMenu = state.frame!({ data=cb, x=x, y=y, minWidth=CONTEXT_MENU_MIN_WIDTH, layout=.FLOATING, style=.CONTEXT_MENU,
+		state.buttons!({ name="__contextMenuButtons", vertical=true, align=.LEFT, style=.CONTEXT_MENU, buttonMinHeight=16,
 			buttons = {unpack(buttonList)},
 		}),
 	})
@@ -3178,11 +3178,11 @@ export showContextMenuWithInput :: (state:State, x,y:int, value:string, items:[]
 			insert(buttonList, cast(Button){ label=it })
 	}
 
-	local input = state.inputText!({ name="__contextMenuInput", value=value, style=Style.CONTEXT_MENU, tooltip=inputTooltip })
+	local input = state.inputText!({ name="__contextMenuInput", value=value, style=.CONTEXT_MENU, tooltip=inputTooltip })
 
-	local contextMenu = state.frame!({ data=cb, x=x, y=y, minWidth=CONTEXT_MENU_MIN_WIDTH, layout=Layout.FLOATING, style=Style.CONTEXT_MENU,
+	local contextMenu = state.frame!({ data=cb, x=x, y=y, minWidth=CONTEXT_MENU_MIN_WIDTH, layout=.FLOATING, style=.CONTEXT_MENU,
 		input,
-		state.buttons!({ name="__contextMenuButtons", vertical=true, align=Alignment.LEFT, style=Style.CONTEXT_MENU, buttonMinHeight=16,
+		state.buttons!({ name="__contextMenuButtons", vertical=true, align=.LEFT, style=.CONTEXT_MENU, buttonMinHeight=16,
 			buttons = {unpack(buttonList)},
 		}),
 	})
@@ -3274,7 +3274,7 @@ local shouldHighlight :: (state:State, el:$T) -> bool {
 	if el.id == state.activeId or el.id == state.hoveredId  return true
 
 	local mod = state.activeId ? state.activeMod : getModifierKey()
-	if not (mod == ModifierKey.S or mod == ModifierKey.CS)  return false
+	if not (mod == .S or mod == .CS)  return false
 
 	local other = cast(T) state.elementsById[state.activeId ?: state.hoveredId]
 	if other      == NULL  return false

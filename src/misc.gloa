@@ -98,15 +98,16 @@ export getModifierKey :: () -> ModifierKey {
 	local ctrl  = LK.isDown(lctrl,rctrl)
 	local alt   = LK.isDown("lalt","ralt")
 	local shift = LK.isDown("lshift","rshift")
+	using ModifierKey
 	return
-		ctrl and alt and shift ? ModifierKey.CAS :
-		ctrl and alt           ? ModifierKey.CA  :
-		ctrl and shift         ? ModifierKey.CS  :
-		alt  and shift         ? ModifierKey.AS  :
-		ctrl                   ? ModifierKey.C   :
-		alt                    ? ModifierKey.A   :
-		shift                  ? ModifierKey.S   :
-		ModifierKey.NONE
+		ctrl and alt and shift ? CAS :
+		ctrl and alt           ? CA  :
+		ctrl         and shift ? CS  :
+		alt          and shift ? AS  :
+		ctrl                   ? C   :
+		alt                    ? A   :
+		shift                  ? S   :
+		NONE
 }
 
 
@@ -399,15 +400,16 @@ export prepareSandbox :: (globals:table) -> (env:table) {
 
 
 export combineKeyAndModifier :: (mod:ModifierKey, key:LK.KeyConstant) -> string {
+	using ModifierKey
 	local PREFIXES: Table(ModifierKey, string) : {
-		[ModifierKey.NONE] = "",
-		[ModifierKey.C]    = "c-",
-		[ModifierKey.A]    = "a-",
-		[ModifierKey.S]    = "s-",
-		[ModifierKey.CA]   = "c-a-",
-		[ModifierKey.CS]   = "c-s-",
-		[ModifierKey.AS]   = "a-s-",
-		[ModifierKey.CAS]  = "c-a-s-",
+		[NONE] = "",
+		[C]    = "c-",
+		[A]    = "a-",
+		[S]    = "s-",
+		[CA]   = "c-a-",
+		[CS]   = "c-s-",
+		[AS]   = "a-s-",
+		[CAS]  = "c-a-s-",
 	}
 	return PREFIXES[mod] .. key
 }

@@ -355,7 +355,7 @@ export setupGuiFrames :: () {
 				guiState.buttons!({ name="fileDialog_clearRecent", buttons={{label="Clear",tooltip="Clear history"}} }),
 			}),
 			guiState.separator!({ thick=false }),
-			guiState.buttons!({ name="fileDialog_recent", vertical=true, align=gui.Alignment.LEFT, style=gui.Style.LIST }),
+			guiState.buttons!({ name="fileDialog_recent", vertical=true, align=.LEFT, style=.LIST }),
 
 			guiState.separator!({ thick=true }),
 			guiState.hbox!({
@@ -363,13 +363,13 @@ export setupGuiFrames :: () {
 				guiState.buttons!({ name="fileDialog_addBookmark", buttons={{image="iconAdd",tooltip="Add current folder to bookmarks"}} }),
 			}),
 			guiState.scrollable!({ height=80,
-				guiState.buttons!({ name="fileDialog_bookmarks", vertical=true, align=gui.Alignment.LEFT, style=gui.Style.LIST }),
+				guiState.buttons!({ name="fileDialog_bookmarks", vertical=true, align=.LEFT, style=.LIST }),
 			}),
 
 			guiState.separator!({ thick=true }),
 			guiState.inputText!({ name="fileDialog_directory" }),
 			guiState.scrollable!({ name="fileDialog_itemsSrollable",
-				guiState.buttons!({ name="fileDialog_items", vertical=true, align=gui.Alignment.LEFT, style=gui.Style.LIST, buttonMinHeight=MEDIUM_BUTTON_HEIGHT }),
+				guiState.buttons!({ name="fileDialog_items", vertical=true, align=.LEFT, style=.LIST, buttonMinHeight=MEDIUM_BUTTON_HEIGHT }),
 			}),
 
 			guiState.separator!({ thick=true }),
@@ -381,7 +381,7 @@ export setupGuiFrames :: () {
 			}),
 		}),
 
-		guiState.frame!({ name="exportProject", width=DIALOG_WIDTH_EXPORT, modal=true, layout=gui.Layout.FLOATING, active=false,
+		guiState.frame!({ name="exportProject", width=DIALOG_WIDTH_EXPORT, modal=true, layout=.FLOATING, active=false,
 			guiState.text!({ text="Export", size=3 }),
 
 			guiState.separator!({ thick=false }),
@@ -404,7 +404,7 @@ export setupGuiFrames :: () {
 					guiState.text!({ name="exportProject_particles_pathResult", weight=1 }),
 					guiState.buttons!({ name="exportProject_particles_pathResultInfo", buttons={{image="iconEye"}} }),
 				}),
-				guiState.buttons!({ name="exportProject_particles_template", labelLeft="template", vertical=true, align=gui.Alignment.LEFT, buttonMinHeight=MEDIUM_BUTTON_HEIGHT,
+				guiState.buttons!({ name="exportProject_particles_template", labelLeft="template", vertical=true, align=.LEFT, buttonMinHeight=MEDIUM_BUTTON_HEIGHT,
 					buttons={{image="iconDown",label="defaultLuaModule"}},
 				}),
 			}),
@@ -426,8 +426,8 @@ export setupGuiFrames :: () {
 
 			guiState.separator!({ thick=true }),
 			guiState.section!({ name="exportProject_clipboardSection", label="Clipboard", icon16="clipboard",
-				guiState.buttons!({ align=gui.Alignment.LEFT, buttonMinHeight=MEDIUM_BUTTON_HEIGHT, buttons={{name="exportProject_clipboard_export",label="Export to clipboard"}}}),
-				guiState.buttons!({ name="exportProject_clipboard_template", labelLeft="template", align=gui.Alignment.LEFT, buttonMinHeight=MEDIUM_BUTTON_HEIGHT,
+				guiState.buttons!({ align=.LEFT, buttonMinHeight=MEDIUM_BUTTON_HEIGHT, buttons={{name="exportProject_clipboard_export",label="Export to clipboard"}}}),
+				guiState.buttons!({ name="exportProject_clipboard_template", labelLeft="template", align=.LEFT, buttonMinHeight=MEDIUM_BUTTON_HEIGHT,
 					buttons={{image="iconDown",label="defaultLuaClipboard"}},
 				}),
 			}),
@@ -438,7 +438,7 @@ export setupGuiFrames :: () {
 			}),
 		}),
 
-		guiState.frame!({ name="preferences", width=DIALOG_WIDTH, modal=true, layout=gui.Layout.FLOATING, active=false,
+		guiState.frame!({ name="preferences", width=DIALOG_WIDTH, modal=true, layout=.FLOATING, active=false,
 			guiState.text!({ text="Preferences", size=3 }),
 
 			guiState.separator!({ thick=false }),
@@ -463,7 +463,7 @@ export setupGuiFrames :: () {
 			guiState.buttons!({ height=BIG_BUTTON_HEIGHT, buttons={{name="util_popPanel",label="Close"}} }),
 		}),
 
-		guiState.frame!({ name="log", width=DIALOG_WIDTH_LOG, modal=true, layout=gui.Layout.FLOATING, active=false,
+		guiState.frame!({ name="log", width=DIALOG_WIDTH_LOG, modal=true, layout=.FLOATING, active=false,
 			guiState.text!({ text="Log", size=3 }),
 
 			guiState.separator!({ thick=false }),
@@ -528,7 +528,7 @@ export pushTempChoiceDialog :: (title:string, text:string, buttonList:[]gui.Butt
 	local name        = format("temp%d", tempN)
 	local nameButtons = name.."_buttons"
 
-	local frame = guiState.frame!({ name=name, temp=true, layout=gui.Layout.FLOATING, modal=true, width=width, active=false })
+	local frame = guiState.frame!({ name=name, temp=true, layout=.FLOATING, modal=true, width=width, active=false })
 	insert(guiState.frames, frame)
 
 	if title {
@@ -607,10 +607,10 @@ export showFileDialog :: (title:string, dir,filename:string, onHighlight:(path:P
 	local frame = guiState.getElement!("fileDialog", gui.Frame)
 	if floating {
 		frame.modal  = true
-		frame.layout = gui.Layout.FLOATING
+		frame.layout = .FLOATING
 	} else {
 		frame.modal  = false
-		frame.layout = gui.Layout.DOCKED
+		frame.layout = .DOCKED
 	}
 
 	pushPanel("fileDialog")
@@ -1399,8 +1399,8 @@ export setupGuiCallbacks :: () {
 		(project:Project, system:System, value:LG.AreaSpreadDistribution) {
 			system.psEmissionAreaDistribution = value
 			updateParticleParams(project, system)
-			guiState.setActive!("areaParams", (value == LG.AreaSpreadDistribution.NONE))
-			if value ~= LG.AreaSpreadDistribution.NONE  guiState.refreshRecursively!("areaParams")
+			guiState.setActive!("areaParams", (value == .NONE))
+			if value ~= .NONE  guiState.refreshRecursively!("areaParams")
 		}
 	)
 	guiState.onRefresh.areaAngle = (direction:gui.Direction) {
@@ -2073,9 +2073,9 @@ export setupGuiCallbacks :: () {
 
 				if LF.getInfo(it, info) == nil {
 					-- void  The file may be a system file or something.
-				} elseif info.type == LF.FileType.DIRECTORY {
+				} elseif info.type == .DIRECTORY {
 					if not findPattern(it, "^%$")  insert(dirs, it)
-				} elseif info.type == LF.FileType.FILE {
+				} elseif info.type == .FILE {
 					if not fileDialog_filenamePattern or findPattern(it, fileDialog_filenamePattern)  insert(filenames, it)
 				}
 			}
@@ -2455,7 +2455,7 @@ export setupGuiCallbacks :: () {
 		for LF.getDirectoryItems(EXPORT_TEMPLATES_DIRECTORY) {
 			static info: LF.FileInfo
 
-			if findPattern(it, "%.lua$") and LF.getInfo(EXPORT_TEMPLATES_DIRECTORY.."/"..it, info) ~= nil and info.type == LF.FileType.FILE {
+			if findPattern(it, "%.lua$") and LF.getInfo(EXPORT_TEMPLATES_DIRECTORY.."/"..it, info) ~= nil and info.type == .FILE {
 				insert(templateNames, getSubstring(it, 1, -5))
 			}
 		}
@@ -2671,7 +2671,7 @@ export setupGuiCallbacks :: () {
 			local buttonList: []gui.Button
 			for filesToConfirmOverwrite  insert(buttonList, cast(gui.Button){ label=it, tooltip=it })
 
-			local fileListEl = guiState.buttons!({ vertical=true, align=gui.Alignment.LEFT, style=gui.Style.LIST, buttons=buttonList })
+			local fileListEl = guiState.buttons!({ vertical=true, align=.LEFT, style=.LIST, buttons=buttonList })
 
 			pushTempChoiceDialog("Confirm export", text, BUTTONS, submitIndex=1, extraContent=fileListEl, width=DIALOG_WIDTH_EXPORT, [writeExportFiles] (choice:int) {
 				if choice ~= 1  return
@@ -2839,7 +2839,7 @@ export setupGuiCallbacks :: () {
 				case NIL:     !through
 				case NUMBER:
 					if     v == 0           insert(buffer, "0") -- Avoid writing "-0".
-					elseif v == math.HUGE   insert(buffer, "math.huge")
+					elseif v == +math.HUGE  insert(buffer, "math.huge")
 					elseif v == -math.HUGE  insert(buffer, "(-math.huge)")
 					elseif v ~= v           insert(buffer, "(0/0)")
 					else                    insert(buffer, format("%s", cast(string)v)) -- The type we cast to doesn't matter here.
@@ -2875,7 +2875,7 @@ export setupGuiCallbacks :: () {
 
 		local templateEnv = prepareSandbox({
 			Text = [buffer] (s:string) {
-				if lua.getType(s) ~= lua.LuaType.STRING {
+				if lua.getType(s) ~= .STRING {
 					errorf(2, "bad argument #1 to 'Text'. (string expected, got %s)", cast(string)lua.getType(s))
 				}
 				insert(buffer, s)
@@ -2886,7 +2886,7 @@ export setupGuiCallbacks :: () {
 			},
 
 			LuaCsv = [buffer] (v:any) {
-				if lua.getType(v) == lua.LuaType.TABLE
+				if lua.getType(v) == .TABLE
 					writeLuaCsv(buffer, 2, cast([]any)v)
 				else
 					writeLuaValue(buffer, 2, v)

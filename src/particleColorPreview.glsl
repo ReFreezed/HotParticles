@@ -1,5 +1,5 @@
-extern vec4 colors[8];
-extern int  colorCount;
+uniform vec4 colors[8];
+uniform int  colorCount;
 
 int clampInt(int v, int low, int high) {
 	if (v < low ) return low;

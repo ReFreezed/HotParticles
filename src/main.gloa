@@ -596,7 +596,7 @@ export updateParticleTexture :: (project:Project, system:System, saveRecent=fals
 	system.particles.setTexture!(image)
 	updateParticleAnimation(system)
 
-	local filter = project.pixelateTextures ? LG.FilterMode.NEAREST : LG.FilterMode.LINEAR
+	local filter = project.pixelateTextures ? LG.FilterMode.NEAREST : .LINEAR
 	image.setFilter!(filter, filter)
 
 	return loadedCustomTexture
@@ -700,7 +700,7 @@ export updateParticleTextureOffset :: (system:System) {
 
 export updateParticleImageFilters :: () {
 	local project = app.projects[app.currentProjectIndex]
-	local filter  = (project.pixelateTextures or forcePixelatedTextures) ? LG.FilterMode.NEAREST : LG.FilterMode.LINEAR
+	local filter  = (project.pixelateTextures or forcePixelatedTextures) ? LG.FilterMode.NEAREST : .LINEAR
 
 	for particleImageNames {
 		particleImages[it].setFilter!(filter, filter)
@@ -765,7 +765,7 @@ export createCanvases :: () {
 	canvasWorld = LG.newCanvas(math.max(ww-MAIN_PANEL_WIDTH, 1), wh)
 
 	if app.projects[app.currentProjectIndex].pixelateWorld {
-		canvasWorld.setFilter!(LG.FilterMode.NEAREST, LG.FilterMode.NEAREST)
+		canvasWorld.setFilter!(.NEAREST, .NEAREST)
 	}
 
 	scheduleRecreateCanvases = false
@@ -850,7 +850,7 @@ local onRun :: () -> (mainLoop:()->int|none) {
 	return [dt] () -> int|none {
 		LE.pump()
 		for name, a,b,c,d,e,f in LE.poll() {
-			if name == LE.Event.QUIT {
+			if name == .QUIT {
 				-- if not (cast(()->bool)cast(any)LOVE.quit)() { -- We don't currently have a 'quit' handler.
 					return a == NULL ? 0 : cast(int)a
 				-- }
@@ -920,12 +920,12 @@ local onLoad :: (args:[]string, argsRaw:[]string) {
 	!if not DEV  insert(defaultSearchPaths, getAppDirectory())
 	disconnectFromRemoteDirectory() -- Resets paths. We didn't actually connect.
 
-	dummyCursors[LM.CursorType.ARROW]         = {hotX=2, hotY=2,  data=LI.newImageData("gfx/cursor_arrow.png")}
-	dummyCursors[LM.CursorType.I_BEAM]        = {hotX=4, hotY=9,  data=LI.newImageData("gfx/cursor_ibeam.png")}
-	dummyCursors[LM.CursorType.SIZE_VERTICAL] = {hotX=6, hotY=12, data=LI.newImageData("gfx/cursor_sizens.png")}
+	dummyCursors[.ARROW]         = {hotX=2, hotY=2,  data=LI.newImageData("gfx/cursor_arrow.png")}
+	dummyCursors[.I_BEAM]        = {hotX=4, hotY=9,  data=LI.newImageData("gfx/cursor_ibeam.png")}
+	dummyCursors[.SIZE_VERTICAL] = {hotX=6, hotY=12, data=LI.newImageData("gfx/cursor_sizens.png")}
 
 	imageBoxGradient = LG.newImage("gfx/boxGradient.png")
-	imageChecker     = LG.newImage("gfx/checker.png") ; imageChecker.setWrap!(LG.WrapMode.REPEAT, LG.WrapMode.REPEAT) ; imageChecker.setFilter!(LG.FilterMode.NEAREST, LG.FilterMode.NEAREST)
+	imageChecker     = LG.newImage("gfx/checker.png") ; imageChecker.setWrap!(.REPEAT, .REPEAT) ; imageChecker.setFilter!(.NEAREST, .NEAREST)
 	imageGradient    = LG.newImage("gfx/gradient.png")
 	imageIcons16     = LG.newImage("gfx/icons.png")
 	imageNormal      = LG.newImage("gfx/normal.png")
@@ -1289,7 +1289,7 @@ local onMouseWheel :: (dx,dy:int) {
 	if guiState.getTopmostActiveModal!() ~= NULL or guiState.isOverGui!(mx, my)  return
 
 	local mod = getModifierKey()
-	if mod ~= ModifierKey.NONE  return
+	if mod ~= .NONE  return
 
 	local project   = app.projects[app.currentProjectIndex]
 	local zoomLevel = project.zoomLevel
@@ -1330,8 +1330,8 @@ local onUpdate :: (dt:float) {
 	}
 
 	local mod  = getModifierKey()
-	local slow = not guiState.focusId and mod == ModifierKey.NONE and LK.isDown"g"
-	local fast = not guiState.focusId and mod == ModifierKey.NONE and LK.isDown"f"
+	local slow = not guiState.focusId and mod == .NONE and LK.isDown"g"
+	local fast = not guiState.focusId and mod == .NONE and LK.isDown"f"
 
 	local dtForParticles      = dt / (slow ? 20 : 1)
 	local particleUpdateCount = fast ? 10 : 1
@@ -1577,7 +1577,7 @@ local onDraw :: () {
 			-- !if DEV  LG.getStats(statsWorld)
 
 			LG.setShader()
-			LG.setBlendMode(LG.BlendMode.ALPHA)
+			LG.setBlendMode(.ALPHA)
 
 			if showAreaDistribution {
 				local system = project.systems[project.systemIndex]
@@ -2199,7 +2199,7 @@ export confirmDeleteSystem :: (systemIndexToDelete:int) {
 		local r, g, b = hsvToRgb(project.bgColor)
 		local emitterX, emitterY: float
 
-		if project.movementPreset == Movement.NONE {
+		if project.movementPreset == .NONE {
 			emitterX, emitterY = system.particles.getPosition!()
 		}
 
@@ -2216,7 +2216,7 @@ export confirmDeleteSystem :: (systemIndexToDelete:int) {
 		)
 
 		LG.setShader()
-		LG.setBlendMode(LG.BlendMode.ALPHA)
+		LG.setBlendMode(.ALPHA)
 	}
 
 	forceParticleUpdates = true

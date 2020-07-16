@@ -24,7 +24,7 @@ export !self
 
 !run {
 	local options      = getBuildOptions()
-	options.outputType = BuildOutputType.NONE
+	options.outputType = .NONE
 	setBuildOptions(options)
 
 	local dev = indexOf(getProgramArguments(), "--dev")
@@ -143,10 +143,10 @@ local doRelease :: () {
 				}
 
 			-- } elseif path == ? {
-			-- 	return lfs.Traverse.IGNORE
+			-- 	return .IGNORE
 			}
 
-			return lfs.Traverse.CONTINUE
+			return .CONTINUE
 		})
 	}
 
