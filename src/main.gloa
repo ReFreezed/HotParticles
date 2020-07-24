@@ -129,6 +129,8 @@ local updateId = 0
 local timeForAnimationPreview   = 0.00
 local particleEmitDurationTotal = 0.00
 
+local showParticlePath = 0 -- 0=no, 1=average, 2=range
+
 export isMac: bool
 export lctrl: LK.KeyConstant
 export rctrl: LK.KeyConstant
@@ -1153,6 +1155,16 @@ local onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool) 
 			}
 			return
 
+		case "p":
+			showParticlePath = (showParticlePath + 1) % 3
+			setMessageText(
+				showParticlePath == 0 ? "Hide particle path" :
+				showParticlePath == 1 ? "Show particle path (average)" :
+				showParticlePath == 2 ? "Show particle path (random)" :
+				""
+			)
+			return
+
 		case "space":
 			for project.systems {
 				local ps     = it.particles
@@ -1188,7 +1200,7 @@ local onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool) 
 
 		case "h":        system.visible = not system.visible
 
-		case "p":        !if DEV  guiState.setActive!("main", not guiState.getElement!("main").active)
+		case "c-p":      !if DEV  guiState.setActive!("main", not guiState.getElement!("main").active)
 
 		case "c-delete": confirmDeleteSystem(project.systemIndex)
 		case "c-d":      duplicateSystem(project.systemIndex)
@@ -1615,6 +1627,100 @@ local onDraw :: () {
 				}
 
 				LG.setLineWidth(1)
+			}
+
+			if showParticlePath {
+				local MAX_SEGMENTS       :: 1000
+				local RANDOM_LINES       :: 8
+				local RATE_WHEN_NO_VSYNC :: 250
+
+				local system = project.systems[project.systemIndex]
+				local ps     = system.particles
+
+				local direction0 = ps.getDirection!()
+				local spread     = ps.getSpread!()
+
+				local accRadialMin,  accRadialMax  = ps.getRadialAcceleration!()
+				local accTangentMin, accTangentMax = ps.getTangentialAcceleration!()
+				local dampMin,       dampMax       = ps.getLinearDamping!()
+				local lifeMin,       lifeMax       = ps.getParticleLifetime!()
+				local speedMin,      speedMax      = ps.getSpeed!()
+
+				local accXmin, accYmin, accXmax, accYmax = ps.getLinearAcceleration!()
+
+				-- local distribution, dx, dy, angle, relative = ps.getEmissionArea!() -- @Incomplete: Use distribution for initial coords.
+
+				local _, _, flags = LW.getMode()
+
+				LG.setColor(.3, .3, 1)
+
+				for 1, (showParticlePath == 1 ? 1 : RANDOM_LINES) {
+					local accRadial, accTangent, accX, accY, damp, life, speed, direction: float = NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL
+
+					if showParticlePath == 1 {
+						accRadial  = (accRadialMin  + accRadialMax ) / 2
+						accTangent = (accTangentMin + accTangentMax) / 2
+						accX       = (accXmin       + accXmax      ) / 2
+						accY       = (accYmin       + accYmax      ) / 2
+						damp       = (dampMin       + dampMax      ) / 2
+						life       = (lifeMin       + lifeMax      ) / 2
+						speed      = (speedMin      + speedMax     ) / 2
+						direction  = direction0
+					} else {
+						accRadial  = math.getRandom(accRadialMin,  accRadialMax)
+						accTangent = math.getRandom(accTangentMin, accTangentMax)
+						accX       = math.getRandom(accXmin,       accXmax)
+						accY       = math.getRandom(accYmin,       accYmax)
+						damp       = math.getRandom(dampMin,       dampMax)
+						life       = math.getRandom(lifeMin,       lifeMax)
+						speed      = math.getRandom(speedMin,      speedMax)
+						direction  = direction0 + spread * math.getRandom(-.5, +.5)
+					}
+
+					local dt
+						= app.showStats == STATS_ALL
+						? 1 / RATE_WHEN_NO_VSYNC
+						: 1 / (flags.refreshrate ?: 60)
+
+					local segments = math.round(life / dt)
+
+					segments = math.clamp(segments, 2, MAX_SEGMENTS)
+					dt       = life / segments
+
+					local x0, y0 = ps.getPosition!()
+					local points = {x0, y0}
+
+					local x      = x0
+					local y      = y0
+					local speedX = speed * math.cos(direction)
+					local speedY = speed * math.sin(direction)
+
+					for 1, segments {
+						-- @Accuracy: This all seem to break to some extent for extreme values (at least for damping).
+						local prevSpeedX = speedX
+						local prevSpeedY = speedY
+
+						speedX, speedY = math.damp(speedX,speedY, 0,0, damp, dt)
+
+						x += (prevSpeedX+speedX)/2 * dt
+						y += (prevSpeedY+speedY)/2 * dt
+
+						local originAngle = math.atan(y-y0, x-x0)
+
+						speedX += dt * accX
+						speedY += dt * accY
+						speedX += dt * accRadial  * math.cos(originAngle)
+						speedY += dt * accRadial  * math.sin(originAngle)
+						speedX += dt * accTangent * math.cos(originAngle + math.TAU/4)
+						speedY += dt * accTangent * math.sin(originAngle + math.TAU/4)
+
+						insert(points, x)
+						insert(points, y)
+					}
+
+					LG.line(points)
+					-- LG.points(points) -- DEBUG
+				}
 			}
 
 			--[[ DEBUG

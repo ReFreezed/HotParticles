@@ -71,6 +71,7 @@ F               Fast-forward particles (hold)
 G               Slow down particles (hold)
 
 H               Show/hide current particle system
+P               Show/hide particle movement path
 F1              Show/hide stats (and toggle Vsync)
 F2              Show/hide panel numbers
 
