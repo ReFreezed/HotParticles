@@ -81,9 +81,8 @@ export imagePixel:       LG.Image = NULL
 export imageRainbow:     LG.Image = NULL
 
 export particleImageNames: []string
-export particleImageDatas: struct { !key:string, !value:LF.FileData } -- FileData, not ImageData! The latter is problematic when we export textures.
-export particleImages:     struct { !key:string, !value:LG.Image    }
-export guiImages:          struct { !key:string, !value:LG.Image    }
+export particleImages:     struct { !key:string, !value:ImageAndInfo }
+export guiImages:          struct { !key:string, !value:LG.Image }
 export dummyCursors:       struct { !key:LM.CursorType, !value:DummyCursor }
 
 export textureBrowserPreviewImage: LG.Image = NULL
@@ -156,6 +155,15 @@ export DummyCursor :: struct {
 	hotX: int,
 	hotY: int,
 	data: LI.ImageData = NULL,
+}
+
+
+
+export ImageAndInfo :: struct {
+	fullPath: string,
+	fileData: LF.FileData = NULL, -- We use FileData instead of ImageData as the latter is problematic when exporting the textures.  @Cleanup: Does this need to be loaded all the time (since we have the path here anyway)?
+	image:    LG.Image    = NULL,
+	bundled = false,
 }
 
 
@@ -387,18 +395,15 @@ export System :: struct {
 
 	particles: LG.ParticleSystem = NULL,
 
-	currentImageData: LF.FileData = NULL,
-	currentImage:     LG.Image    = NULL,
-
-	currentShader: LG.Shader = NULL,
+	currentImage:  ImageAndInfo = NULL,
+	currentShader: LG.Shader    = NULL,
 
 	!call :: () -> System {
 		local system: System
 
-		system.currentImageData = particleImageDatas.light
-		system.currentImage     = particleImages    .light
+		system.currentImage = particleImages.light
 
-		system.particles = LG.newParticleSystem(system.currentImage)
+		system.particles = LG.newParticleSystem(system.currentImage.image)
 		system.particles.stop!() -- Needed for initial kick-start to work.
 
 		return system
@@ -455,9 +460,8 @@ export System :: struct {
 			customData                  = source.customData,
 			gui                         = copyTable(source.gui),
 
-			particles        = source.particles.clone!(),
-			currentImageData = source.currentImageData,
-			currentImage     = source.currentImage,
+			particles    = source.particles.clone!(),
+			currentImage = source.currentImage,
 		}
 
 		for source.frames {
@@ -541,14 +545,14 @@ export updateParticleTextures :: (project:Project) {
 }
 
 export updateParticleTexture :: (project:Project, system:System, saveRecent=false) -> (loadedCustomTexture:bool) {
-	local loadParticleTexture :: (project:Project, system:System, saveRecent:bool) -> LF.FileData, LG.Image {
+	local loadParticleTexture :: (project:Project, system:System, saveRecent:bool) -> ImageAndInfo {
 		local ok, path, isDangling = getTextureFullPath(project, system)
 		if not ok {
 			if isDangling
 				setErrorText("Relative paths require the project to be saved: %s", path)
 			else
 				setErrorText("Bad texture path '%s'", path)
-			return NULL, NULL
+			return NULL
 		}
 
 		local ^ok, dir, filename = Path(path).getDirectoryAndFilename!()
@@ -556,7 +560,7 @@ export updateParticleTexture :: (project:Project, system:System, saveRecent=fals
 
 		if not connectToRemoteDirectory(dir) {
 			setErrorText("Could not access folder '%s'", dir)
-			return NULL, NULL
+			return NULL
 		}
 		defer disconnectFromRemoteDirectory()
 
@@ -564,7 +568,7 @@ export updateParticleTexture :: (project:Project, system:System, saveRecent=fals
 
 		if imageData == NULL {
 			setErrorText(err)
-			return NULL, NULL
+			return NULL
 		}
 
 		if saveRecent  addRecent(app.recentTextures, system.texturePath, app.maxRecentFiles)
@@ -574,32 +578,29 @@ export updateParticleTexture :: (project:Project, system:System, saveRecent=fals
 		if image == NULL {
 			log(err)
 			setErrorText("Could not load texture '%s'", filename)
-			return NULL, NULL
+			return NULL
 		}
 
-		return cast(LF.FileData)imageData, image
+		return {fullPath=path, fileData=cast(LF.FileData)imageData, image=image}
 	}
 
-	local imageData: LF.FileData = NULL
-	local image:     LG.Image    = NULL
-	local loadedCustomTexture    = true
+	local imageAndInfo: ImageAndInfo = NULL
+	local loadedCustomTexture        = true
 
-	if system.texturePath  imageData, image = loadParticleTexture(project, system, saveRecent) -- @Speed: Don't reload the texture if there's no change.
+	if system.texturePath  imageAndInfo = loadParticleTexture(project, system, saveRecent) -- @Speed: Don't reload the texture if there's no change.
 
-	if imageData == NULL {
-		imageData           = particleImageDatas[system.textureName]
-		image               = particleImages    [system.textureName]
+	if imageAndInfo == NULL {
+		imageAndInfo        = particleImages[system.textureName]
 		loadedCustomTexture = false
 	}
 
-	system.currentImageData = imageData
-	system.currentImage     = image
+	system.currentImage = imageAndInfo
 
-	system.particles.setTexture!(image)
+	system.particles.setTexture!(imageAndInfo.image)
 	updateParticleAnimation(system)
 
 	local filter = project.pixelateTextures ? LG.FilterMode.NEAREST : .LINEAR
-	image.setFilter!(filter, filter)
+	imageAndInfo.image.setFilter!(filter, filter)
 
 	return loadedCustomTexture
 }
@@ -672,7 +673,7 @@ export updateParticleShader :: (project:Project, system:System, saveRecent=false
 
 export updateParticleAnimation :: (system:System) {
 	if system.frames {
-		local iw, ih = system.currentImage.getDimensions!()
+		local iw, ih = system.currentImage.image.getDimensions!()
 		local quads: []LG.Quad
 
 		for system.frames {
@@ -693,7 +694,7 @@ export updateParticleTextureOffset :: (system:System) {
 		local animFrame1 = system.frames[1]
 		system.particles.setOffset!(animFrame1.w*system.offsetX, animFrame1.h*system.offsetY)
 	} else {
-		local iw, ih = system.currentImage.getDimensions!()
+		local iw, ih = system.currentImage.image.getDimensions!()
 		system.particles.setOffset!(iw*system.offsetX, ih*system.offsetY)
 	}
 }
@@ -705,11 +706,11 @@ export updateParticleImageFilters :: () {
 	local filter  = (project.pixelateTextures or forcePixelatedTextures) ? LG.FilterMode.NEAREST : .LINEAR
 
 	for particleImageNames {
-		particleImages[it].setFilter!(filter, filter)
+		particleImages[it].image.setFilter!(filter, filter)
 	}
 
 	local system = project.systems[project.systemIndex]
-	system.currentImage.setFilter!(filter, filter) -- In case this is a custom texture.
+	system.currentImage.image.setFilter!(filter, filter) -- In case this is a custom texture.
 }
 
 
@@ -945,9 +946,14 @@ local onLoad :: (args:[]string, argsRaw:[]string) {
 			local imageData = LF.newFileData(path)
 			local image     = LG.newImage(path)
 
-			particleImageDatas[cast(string)name] = imageData
-			particleImages    [cast(string)name] = image
-			guiImages         [cast(string)name] = image
+			particleImages[cast(string)name] = {
+				fullPath = format("%s/%s", getAppDirectory(), path),
+				fileData = imageData,
+				image    = image,
+				bundled  = true,
+			}
+
+			guiImages[cast(string)name] = image
 
 			insert(particleImageNames, cast(string)name)
 
@@ -1751,7 +1757,7 @@ local onDraw :: () {
 			local PADDING :: 20
 
 			local system = project.systems[project.systemIndex]
-			local image  = showTexturePreview ? textureBrowserPreviewImage : system.currentImage
+			local image  = showTexturePreview ? textureBrowserPreviewImage : system.currentImage.image
 			local iw, ih = image.getDimensions!()
 
 			local scale = math.min((ww-2*PADDING-MAIN_PANEL_WIDTH)/iw, (wh-2*PADDING)/ih)
@@ -2398,7 +2404,7 @@ export getTextureFullPath :: (project:Project, system:System) -> (success:bool, 
 	local path = system.texturePath
 
 	if not path {
-		return true, format("%s/gfx/particles/%s.png", getAppDirectory(), system.textureName), false
+		return true, particleImages[system.textureName].fullPath, false
 
 	} elseif Path(path).isAbsolute {
 		if not Path(path).getFilename!()  return false, "", false

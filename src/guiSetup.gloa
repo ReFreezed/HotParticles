@@ -2250,7 +2250,7 @@ export setupGuiCallbacks :: () {
 			if not pathObj.isAbsolute  return false, NULL, NULL
 		}
 
-		local ok, inputPath = getTextureFullPath(project, system)
+		local ok, inputPath = getTextureFullPath(project, system) -- @Cleanup: Can we just use system.currentImage.fullPath here?
 		if not ok  inputPath = ""
 
 		local path = pathObj.toString!()
@@ -2646,7 +2646,7 @@ export setupGuiCallbacks :: () {
 				}
 				defer disconnectFromRemoteDirectory()
 
-				local ok, err = LF.write(filename, system.currentImageData.getString!())
+				local ok, err = LF.write(filename, system.currentImage.fileData.getString!())
 				if not ok {
 					setErrorText(err)
 					return
@@ -2812,7 +2812,7 @@ export setupGuiCallbacks :: () {
 			}
 
 			do {
-				local iw, ih = system.currentImage.getDimensions!()
+				local iw, ih = system.currentImage.image.getDimensions!()
 				local publicQuads: []table
 
 				for system.frames {
@@ -2990,7 +2990,7 @@ export setupGuiCallbacks :: () {
 		guiState.onDraw.animation_preview = (canvasEl:gui.Canvas, cw,ch:int) {
 			local PADDING :: 5
 			local project, system = getCurrentProjectAndSystem()
-			local image           = system.currentImage
+			local image           = system.currentImage.image
 			local iw, ih          = image.getDimensions!()
 
 			local r, g, b = hsvToRgb(project.bgColor)
@@ -3081,7 +3081,7 @@ export setupGuiCallbacks :: () {
 
 		guiState.onAction.animation_sequence_generateFromSize = (buttons:gui.Buttons, buttonIndex:int) {
 			local project, system = getCurrentProjectAndSystem()
-			local iw, ih          = system.currentImage.getDimensions!()
+			local iw, ih          = system.currentImage.image.getDimensions!()
 
 			local areaPosStr   = trim(guiState.getElement!("animation_sequence_areaPosition", gui.InputText).value)
 			local areaSizeStr  = trim(guiState.getElement!("animation_sequence_areaSize",     gui.InputText).value)
@@ -3142,7 +3142,7 @@ export setupGuiCallbacks :: () {
 
 		guiState.onAction.animation_sequence_generateFromDivision = (buttons:gui.Buttons, buttonIndex:int) {
 			local project, system = getCurrentProjectAndSystem()
-			local iw, ih          = system.currentImage.getDimensions!()
+			local iw, ih          = system.currentImage.image.getDimensions!()
 
 			local areaPosStr   = trim(guiState.getElement!("animation_sequence_areaPosition", gui.InputText).value)
 			local areaSizeStr  = trim(guiState.getElement!("animation_sequence_areaSize",     gui.InputText).value)
