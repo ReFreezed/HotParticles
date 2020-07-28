@@ -1,0 +1,379 @@
+--[[============================================================
+--=
+--=  Hot-loader
+--=
+--=-------------------------------------------------------------
+--=
+--=  Hot Particles - a particle editor for LÖVE
+--=  by Marcus 'ReFreezed' Thunström
+--=
+--==============================================================
+
+	stop
+	update
+
+--============================================================]]
+
+local ffi :: !import "ffi"
+
+local Pointer :: ffi.Cdata
+local String  :: string|Pointer
+
+
+
+local DEFINITIONS :: [[//C
+	// Windows.
+	typedef       unsigned int  UINT;
+	typedef       uint32_t      DWORD, *LPDWORD;
+	typedef       int           BOOL,  *LPBOOL;
+	typedef       wchar_t       *LPWSTR;
+	typedef const char          *LPCCH;
+	typedef const wchar_t       *LPCWSTR;
+	typedef       void          *HANDLE, *LPVOID;
+
+	typedef struct _SECURITY_ATTRIBUTES {
+		DWORD  nLength;
+		LPVOID lpSecurityDescriptor;
+		BOOL   bInheritHandle;
+	} SECURITY_ATTRIBUTES, *LPSECURITY_ATTRIBUTES;
+
+	int MultiByteToWideChar(
+		UINT    codePage,
+		DWORD   dwFlags,
+		LPCCH   lpMultiByteStr,
+		int     cbMultiByte,
+		LPCWSTR lpWideCharStr,
+		int     cchWideChar
+	);
+	int WideCharToMultiByte(
+		UINT    codePage,
+		DWORD   dwFlags,
+		LPCWSTR lpWideCharStr,
+		int     cchWideChar,
+		LPCCH   lpMultiByteStr,
+		int     cbMultiByte,
+		LPCCH   lpDefaultChar,
+		LPBOOL  lpUsedDefaultChar
+	);
+
+	HANDLE FindFirstChangeNotificationW(
+		LPCWSTR lpPathName,
+		BOOL    bWatchSubtree,
+		DWORD   dwNotifyFilter
+	);
+	BOOL FindNextChangeNotification(
+		HANDLE hChangeHandle
+	);
+	BOOL FindCloseChangeNotification(
+		HANDLE hChangeHandle
+	);
+
+	DWORD WaitForSingleObject(
+		HANDLE hHandle,
+		DWORD  dwMilliseconds
+	);
+	DWORD WaitForMultipleObjects(
+		DWORD        nCount,
+		const HANDLE *lpHandles,
+		BOOL         bWaitAll,
+		DWORD        dwMilliseconds
+	);
+
+	DWORD GetLastError();
+
+	HANDLE CreateFileW(
+		LPCWSTR               lpFileName,
+		DWORD                 dwDesiredAccess,
+		DWORD                 dwShareMode,
+		LPSECURITY_ATTRIBUTES lpSecurityAttributes,
+		DWORD                 dwCreationDisposition,
+		DWORD                 dwFlagsAndAttributes,
+		HANDLE                hTemplateFile
+	);
+	BOOL CloseHandle(
+		HANDLE hObject
+	);
+]]
+
+local C: !foreign struct {
+	MultiByteToWideChar: (codePage:int, dwFlags:int, lpMultiByteStr:String, cbMultiByte:int, lpWideCharStr:Pointer, cchWideChar:int) -> int;
+	WideCharToMultiByte: (codePage:int, dwFlags:int, lpWideCharStr:Pointer, cchWideChar:int, lpMultiByteStr:String, cbMultiByte:int, lpDefaultChar:Pointer, lpUsedDefaultChar:Pointer) -> int;
+
+	FindFirstChangeNotificationW: (lpPathName:Pointer, bWatchSubtree:bool, dwNotifyFilter:int) -> Pointer;
+	FindNextChangeNotification:   (hChangeHandle:Pointer) -> int;
+	FindCloseChangeNotification:  (hChangeHandle:Pointer) -> int;
+
+	WaitForSingleObject:    (hHandle:Pointer, dwMilliseconds:int) -> int;
+	WaitForMultipleObjects: (nCount:int, lpHandles:Pointer, bWaitAll:bool, dwMilliseconds:int) -> int;
+
+	GetLastError: () -> int;
+
+	CreateFileW: (lpFileName:Pointer, dwDesiredAccess:int, dwShareMode:int, lpSecurityAttributes:Pointer, dwCreationDisposition:int, dwFlagsAndAttributes:int, hTemplateFile:Pointer) -> Pointer;
+	CloseHandle: (hObject:Pointer) -> int;
+} = NULL
+
+
+
+-- Windows constants.
+local CODE_PAGE_UTF8 :: 65001
+
+local INVALID_HANDLE_VALUE :: -1
+
+local FILE_NOTIFY_CHANGE_FILE_NAME  :: 0x001
+local FILE_NOTIFY_CHANGE_DIR_NAME   :: 0x002
+local FILE_NOTIFY_CHANGE_ATTRIBUTES :: 0x004
+local FILE_NOTIFY_CHANGE_SIZE       :: 0x008
+local FILE_NOTIFY_CHANGE_LAST_WRITE :: 0x010
+local FILE_NOTIFY_CHANGE_SECURITY   :: 0x100
+
+local WAIT_OBJECT_0    :: 0x_0000_0000
+local WAIT_ABANDONED_0 :: 0x_0000_0080
+local WAIT_TIMEOUT     :: 0x_0000_0102
+local WAIT_FAILED      :: 0x_FFFF_FFFF
+
+local GENERIC_ALL     :: 0x_1000_0000
+local GENERIC_EXECUTE :: 0x_2000_0000
+local GENERIC_WRITE   :: 0x_4000_0000
+local GENERIC_READ    :: 0x_8000_0000
+
+local FILE_SHARE_0      :: 0x0
+local FILE_SHARE_READ   :: 0x1
+local FILE_SHARE_WRITE  :: 0x2
+local FILE_SHARE_DELETE :: 0x4
+
+local CREATE_NEW        :: 1
+local CREATE_ALWAYS     :: 2
+local OPEN_EXISTING     :: 3
+local OPEN_ALWAYS       :: 4
+local TRUNCATE_EXISTING :: 5
+
+
+
+local Watcher :: struct {
+	directory: string,
+	notification: Pointer = NULL,
+}
+
+export watchersNeedUpdate = true
+local  watchers: []Watcher
+
+
+
+local ProjectAndSystem :: struct {
+	project: Project,
+	system:  System,
+}
+
+
+
+local init :: () {
+	static initted = false
+	if initted  return
+	initted = true
+
+	ffi.define(DEFINITIONS)
+	C = ffi.newInterface(type_of(C))
+}
+
+
+
+export update :: (dt:float) {
+	if isWindows
+		updateWindows()
+	else
+		updateUniversal()
+}
+
+local updateWindows :: () {
+	init()
+
+	local _watchersNeedUpdate = watchersNeedUpdate
+	static delayedReloads: []ProjectAndSystem
+
+	for < delayed: delayedReloads {
+		local path = delayed.system.currentImage.fullPath
+
+		if Windows_isWritable(path) {
+			remove(delayedReloads, itIndex)
+
+			printf("[hotLoader] Reloading texture '%s' after delay.", path)
+			updateParticleTexture(delayed.project, delayed.system)
+		}
+	}
+
+	if _watchersNeedUpdate {
+		printf("[hotLoader] Updating watchers.")
+
+		stop()
+
+		local dirs: []string
+		local dirSet: struct { !key:string, !value:bool }
+
+		for project: app.projects  for system: project.systems  if not system.currentImage.bundled {
+			local _, dir = Path(system.currentImage.fullPath).getDirectory!()
+			if not dirSet[dir] {
+				dirSet[dir] = true
+				insert(dirs, dir)
+			}
+		}
+
+		for dir: dirs {
+			local dirWide = Windows_stringToWide(dir)
+
+			-- Note: FILE_NOTIFY_CHANGE_LAST_WRITE usually fire two (or more?) notifications in a row.
+			-- https://devblogs.microsoft.com/oldnewthing/20140507-00/?p=1053
+			local filter :: FILE_NOTIFY_CHANGE_LAST_WRITE + FILE_NOTIFY_CHANGE_SIZE
+			local notification = C.FindFirstChangeNotificationW(dirWide, false, filter)
+
+			if ffi.pointerToInt(notification) == INVALID_HANDLE_VALUE {
+				printf("[hotLoader] Error: FindFirstChangeNotificationW: %s (Code %d)", dir, C.GetLastError())
+			} else {
+				printf("[hotLoader] Watching '%s'.", dir)
+				insert(watchers, cast(Watcher) {directory=dir, notification=notification})
+			}
+		}
+
+	} else {
+		local recentTime = os.getTime() - 1
+
+		for < watcher, watcherIndex: watchers {
+			local gotSignal = false
+
+			while true {
+				local code = C.WaitForSingleObject(watcher.notification, 0)
+
+				if code == WAIT_OBJECT_0 {
+					-- if not gotSignal  printf("[hotLoader] [%d] WaitForSingleObject: Signal: %s", updateEventCount, watcher.directory)
+					gotSignal = true
+
+					if not C.FindNextChangeNotification(watcher.notification) {
+						printf("[hotLoader] Error: FindNextChangeNotification failed for '%s'. (Code %d)", watcher.directory, C.GetLastError())
+
+						if not C.FindCloseChangeNotification(watcher.notification) { -- Is this needed, since FindNextChangeNotification() failed? I'm gonna assume yes.
+							printf("[hotLoader] Error: FindCloseChangeNotification: %s (Code %d)", watcher.directory, C.GetLastError())
+						}
+						remove(watchers, watcherIndex)
+
+						break
+					}
+
+				} elseif code == WAIT_TIMEOUT {
+					break
+
+				} elseif code == WAIT_FAILED {
+					printf("[hotLoader] Error: WaitForSingleObject failed for '%s'. (Code %d)", watcher.directory, C.GetLastError())
+					break
+
+				} else {
+					printf("[hotLoader] Error: WaitForSingleObject: Unhandled code %d.", code)
+					break
+				}
+			}
+
+			if not gotSignal {
+				-- void
+
+			} elseif not connectToRemoteDirectory(watcher.directory) {
+				printf("[hotLoader] Error: Could not connect to '%s'.", watcher.directory)
+
+			} else {
+				defer disconnectFromRemoteDirectory()
+
+				for project: app.projects  for system: project.systems  if not system.currentImage.bundled {
+					local path             = system.currentImage.fullPath
+					local _, dir, filename = Path(path).getDirectoryAndFilename!()
+
+					static info: LF.FileInfo
+
+					if (
+						dir == watcher.directory
+						-- @Robustness: This is not optimal, but we probably have to use ReadDirectoryChanges() otherwise (which we could).
+						and LF.getInfo(filename, info) ~= nil and info.modtime ~= nil and cast(int)info.modtime >= recentTime
+					) {
+						if Windows_isWritable(path) {
+							for delayed: delayedReloads {
+								if delayed.project == project and delayed.system == system {
+									printf("[hotLoader] Removing delay for texture '%s'.", path)
+									remove(delayedReloads, itIndex)
+									break
+								}
+							}
+
+							printf("[hotLoader] Reloading texture '%s'.", path)
+							updateParticleTexture(project, system)
+
+						} else {
+							printf("[hotLoader] Adding delay for texture '%s'.", path)
+							local delayed: ProjectAndSystem = {
+								project = project,
+								system  = system,
+							}
+							insert(delayedReloads, delayed)
+						}
+					}
+				}
+			}
+		}
+	}
+
+	watchersNeedUpdate = false -- Must be reset after all calls to updateParticleTexture().
+}
+
+local updateUniversal :: () {
+	-- @Incomplete: Watch using modtime.
+}
+
+
+
+export stop :: () {
+	if isWindows {
+		init() -- Probably not needed here, but just in case.
+		for watcher: watchers {
+			if not C.FindCloseChangeNotification(watcher.notification) {
+				printf("[hotLoader] Error: FindCloseChangeNotification: %s (Code %d)", watcher.directory, C.GetLastError())
+			}
+		}
+	}
+	watchers = {}
+}
+
+
+
+-- Returns false on error.
+local Windows_isWritable :: (path:string) -> bool {
+	-- https://stackoverflow.com/questions/25227151/check-if-a-file-is-being-written-using-win32-api-or-c-c-i-do-not-have-write-a/25229839#25229839
+	local pathWide = Windows_stringToWide(path)
+
+	local file = C.CreateFileW(
+		--[[lpFileName            = ]] pathWide,
+		--[[dwDesiredAccess       = ]] GENERIC_READ,
+		--[[dwShareMode           = ]] FILE_SHARE_READ,
+		--[[lpSecurityAttributes  = ]] NULL, -- @Compiler @Incomplete: Infer expected type from named arguments.
+		--[[dwCreationDisposition = ]] OPEN_EXISTING,
+		--[[dwFlagsAndAttributes  = ]] 0,
+		--[[hTemplateFile         = ]] NULL
+	)
+
+	if ffi.pointerToInt(file) == INVALID_HANDLE_VALUE  return false
+
+	C.CloseHandle(file)
+	return true
+}
+
+
+
+local Windows_stringToWide :: (s:string) -> Pointer {
+	local size      = C.MultiByteToWideChar(CODE_PAGE_UTF8, 0, s, #s, NULL, 0)
+	local _, buffer = ffi.newArray("wchar_t[?]", size+1)
+	C.MultiByteToWideChar(CODE_PAGE_UTF8, 0, s, #s, buffer, size)
+	return buffer
+}
+
+local Windows_wideToString :: (wstr:Pointer) -> string {
+	local size      = C.WideCharToMultiByte(CODE_PAGE_UTF8, 0, wstr, -1, NULL, 0, NULL, NULL)
+	local _, buffer = ffi.newArray("char[?]", size+1)
+	C.WideCharToMultiByte(CODE_PAGE_UTF8, 0, wstr, -1, buffer, size, NULL, NULL)
+	return ffi.toString(buffer)
+}
+
+

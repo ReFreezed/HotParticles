@@ -62,7 +62,8 @@ export !load "src/guiSetup"
 export !load "src/misc"
 export !load "src/workspace"
 
-export gui :: !load "src/gui"
+export gui       :: !load "src/gui"
+export hotLoader :: !load "src/hotLoader"
 
 !load "src/shared"
 
@@ -123,14 +124,15 @@ local forceParticleUpdates   = false
 
 local zoomTime = -9999.00
 
-local updateId = 0
+export updateEventCount = 0
 
 local timeForAnimationPreview   = 0.00
 local particleEmitDurationTotal = 0.00
 
 local showParticlePath = 0 -- 0=no, 1=average, 2=range
 
-export isMac: bool
+export isWindows: bool
+export isMac:     bool
 export lctrl: LK.KeyConstant
 export rctrl: LK.KeyConstant
 export ctrlText: string
@@ -163,7 +165,8 @@ export ImageAndInfo :: struct {
 	fullPath: string,
 	fileData: LF.FileData = NULL, -- We use FileData instead of ImageData as the latter is problematic when exporting the textures.  @Cleanup: Does this need to be loaded all the time (since we have the path here anyway)?
 	image:    LG.Image    = NULL,
-	bundled = false,
+	bundled  = false,
+	-- modified = -1,
 }
 
 
@@ -581,13 +584,22 @@ export updateParticleTexture :: (project:Project, system:System, saveRecent=fals
 			return NULL
 		}
 
-		return {fullPath=path, fileData=cast(LF.FileData)imageData, image=image}
+		-- static info: LF.FileInfo
+
+		local imageAndInfo: ImageAndInfo = {
+			fullPath = path,
+			fileData = cast(LF.FileData)imageData,
+			image    = image,
+			bundled  = false,
+			-- modified = (LF.getInfo(filename, info) ~= nil and info.modtime ~= nil) ? cast(int)info.modtime : -1,
+		}
+		return imageAndInfo
 	}
 
 	local imageAndInfo: ImageAndInfo = NULL
 	local loadedCustomTexture        = true
 
-	if system.texturePath  imageAndInfo = loadParticleTexture(project, system, saveRecent) -- @Speed: Don't reload the texture if there's no change.
+	if system.texturePath  imageAndInfo = loadParticleTexture(project, system, saveRecent) -- @Speed: Don't reload the texture if there's no change (and we don't want to force a reload).
 
 	if imageAndInfo == NULL {
 		imageAndInfo        = particleImages[system.textureName]
@@ -601,6 +613,8 @@ export updateParticleTexture :: (project:Project, system:System, saveRecent=fals
 
 	local filter = project.pixelateTextures ? LG.FilterMode.NEAREST : .LINEAR
 	imageAndInfo.image.setFilter!(filter, filter)
+
+	hotLoader.watchersNeedUpdate = true
 
 	return loadedCustomTexture
 }
@@ -784,6 +798,7 @@ export moveEmittersTo :: (x,y:float) {
 
 export pushQuitEvent :: () {
 	saveWorkspace()
+	hotLoader.stop()
 	LE.quit(0)
 }
 
@@ -896,10 +911,16 @@ local onLoad :: (args:[]string, argsRaw:[]string) {
 		-- LT.sleep(1) -- DEBUG
 	}
 
-	isMac    = love.system.getOS() == "OS X"
-	lctrl    = isMac ? "lgui" : "lctrl"
-	rctrl    = isMac ? "rgui" : "rctrl"
-	ctrlText = isMac ? "Cmd"  : "Ctrl"
+	do {
+		local osName = love.system.getOS()
+
+		isWindows = osName == .WINDOWS
+		isMac     = osName == .OSX
+
+		lctrl    = isMac ? "lgui" : "lctrl"
+		rctrl    = isMac ? "rgui" : "rctrl"
+		ctrlText = isMac ? "Cmd"  : "Ctrl"
+	}
 
 	local projectsToOpen: []string
 
@@ -938,32 +959,37 @@ local onLoad :: (args:[]string, argsRaw:[]string) {
 	!load "src/icons"
 	generateIcons()
 
-	for LF.getDirectoryItems"gfx/particles" {
-		local found, name = matchPattern(it, "^(.+)%.png$")
+	do {
+		-- local info: LF.FileInfo
 
-		if found {
-			local path      = "gfx/particles/"..it
-			local imageData = LF.newFileData(path)
-			local image     = LG.newImage(path)
+		for LF.getDirectoryItems"gfx/particles" {
+			local found, name = matchPattern(it, "^(.+)%.png$")
 
-			particleImages[cast(string)name] = {
-				fullPath = format("%s/%s", getAppDirectory(), path),
-				fileData = imageData,
-				image    = image,
-				bundled  = true,
+			if found {
+				local path      = "gfx/particles/"..it
+				local imageData = LF.newFileData(path)
+				local image     = LG.newImage(path)
+
+				particleImages[cast(string)name] = {
+					fullPath = format("%s/%s", getAppDirectory(), path),
+					fileData = imageData,
+					image    = image,
+					bundled  = not DEV, -- Count all files as unbundled in DEV mode.
+					-- modified = (LF.getInfo(path, info) ~= nil and info.modtime ~= nil) ? cast(int)info.modtime : -1,
+				}
+
+				guiImages[cast(string)name] = image
+
+				insert(particleImageNames, cast(string)name)
+
+				--[[ Black/white to transparent/white.
+				local img = LI.newImageData(path)
+				img.mapPixel!((x,y:int, r,g,b,a:float) -> (r,g,b,a:float) {
+					return 1, 1, 1, r
+				})
+				img.encode!(LI.ImageFormat.PNG, it)
+				--]]
 			}
-
-			guiImages[cast(string)name] = image
-
-			insert(particleImageNames, cast(string)name)
-
-			--[[ Black/white to transparent/white.
-			local img = LI.newImageData(path)
-			img.mapPixel!((x,y:int, r,g,b,a:float) -> (r,g,b,a:float) {
-				return 1, 1, 1, r
-			})
-			img.encode!(LI.ImageFormat.PNG, it)
-			--]]
 		}
 	}
 
@@ -1333,7 +1359,7 @@ local onMouseWheel :: (dx,dy:int) {
 
 
 local onUpdate :: (dt:float) {
-	updateId += 1
+	updateEventCount += 1
 
 	!if GIF_RECORDING_MODE  if gifRecordingActive  dt = GIF_FRAME_DELAY / 100
 
@@ -1496,6 +1522,7 @@ local onUpdate :: (dt:float) {
 	)
 
 	guiState.update!(dt)
+	hotLoader.update(dt)
 
 	!if GIF_RECORDING_MODE  for < visualMousePresses {
 		it.progress += dt/.20
@@ -2555,7 +2582,7 @@ export recordChange :: (label:string, onDo:(project:Project), onUndo:(project:Pr
 	while project.changes[app.maxChanges] ~= NULL  remove(project.changes, 1) -- This may remove more than one if app.maxChanges changed.
 
 	local change: Change = {
-		bundle   = updateId,
+		bundle   = updateEventCount,
 		label    = label,
 		onDo     = onDo,
 		onUndo   = onUndo,
