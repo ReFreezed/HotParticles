@@ -22,7 +22,7 @@ local String  :: string|Pointer
 
 
 local DEFINITIONS :: [[//C
-	// Windows.
+	// Windows:
 	typedef       unsigned int  UINT;
 	typedef       uint32_t      DWORD, *LPDWORD;
 	typedef       int           BOOL,  *LPBOOL;
@@ -150,11 +150,18 @@ local TRUNCATE_EXISTING :: 5
 
 
 local Watcher :: struct {
-	directory: string,
+	-- Windows:
+	directory:    string  = NULL,
 	notification: Pointer = NULL,
+
+	-- Universal:
+	path:     string = NULL,
+	modified: int    = NULL,
 }
 
 export watchersNeedUpdate = true
+export watcherIndex       = 0
+export watcherTime        = 0.00
 local  watchers: []Watcher
 
 
@@ -178,42 +185,68 @@ local init :: () {
 
 
 export update :: (dt:float) {
-	if isWindows
+	if isWindows and HOTLOADER_USE_WINAPI
 		updateWindows()
 	else
-		updateUniversal()
+		updateUniversal(dt)
 }
 
 local updateWindows :: () {
 	init()
 
 	local _watchersNeedUpdate = watchersNeedUpdate
-	static delayedReloads: []ProjectAndSystem
+	static delayedReloadImages:  []ProjectAndSystem
+	static delayedReloadShaders: []ProjectAndSystem
 
-	for < delayed: delayedReloads {
+	for < delayed: delayedReloadImages {
 		local path = delayed.system.currentImage.fullPath
 
 		if Windows_isWritable(path) {
-			remove(delayedReloads, itIndex)
+			remove(delayedReloadImages, itIndex)
 
-			printf("[hotLoader] Reloading texture '%s' after delay.", path)
+			log("[hotLoader] Reloading texture '%s' after delay.", path)
 			updateParticleTexture(delayed.project, delayed.system)
 		}
 	}
 
+	for < delayed: delayedReloadShaders {
+		if delayed.system.currentShader == NULL {
+			remove(delayedReloadShaders, itIndex)
+			continue
+		}
+
+		local path = delayed.system.currentShader.fullPath
+
+		if Windows_isWritable(path) {
+			remove(delayedReloadShaders, itIndex)
+
+			log("[hotLoader] Reloading shader '%s' after delay.", path)
+			updateParticleShader(delayed.project, delayed.system)
+		}
+	}
+
 	if _watchersNeedUpdate {
-		printf("[hotLoader] Updating watchers.")
+		log("[hotLoader] Updating watchers.")
 
 		stop()
 
 		local dirs: []string
 		local dirSet: struct { !key:string, !value:bool }
 
-		for project: app.projects  for system: project.systems  if not system.currentImage.bundled {
-			local _, dir = Path(system.currentImage.fullPath).getDirectory!()
-			if not dirSet[dir] {
-				dirSet[dir] = true
-				insert(dirs, dir)
+		for project: app.projects  for system: project.systems {
+			if not system.currentImage.bundled {
+				local _, dir = Path(system.currentImage.fullPath).getDirectory!()
+				if not dirSet[dir] {
+					dirSet[dir] = true
+					insert(dirs, dir)
+				}
+			}
+			if system.currentShader ~= NULL {
+				local _, dir = Path(system.currentShader.fullPath).getDirectory!()
+				if not dirSet[dir] {
+					dirSet[dir] = true
+					insert(dirs, dir)
+				}
 			}
 		}
 
@@ -226,33 +259,33 @@ local updateWindows :: () {
 			local notification = C.FindFirstChangeNotificationW(dirWide, false, filter)
 
 			if ffi.pointerToInt(notification) == INVALID_HANDLE_VALUE {
-				printf("[hotLoader] Error: FindFirstChangeNotificationW: %s (Code %d)", dir, C.GetLastError())
+				log("[hotLoader] Error: FindFirstChangeNotificationW: %s (Code %d)", dir, C.GetLastError())
 			} else {
-				printf("[hotLoader] Watching '%s'.", dir)
+				log("[hotLoader] Watching '%s'.", dir)
 				insert(watchers, cast(Watcher) {directory=dir, notification=notification})
 			}
 		}
 
-	} else {
+	} elseif watchers {
 		local recentTime = os.getTime() - 1
 
-		for < watcher, watcherIndex: watchers {
+		for < watcher, _watcherIndex: watchers {
 			local gotSignal = false
 
 			while true {
 				local code = C.WaitForSingleObject(watcher.notification, 0)
 
 				if code == WAIT_OBJECT_0 {
-					-- if not gotSignal  printf("[hotLoader] [%d] WaitForSingleObject: Signal: %s", updateEventCount, watcher.directory)
+					-- if not gotSignal  log("[hotLoader] [%d] WaitForSingleObject: Signal: %s", updateEventCount, watcher.directory)
 					gotSignal = true
 
 					if not C.FindNextChangeNotification(watcher.notification) {
-						printf("[hotLoader] Error: FindNextChangeNotification failed for '%s'. (Code %d)", watcher.directory, C.GetLastError())
+						log("[hotLoader] Error: FindNextChangeNotification failed for '%s'. (Code %d)", watcher.directory, C.GetLastError())
 
 						if not C.FindCloseChangeNotification(watcher.notification) { -- Is this needed, since FindNextChangeNotification() failed? I'm gonna assume yes.
-							printf("[hotLoader] Error: FindCloseChangeNotification: %s (Code %d)", watcher.directory, C.GetLastError())
+							log("[hotLoader] Error: FindCloseChangeNotification: %s (Code %d)", watcher.directory, C.GetLastError())
 						}
-						remove(watchers, watcherIndex)
+						remove(watchers, _watcherIndex)
 
 						break
 					}
@@ -261,11 +294,11 @@ local updateWindows :: () {
 					break
 
 				} elseif code == WAIT_FAILED {
-					printf("[hotLoader] Error: WaitForSingleObject failed for '%s'. (Code %d)", watcher.directory, C.GetLastError())
+					log("[hotLoader] Error: WaitForSingleObject failed for '%s'. (Code %d)", watcher.directory, C.GetLastError())
 					break
 
 				} else {
-					printf("[hotLoader] Error: WaitForSingleObject: Unhandled code %d.", code)
+					log("[hotLoader] Error: WaitForSingleObject: Unhandled code %d.", code)
 					break
 				}
 			}
@@ -274,41 +307,47 @@ local updateWindows :: () {
 				-- void
 
 			} elseif not connectToRemoteDirectory(watcher.directory) {
-				printf("[hotLoader] Error: Could not connect to '%s'.", watcher.directory)
+				log("[hotLoader] Error: Could not connect to '%s'.", watcher.directory)
 
 			} else {
 				defer disconnectFromRemoteDirectory()
 
-				for project: app.projects  for system: project.systems  if not system.currentImage.bundled {
-					local path             = system.currentImage.fullPath
-					local _, dir, filename = Path(path).getDirectoryAndFilename!()
+				for project: app.projects  for system: project.systems {
+					if not system.currentImage.bundled  maybeReload(recentTime, watcher, project, system, system.currentImage .fullPath, updateParticleTexture, delayedReloadImages,  "texture")
+					if system.currentShader ~= NULL     maybeReload(recentTime, watcher, project, system, system.currentShader.fullPath, updateParticleShader,  delayedReloadShaders, "shader")
 
-					static info: LF.FileInfo
+					local Updater :: (project:Project, system:System, saveRecent:bool) -> bool
 
-					if (
-						dir == watcher.directory
-						-- @Robustness: This is not optimal, but we probably have to use ReadDirectoryChanges() otherwise (which we could).
-						and LF.getInfo(filename, info) ~= nil and info.modtime ~= nil and cast(int)info.modtime >= recentTime
-					) {
-						if Windows_isWritable(path) {
-							for delayed: delayedReloads {
-								if delayed.project == project and delayed.system == system {
-									printf("[hotLoader] Removing delay for texture '%s'.", path)
-									remove(delayedReloads, itIndex)
-									break
+					local maybeReload :: (recentTime:int, watcher:Watcher, project:Project, system:System, path:string, updater:Updater, delayeds:[]ProjectAndSystem, termForLog:string) {
+						local _, dir, filename = Path(path).getDirectoryAndFilename!()
+
+						static info: LF.FileInfo
+
+						if (
+							dir == watcher.directory
+							-- @Robustness: This is not optimal, but we probably have to use ReadDirectoryChanges() otherwise (which we could).
+							and LF.getInfo(filename, info) ~= nil and info.modtime ~= nil and cast(int)info.modtime >= recentTime
+						) {
+							if Windows_isWritable(path) {
+								for delayed: delayeds {
+									if delayed.project == project and delayed.system == system {
+										log("[hotLoader] Removing delay for %s '%s'.", termForLog, path)
+										remove(delayeds, itIndex)
+										break
+									}
 								}
-							}
 
-							printf("[hotLoader] Reloading texture '%s'.", path)
-							updateParticleTexture(project, system)
+								log("[hotLoader] Reloading %s '%s'.", termForLog, path)
+								updater(project, system, false)
 
-						} else {
-							printf("[hotLoader] Adding delay for texture '%s'.", path)
-							local delayed: ProjectAndSystem = {
-								project = project,
-								system  = system,
+							} else {
+								log("[hotLoader] Adding delay for %s '%s'.", termForLog, path)
+								local delayed: ProjectAndSystem = {
+									project = project,
+									system  = system,
+								}
+								insert(delayeds, delayed)
 							}
-							insert(delayedReloads, delayed)
 						}
 					}
 				}
@@ -316,21 +355,83 @@ local updateWindows :: () {
 		}
 	}
 
-	watchersNeedUpdate = false -- Must be reset after all calls to updateParticleTexture().
+	watchersNeedUpdate = false -- Must be reset after all calls to updateParticle*().
 }
 
-local updateUniversal :: () {
-	-- @Incomplete: Watch using modtime.
+local updateUniversal :: (dt:float) {
+	if watchersNeedUpdate {
+		log("[hotLoader] Updating watchers.")
+
+		stop()
+
+		local pathSet: struct { !key:string, !value:bool }
+
+		for project: app.projects  for system: project.systems {
+			if not system.currentImage.bundled {
+				local path = system.currentImage.fullPath
+				if not pathSet[path] and system.currentImage.modified >= 0 {
+					pathSet[path] = true
+					log("[hotLoader] Watching '%s'.", path)
+					insert(watchers, cast(Watcher) {path=path, modified=system.currentImage.modified})
+				}
+			}
+			if system.currentShader ~= NULL {
+				local path = system.currentShader.fullPath
+				if not pathSet[path] and system.currentShader.modified >= 0 {
+					pathSet[path] = true
+					log("[hotLoader] Watching '%s'.", path)
+					insert(watchers, cast(Watcher) {path=path, modified=system.currentShader.modified})
+				}
+			}
+		}
+
+		watcherIndex = 0
+		watcherTime  = 0
+
+	} elseif watchers {
+		local HOTLOAD_MAX_WAIT_TIME :: 0.80
+		local timePerWatcher = HOTLOAD_MAX_WAIT_TIME / #watchers
+
+		watcherTime += dt
+
+		while watcherTime >= timePerWatcher {
+			watcherTime  -= timePerWatcher
+			watcherIndex  = (watcherIndex % #watchers) + 1
+
+			local watcher          = watchers[watcherIndex]
+			local _, dir, filename = Path(watcher.path).getDirectoryAndFilename!()
+
+			if connectToRemoteDirectory(dir) {
+				defer disconnectFromRemoteDirectory()
+
+				static info: LF.FileInfo
+				local modified = (LF.getInfo(filename, info) ~= nil and info.modtime ~= nil) ? cast(int)info.modtime : -1
+
+				if modified > watcher.modified {
+					log("[hotLoader] Reloading texture '%s'.", watcher.path)
+
+					for project: app.projects  for system: project.systems {
+						if                                  system.currentImage .fullPath == watcher.path  updateParticleTexture(project, system)
+						if system.currentShader ~= NULL and system.currentShader.fullPath == watcher.path  updateParticleShader (project, system)
+					}
+
+					watcher.modified = modified
+				}
+			}
+		}
+	}
+
+	watchersNeedUpdate = false -- Must be reset after all calls to updateParticle*().
 }
 
 
 
 export stop :: () {
-	if isWindows {
+	if isWindows and HOTLOADER_USE_WINAPI {
 		init() -- Probably not needed here, but just in case.
 		for watcher: watchers {
 			if not C.FindCloseChangeNotification(watcher.notification) {
-				printf("[hotLoader] Error: FindCloseChangeNotification: %s (Code %d)", watcher.directory, C.GetLastError())
+				log("[hotLoader] Error: FindCloseChangeNotification: %s (Code %d)", watcher.directory, C.GetLastError())
 			}
 		}
 	}

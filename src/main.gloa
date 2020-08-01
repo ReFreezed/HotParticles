@@ -12,6 +12,8 @@ export APP_VERSION_STRING   :: !run (getReleaseVersion())
 export WORKSPACE_SAVE_DELAY :: 1.00
 export WINDOW_TITLE         :: !run format("Hot Particles %s%s", APP_VERSION_STRING, (DEV ? " [DEBUG]" : ""))
 
+export HOTLOADER_USE_WINAPI :: 1==1 -- Enabling this means faster file modification detection and less usage of resources.
+
 
 
 local isDev :: () -> bool {
@@ -166,7 +168,13 @@ export ImageAndInfo :: struct {
 	fileData: LF.FileData = NULL, -- We use FileData instead of ImageData as the latter is problematic when exporting the textures.  @Cleanup: Does this need to be loaded all the time (since we have the path here anyway)?
 	image:    LG.Image    = NULL,
 	bundled  = false,
-	-- modified = -1,
+	modified = -1,
+}
+
+export ShaderAndInfo :: struct {
+	fullPath: string,
+	shader:   LG.Shader = NULL,
+	modified = -1,
 }
 
 
@@ -398,8 +406,8 @@ export System :: struct {
 
 	particles: LG.ParticleSystem = NULL,
 
-	currentImage:  ImageAndInfo = NULL,
-	currentShader: LG.Shader    = NULL,
+	currentImage:  ImageAndInfo  = NULL,
+	currentShader: ShaderAndInfo = NULL,
 
 	!call :: () -> System {
 		local system: System
@@ -584,14 +592,14 @@ export updateParticleTexture :: (project:Project, system:System, saveRecent=fals
 			return NULL
 		}
 
-		-- static info: LF.FileInfo
+		static info: LF.FileInfo
 
 		local imageAndInfo: ImageAndInfo = {
 			fullPath = path,
 			fileData = cast(LF.FileData)imageData,
 			image    = image,
 			bundled  = false,
-			-- modified = (LF.getInfo(filename, info) ~= nil and info.modtime ~= nil) ? cast(int)info.modtime : -1,
+			modified = (LF.getInfo(filename, info) ~= nil and info.modtime ~= nil) ? cast(int)info.modtime : -1,
 		}
 		return imageAndInfo
 	}
@@ -615,12 +623,11 @@ export updateParticleTexture :: (project:Project, system:System, saveRecent=fals
 	imageAndInfo.image.setFilter!(filter, filter)
 
 	hotLoader.watchersNeedUpdate = true
-
 	return loadedCustomTexture
 }
 
-export updateParticleShader :: (project:Project, system:System, saveRecent=false) {
-	local loadParticleShader :: (project:Project, system:System, saveRecent:bool) -> LG.Shader {
+export updateParticleShader :: (project:Project, system:System, saveRecent=false) -> (dummy:bool) {
+	local loadParticleShader :: (project:Project, system:System, saveRecent:bool) -> ShaderAndInfo {
 		local ok, path, isDangling = getShaderFullPath(project, system)
 		if not ok {
 			if isDangling
@@ -675,14 +682,24 @@ export updateParticleShader :: (project:Project, system:System, saveRecent=false
 			return NULL
 		}
 
-		return shader
+		static info: LF.FileInfo
+
+		local shaderAndInfo: ShaderAndInfo = {
+			fullPath = path,
+			shader   = shader,
+			modified = (LF.getInfo(filename, info) ~= nil and info.modtime ~= nil) ? cast(int)info.modtime : -1,
+		}
+		return shaderAndInfo
 	}
 
-	local shader: LG.Shader = NULL
+	local shaderAndInfo: ShaderAndInfo = NULL
 
-	if system.shaderPath  shader = loadParticleShader(project, system, saveRecent) -- @Speed: Don't reload the shader if there's no change.
+	if system.shaderPath  shaderAndInfo = loadParticleShader(project, system, saveRecent) -- @Speed: Don't reload the shader if there's no change (and we don't want to force a reload).
 
-	system.currentShader = shader
+	system.currentShader = shaderAndInfo
+
+	hotLoader.watchersNeedUpdate = true
+	return false -- Dummy value for hot-loader.
 }
 
 export updateParticleAnimation :: (system:System) {
@@ -960,7 +977,7 @@ local onLoad :: (args:[]string, argsRaw:[]string) {
 	generateIcons()
 
 	do {
-		-- local info: LF.FileInfo
+		local info: LF.FileInfo
 
 		for LF.getDirectoryItems"gfx/particles" {
 			local found, name = matchPattern(it, "^(.+)%.png$")
@@ -975,7 +992,7 @@ local onLoad :: (args:[]string, argsRaw:[]string) {
 					fileData = imageData,
 					image    = image,
 					bundled  = not DEV, -- Count all files as unbundled in DEV mode.
-					-- modified = (LF.getInfo(path, info) ~= nil and info.modtime ~= nil) ? cast(int)info.modtime : -1,
+					modified = (LF.getInfo(path, info) ~= nil and info.modtime ~= nil) ? cast(int)info.modtime : -1,
 				}
 
 				guiImages[cast(string)name] = image
@@ -1605,20 +1622,23 @@ local onDraw :: () {
 			if not project.pixelateWorld  LG.scale(project.zoom)
 
 			local time = LT.getTime()
-
 			LG.setColor(1, 1, 1)
+
 			for system: project.systems  if system.visible {
-				local shader = system.currentShader
+				local shaderAndInfo = system.currentShader
+				local shader        = shaderAndInfo ~= NULL ? shaderAndInfo.shader : NULL
+
 				if shader ~= NULL {
 					if shader.hasUniform!"hotParticlesTime"         shader.send!("hotParticlesTime",        particleEmitDurationTotal)
 					if shader.hasUniform!"hotParticlesEmitterTime"  shader.send!("hotParticlesEmitterTime", project.particleEmitDuration)
 				}
+
 				LG.setShader(shader)
 				LG.setBlendMode(system.blendMode)
 				LG.draw(system.particles)
 			}
 
-			particleDrawTime = LT.getTime()-time -- Not sure how accurate this actually is. This value is still very low even while the actual FPS is tanking a lot.
+			particleDrawTime = LT.getTime() - time -- Not sure how accurate this actually is. This value is still very low even while the actual FPS is tanking a lot.
 			-- !if DEV  LG.getStats(statsWorld)
 
 			LG.setShader()
@@ -2345,7 +2365,7 @@ export confirmDeleteSystem :: (systemIndexToDelete:int) {
 		LG.setColor(1, 1, 1)
 
 		LG.clear(r, g, b)
-		LG.setShader(system.currentShader)
+		LG.setShader(system.currentShader ~= NULL ? system.currentShader.shader : NULL)
 		LG.setBlendMode(system.blendMode)
 
 		LG.draw(system.particles,

@@ -2027,7 +2027,7 @@ local drawElement :: (state:State, el:Element) {
 					)
 
 					LG.clear(r, g, b)
-					LG.setShader(system.currentShader)
+					if system.currentShader ~= NULL  LG.setShader(system.currentShader.shader)
 					LG.setBlendMode(system.blendMode)
 					LG.setColor(1, 1, 1)
 
