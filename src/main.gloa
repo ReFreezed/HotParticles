@@ -12,6 +12,7 @@ export APP_VERSION_STRING   :: !run (getReleaseVersion())
 export WORKSPACE_SAVE_DELAY :: 1.00
 export WINDOW_TITLE         :: !run format("Hot Particles %s%s", APP_VERSION_STRING, (DEV ? " [DEBUG]" : ""))
 
+export LOG_MAX_ENTRIES      :: 500
 export HOTLOADER_USE_WINAPI :: 1==1 -- Enabling this means faster file modification detection and less usage of resources.
 
 
@@ -679,6 +680,7 @@ export updateParticleShader :: (project:Project, system:System, saveRecent=false
 		if shader == NULL {
 			log(err) -- @Incomplete: Fix line numbers.
 			setErrorText("Could not load shader '%s' (see File > Log)", filename)
+			log("Note: Line numbers are slightly off because the program edits the shader a bit.")
 			return NULL
 		}
 
@@ -2325,6 +2327,8 @@ export confirmCloseProject :: (projectIndex:int) {
 			app.currentProjectIndex -= 1
 		else
 			app.currentProjectIndex = math.min(app.currentProjectIndex, #app.projects)
+
+		hotLoader.watchersNeedUpdate = true
 
 		guiState.refreshRecursively!("projects")
 		if isCurrent  setCurrentProject(app.currentProjectIndex, force=true)

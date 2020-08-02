@@ -351,6 +351,7 @@ export Text :: struct {
 	using Element,
 
 	text = "",
+	textLines: []string,
 	size = 2, -- 1=small, 2=normal, 3=large
 
 	textHeight = 0,
@@ -1401,10 +1402,17 @@ local calculateNaturalSize :: (state:State, el:Element) {
 			local textEl        = cast(Text) el
 			local font          = textEl.size == 3 ? fontLarge : textEl.size == 1 ? fontSmall : fontNormal
 			local fontH         = font.getHeight!()
-			local lineCount     = 1 + countString(textEl.text, "\n")
+			local lineCount     = textEl.textLines ? #textEl.textLines : 1 + countString(textEl.text, "\n")
 			textEl.textHeight   = math.ceil(fontH + (lineCount-1) * fontH * font.getLineHeight!())
-			textEl.layoutWidth  = font.getWidth!(textEl.text) + (textEl.size == 3 ? 1 : 0)
 			textEl.layoutHeight = textEl.textHeight
+
+			if textEl.textLines {
+				local w = 0
+				for textEl.textLines  w = math.max(w, font.getWidth!(it))
+				textEl.layoutWidth = w + (textEl.size == 3 ? 1 : 0)
+			} else {
+				textEl.layoutWidth = font.getWidth!(textEl.text) + (textEl.size == 3 ? 1 : 0)
+			}
 
 		case Separator:
 			local separator        = cast(Separator) el
@@ -1883,8 +1891,16 @@ local drawElement :: (state:State, el:Element) {
 			LG.setFont(font)
 			LG.setColor(1, 1, 1, TEXT_OPACITY)
 
-			LG.print(textEl.text, textEl.layoutX, textY)
-			if textEl.size == 3  LG.print(textEl.text, textEl.layoutX+1, textY)
+			if textEl.textLines {
+				local lineDist = math.round(font.getHeight!() * font.getLineHeight!())
+				for textEl.textLines {
+					LG.print(it, textEl.layoutX, textY)
+					textY += lineDist
+				}
+			} else {
+				LG.print(textEl.text, textEl.layoutX, textY)
+				if textEl.size == 3  LG.print(textEl.text, textEl.layoutX+1, textY)
+			}
 
 			LG.pop()
 

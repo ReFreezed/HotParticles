@@ -438,6 +438,7 @@ export pcall_newShader :: (fileOrCode:string|LF.File) -> (shader:LG.Shader, err:
 export logStrings: []string
 
 export log :: (s:string) {
+	if logStrings[LOG_MAX_ENTRIES] ~= NULL  remove(logStrings, 1)
 	insert(logStrings, os.getDate"[%H:%M:%S]  "..s)
 	print(s)
 }

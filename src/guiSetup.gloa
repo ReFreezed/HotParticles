@@ -3385,9 +3385,9 @@ export setupGuiCallbacks :: () {
 	}
 
 	guiState.onRefresh.log_text = (textEl:gui.Text) {
-		local s        = concatinate(logStrings, "\n")
-		local _, lines = fontNormal.getWrap!(s, DIALOG_WIDTH_LOG-20) -- @Ugly
-		textEl.text    = concatinate(lines, "\n")
+		local s          = concatinate(logStrings, "\n")
+		local _, lines   = fontNormal.getWrap!(s, DIALOG_WIDTH_LOG-20) -- @Ugly?
+		textEl.textLines = lines
 	}
 
 	--==============================================================
