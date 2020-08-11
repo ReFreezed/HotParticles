@@ -54,7 +54,7 @@ export SCROLLABLE_PADDING   :: 5 -- Vertical.
 export SCROLLBAR_WIDTH      :: 8
 export SCROLLBAR_MIN_LENGTH :: 16
 
-local SECTION_LABEL_WIDTH :: 100
+local SECTION_DEFAULT_LABEL_WIDTH :: 100
 
 local SLIDER_MIN_WIDTH    :: 12
 local SLIDER_MIN_LENGTH   :: 70
@@ -330,7 +330,8 @@ export Scrollable :: struct {
 export Section :: struct {
 	using Widget,
 
-	icon16 = "",
+	icon16     = "",
+	labelWidth = SECTION_DEFAULT_LABEL_WIDTH,
 }
 
 local Box :: struct {
@@ -1352,7 +1353,7 @@ local calculateNaturalSize :: (state:State, el:Element) {
 			local section = cast(Section) el
 
 			if app.hiddenSections[section.name] {
-				section.layoutWidth  = SECTION_LABEL_WIDTH + (section.icon16 ? 16 : 0)
+				section.layoutWidth  = section.labelWidth + (section.icon16 ? 16 : 0)
 				section.layoutHeight = math.max(fontNormal.getHeight!(), (section.icon16 ? 16 : 0))
 
 			} else {
@@ -1368,7 +1369,7 @@ local calculateNaturalSize :: (state:State, el:Element) {
 
 				local sectionSideHeight = (section.label ? fontNormal.getHeight!() : 0) + (section.icon16 ? 16+SPACING : 0)
 
-				section.layoutWidth  = SECTION_LABEL_WIDTH + contentW
+				section.layoutWidth  = section.labelWidth + contentW
 				section.layoutHeight = math.max(contentH-SPACING, sectionSideHeight)
 			}
 
@@ -1574,8 +1575,8 @@ local positionAndFit :: (state:State, el:Element, x,y,w,h:int) {
 		case Section:
 			local section = cast(Section) el
 
-			x += SECTION_LABEL_WIDTH
-			w -= SECTION_LABEL_WIDTH
+			x += section.labelWidth
+			w -= section.labelWidth
 
 			if not app.hiddenSections[section.name]  positionAndFitChildrenV(state, section, x, y, w, h)
 
@@ -1853,7 +1854,7 @@ local drawElement :: (state:State, el:Element) {
 			if section.icon16 {
 				local x, y: int
 				if hidden {
-					x = section.layoutX + SECTION_LABEL_WIDTH
+					x = section.layoutX + section.labelWidth
 					y = section.layoutY
 				} else {
 					x = section.layoutX

@@ -478,24 +478,28 @@ export setupGuiFrames :: () {
 		guiState.frame!({ name="animation", width=MAIN_PANEL_WIDTH, active=false,
 			guiState.text!({ text="Animation", size=3 }),
 			guiState.canvas!({ name="animation_preview", width=100, height=100 }),
+			guiState.section!({ --[[name="animation_lifetimeSection",]] label="ParticleLifetime", icon16="time", labelWidth=120,
+				guiState.slider!({ name="animation_particleLifetimeMin", labelLeft="min", min=0, max=16, exponential=true, limitName="particleLifetime", readout="%.2f sec", linkMultiDrag={"animation_particleLifetimeMax"} }),
+				guiState.slider!({ name="animation_particleLifetimeMax", labelLeft="max", min=0, max=16, exponential=true, limitName="particleLifetime", readout="%.2f sec", linkMultiDrag={"animation_particleLifetimeMin"} }),
+			}),
 			guiState.separator!({ thick=true }),
 			guiState.buttons!({ buttons={{name="animation_empty",label="Remove all frames"}} }),
 			guiState.separator!({ thick=true }),
-			guiState.section!({ label="Sequence", icon16="sequence",
+			guiState.section!({ label="Sequence", icon16="sequence", labelWidth=120,
 				guiState.hbox!({
-					guiState.inputText!({ name="animation_sequence_areaPosition", labelLeft="area x/y",  value="0 0", inset=15, weight=1, tooltip="Top/left corner of first frame. Negative means offset from bottom/right corner of texture. Format: [x y]" }),
+					guiState.inputText!({ name="animation_sequence_areaPosition", labelLeft="area x/y",  value="0 0",           weight=1, tooltip="Top/left corner of first frame. Negative means offset from bottom/right corner of texture. Format: [x y]" }),
 					guiState.inputText!({ name="animation_sequence_areaSize",     labelLeft="area size", value="0 0", inset=50, weight=1, tooltip="Size of area containing frames. Non-positive means offset from bottom/right corner of texture. Format: [width height] or [size]" }),
 				}),
 				guiState.hbox!({
-					guiState.inputText!({ name="animation_sequence_framePadding", labelLeft="padding", value="0", inset=15, weight=1, tooltip="Padding around each frame. Format: [paddingX paddingY] or [padding]" }),
+					guiState.inputText!({ name="animation_sequence_framePadding", labelLeft="padding", value="0",           weight=1, tooltip="Padding around each frame. Format: [paddingX paddingY] or [padding]" }),
 					guiState.inputText!({ name="animation_sequence_frameSpacing", labelLeft="spacing", value="0", inset=50, weight=1, tooltip="Space between frames. Format: [spacingX spacingY] or [spacing]" }),
 				}),
 				guiState.hbox!({
-					guiState.inputText!({ name="animation_sequence_frameSize", labelLeft="frame size", value="10 10", inset=15, weight=1, tooltip="Format: [width height] or [size]" }),
+					guiState.inputText!({ name="animation_sequence_frameSize", labelLeft="frame size", value="10 10", weight=1, tooltip="Format: [width height] or [size]" }),
 					guiState.buttons!({ width=200, buttons={{name="animation_sequence_generateFromSize",label="Generate using frame size"}} }),
 				}),
 				guiState.hbox!({
-					guiState.inputText!({ name="animation_sequence_rows",    labelLeft="rows",    value="1", inset=15, weight=1 }),
+					guiState.inputText!({ name="animation_sequence_rows",    labelLeft="rows",    value="1",           weight=1 }),
 					guiState.inputText!({ name="animation_sequence_columns", labelLeft="columns", value="1", inset=50, weight=1 }),
 					guiState.buttons!({ width=200, buttons={{name="animation_sequence_generateFromDivision",label="Generate using rows+columns"}} }),
 				}),
@@ -2935,7 +2939,7 @@ export setupGuiCallbacks :: () {
 	--= Animation
 	--==============================================================
 	do {
-		local PARAMS :: {
+		local GUI_VALUE_ELEMENTS :: {
 			"animation_sequence_areaPosition",
 			"animation_sequence_areaSize",
 			"animation_sequence_framePadding",
@@ -2954,13 +2958,13 @@ export setupGuiCallbacks :: () {
 			savedEdited           = project.edited
 			system.frames         = copyArray(system.frames)
 
-			for PARAMS {
+			for GUI_VALUE_ELEMENTS {
 				local input     = guiState.getElement!(it, gui.InputText)
 				local ok, value = getGuiValue(system, it)
 				if ok  input.value = value
 			}
 
-			guiState.refreshRecursively!("animation_frames")
+			guiState.refreshRecursively!(frame)
 		}
 
 		guiState.onAction.animation_ok = (buttons:gui.Buttons, buttonIndex:int) {
@@ -3028,6 +3032,29 @@ export setupGuiCallbacks :: () {
 				LG.draw(image, x, y, 0, scale)
 			}
 		}
+
+		guiState.onRefresh.animation_particleLifetimeMin = (slider:gui.Slider) {
+			local project, system = getCurrentProjectAndSystem()
+			slider.value          = system.psParticleLifetimeMin
+		}
+		addEventHandlersForSlider(forSystem=true, "animation_particleLifetimeMin", "Particle lifetime",
+			(project:Project, system:System, value:float) {
+				system.psParticleLifetimeMin = value
+				updateParticleParams(project, system)
+				guiState.refreshRecursively!("particleLifetimeMin")
+			}
+		)
+		guiState.onRefresh.animation_particleLifetimeMax = (slider:gui.Slider) {
+			local project, system = getCurrentProjectAndSystem()
+			slider.value          = system.psParticleLifetimeMax
+		}
+		addEventHandlersForSlider(forSystem=true, "animation_particleLifetimeMax", "Particle lifetime",
+			(project:Project, system:System, value:float) {
+				system.psParticleLifetimeMax = value
+				updateParticleParams(project, system)
+				guiState.refreshRecursively!("particleLifetimeMax")
+			}
+		)
 
 		guiState.onAction.animation_empty = (buttons:gui.Buttons, buttonIndex:int) {
 			local project, system = getCurrentProjectAndSystem()
@@ -3130,7 +3157,7 @@ export setupGuiCallbacks :: () {
 				}
 			}
 
-			for PARAMS {
+			for GUI_VALUE_ELEMENTS {
 				local input = guiState.getElement!(it, gui.InputText)
 				setGuiValue(system, it, input.value)
 			}
@@ -3197,7 +3224,7 @@ export setupGuiCallbacks :: () {
 				}
 			}
 
-			for PARAMS {
+			for GUI_VALUE_ELEMENTS {
 				local input = guiState.getElement!(it, gui.InputText)
 				setGuiValue(system, it, input.value)
 			}

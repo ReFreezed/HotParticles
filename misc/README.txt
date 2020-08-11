@@ -53,10 +53,13 @@ Hold Ctrl/Cmd while dragging controls to snap the value.
 Hold Shift to drag related controls together (like min and max speed).
 Hold Alt to change the min/max limits of sliders.
 
-Press left and right arrow keys while hovering over controls to shift the
-value. Hold Ctrl or Shift to go slower or faster.
+Press left and right arrow keys while hovering over controls to shift the value.
+Hold Ctrl or Shift to go slower or faster.
 
 Zoom in and out with the mouse wheel.
+
+Press parameter names to collapse or expand the section. (Note that the
+parameter is still "active" while collapsed.)
 
 
 

@@ -1551,11 +1551,13 @@ local onUpdate :: (dt:float) {
 
 
 
-local getVisibilityFlags :: () -> bool, bool, bool, bool, bool {
+local getVisibilityFlags :: () -> bool, bool, bool, bool, bool, bool {
 	static wasHoveringTextureOffset    = false
 	static wasHoveringAreaDistribution = false
+	static wasHoveringEmitterRelated   = false
 	static hoverTimeTextureOffset      = -9999.00
 	static hoverTimeAreaDistribution   = -9999.00
+	static hoverTimeEmitterRelated     = -9999.00
 
 	local isHoveringTextureOffset
 		=  math.max(guiState.activeId, guiState.hoveredId) == guiState.getElement!("textureOffsetX").id
@@ -1566,6 +1568,13 @@ local getVisibilityFlags :: () -> bool, bool, bool, bool, bool {
 		or math.max(guiState.activeId, guiState.hoveredId) == guiState.getElement!("areaDx").id
 		or math.max(guiState.activeId, guiState.hoveredId) == guiState.getElement!("areaDy").id
 
+	local isHoveringEmitterRelated
+		=  isHoveringAreaDistribution
+		or math.max(guiState.activeId, guiState.hoveredId) == guiState.getElement!("emitterMovement").id
+		or math.max(guiState.activeId, guiState.hoveredId) == guiState.getElement!("emitterMovementSx").id
+		or math.max(guiState.activeId, guiState.hoveredId) == guiState.getElement!("emitterMovementSy").id
+		or math.max(guiState.activeId, guiState.hoveredId) == guiState.getElement!("emitterMovementSpeed").id
+
 	if isHoveringTextureOffset ~= wasHoveringTextureOffset {
 		wasHoveringTextureOffset = isHoveringTextureOffset
 		hoverTimeTextureOffset   = LT.getTime()
@@ -1574,12 +1583,17 @@ local getVisibilityFlags :: () -> bool, bool, bool, bool, bool {
 		wasHoveringAreaDistribution = isHoveringAreaDistribution
 		hoverTimeAreaDistribution   = LT.getTime()
 	}
+	if isHoveringEmitterRelated ~= wasHoveringEmitterRelated {
+		wasHoveringEmitterRelated = isHoveringEmitterRelated
+		hoverTimeAreaDistribution = LT.getTime()
+	}
 
 	local DELAY :: 4/60
 	local showTextureOffset    = (isHoveringTextureOffset    and LT.getTime() - hoverTimeTextureOffset    > DELAY)
 	local showAreaDistribution = (isHoveringAreaDistribution and LT.getTime() - hoverTimeAreaDistribution > DELAY)
 	local showAnimationFrames  = guiState.getElement!("animation").active
 	local showTexturePreview   = textureBrowserPreviewImage ~= NULL
+	local showEmitterPosition  = (isHoveringEmitterRelated   and LT.getTime() - hoverTimeEmitterRelated   > DELAY)
 	local showWorld            = not (showTextureOffset or showAnimationFrames or showTexturePreview)
 
 	static didShowWorld = true
@@ -1590,7 +1604,7 @@ local getVisibilityFlags :: () -> bool, bool, bool, bool, bool {
 		updateParticleImageFilters()
 	}
 
-	return showWorld, showTextureOffset, showAreaDistribution, showAnimationFrames, showTexturePreview
+	return showWorld, showTextureOffset, showAreaDistribution, showAnimationFrames, showTexturePreview, showEmitterPosition
 }
 
 local onDraw :: () {
@@ -1600,7 +1614,7 @@ local onDraw :: () {
 	local ww, wh  = LG.getDimensions()
 	local project = app.projects[app.currentProjectIndex]
 
-	local showWorld, showTextureOffset, showAreaDistribution, showAnimationFrames, showTexturePreview = getVisibilityFlags()
+	local showWorld, showTextureOffset, showAreaDistribution, showAnimationFrames, showTexturePreview, showEmitterPosition = getVisibilityFlags()
 
 	LG.reset()
 
@@ -1681,6 +1695,18 @@ local onDraw :: () {
 						LG.draw(imageNormal, x,y, 0, sx,sy, iw/2,ih/2)
 				}
 
+				LG.setLineWidth(1)
+			}
+
+			if showEmitterPosition {
+				local x, y = project.systems[1].particles.getPosition!()
+				local lw   = math.max(2/project.zoom, (project.pixelateWorld ? 1 : 0))
+				local len  = 6 * lw
+
+				LG.setColor(1, 0, 0, .6)
+				LG.setLineWidth(lw)
+				LG.line(x-len, y, x+len, y)
+				LG.line(x, y-len, x, y+len)
 				LG.setLineWidth(1)
 			}
 
@@ -1858,20 +1884,26 @@ local onDraw :: () {
 				LG.draw(image, x0, y0, 0, scale)
 
 				if system.frames {
-					local drawFrame :: (x0,y0:int, scale:float, frame:AnimationFrame) {
+					local drawFrame :: (x0,y0:int, scale:float, frame:AnimationFrame, highlight:bool) {
 						local x1 = math.round(x0 + scale * (frame.x          ))
 						local y1 = math.round(y0 + scale * (frame.y          ))
 						local x2 = math.round(x0 + scale * (frame.x + frame.w))
 						local y2 = math.round(y0 + scale * (frame.y + frame.h))
-						LG.rectangle(LG.DrawMode.LINE, x1+.5, y1+.5, x2-x1-1, y2-y1-1)
+						if highlight {
+							LG.setLineWidth(2)
+							LG.rectangle(LG.DrawMode.LINE, x1+1, y1+1, x2-x1-2, y2-y1-2)
+							LG.setLineWidth(1)
+						} else {
+							LG.rectangle(LG.DrawMode.LINE, x1+.5, y1+.5, x2-x1-1, y2-y1-1)
+						}
 					}
 
 					LG.setColor(0, 1, 0)
-					for system.frames  drawFrame(x0,y0, scale, it)
+					for system.frames  drawFrame(x0,y0, scale, it, false)
 
 					local frameIndex = getAnimationPreviewProgress(system.particles, #system.frames)
 					LG.setColor(1, 1, 1)
-					drawFrame(x0,y0, scale, system.frames[frameIndex])
+					drawFrame(x0,y0, scale, system.frames[frameIndex], true)
 
 					local occupiedCoords: Table(int, bool)
 
