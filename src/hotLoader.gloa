@@ -195,16 +195,28 @@ local updateWindows :: () {
 	init()
 
 	local _watchersNeedUpdate = watchersNeedUpdate
-	static delayedReloadImages:  []ProjectAndSystem
-	static delayedReloadShaders: []ProjectAndSystem
+	static delayedReloadBackgrounds: []ProjectAndSystem
+	static delayedReloadImages:      []ProjectAndSystem
+	static delayedReloadShaders:     []ProjectAndSystem
+
+	for < delayed: delayedReloadBackgrounds {
+		if delayed.project.currentBgImage == NULL {
+			remove(delayedReloadBackgrounds, itIndex)
+			continue
+		}
+		local path = delayed.project.currentBgImage.fullPath
+		if Windows_isWritable(path) {
+			log("[hotLoader] Reloading texture '%s' after delay.", path)
+			remove(delayedReloadBackgrounds, itIndex)
+			updateBackgroundTexture(delayed.project)
+		}
+	}
 
 	for < delayed: delayedReloadImages {
 		local path = delayed.system.currentImage.fullPath
-
 		if Windows_isWritable(path) {
-			remove(delayedReloadImages, itIndex)
-
 			log("[hotLoader] Reloading texture '%s' after delay.", path)
+			remove(delayedReloadImages, itIndex)
 			updateParticleTexture(delayed.project, delayed.system)
 		}
 	}
@@ -214,13 +226,10 @@ local updateWindows :: () {
 			remove(delayedReloadShaders, itIndex)
 			continue
 		}
-
 		local path = delayed.system.currentShader.fullPath
-
 		if Windows_isWritable(path) {
-			remove(delayedReloadShaders, itIndex)
-
 			log("[hotLoader] Reloading shader '%s' after delay.", path)
+			remove(delayedReloadShaders, itIndex)
 			updateParticleShader(delayed.project, delayed.system)
 		}
 	}
@@ -230,23 +239,22 @@ local updateWindows :: () {
 
 		stop()
 
+		local DirectorySet :: struct { !key:string, !value:bool }
+		local dirSet: DirectorySet
 		local dirs: []string
-		local dirSet: struct { !key:string, !value:bool }
 
-		for project: app.projects  for system: project.systems {
-			if not system.currentImage.bundled {
-				local _, dir = Path(system.currentImage.fullPath).getDirectory!()
-				if not dirSet[dir] {
-					dirSet[dir] = true
-					insert(dirs, dir)
-				}
-			}
-			if system.currentShader ~= NULL {
-				local _, dir = Path(system.currentShader.fullPath).getDirectory!()
-				if not dirSet[dir] {
-					dirSet[dir] = true
-					insert(dirs, dir)
-				}
+		local addWatcher :: (dirSet:DirectorySet, dirs:[]string, path:string) {
+			local _, dir = Path(path).getDirectory!()
+			if dirSet[dir]  return
+			dirSet[dir] = true
+			insert(dirs, dir)
+		}
+
+		for project: app.projects {
+			if project.currentBgImage ~= NULL  addWatcher(dirSet, dirs, project.currentBgImage.fullPath)
+			for system: project.systems {
+				if not system.currentImage.bundled  addWatcher(dirSet, dirs, system.currentImage .fullPath)
+				if system.currentShader ~= NULL     addWatcher(dirSet, dirs, system.currentShader.fullPath)
 			}
 		}
 
@@ -312,43 +320,47 @@ local updateWindows :: () {
 			} else {
 				defer disconnectFromRemoteDirectory()
 
-				for project: app.projects  for system: project.systems {
-					if not system.currentImage.bundled  maybeReload(recentTime, watcher, project, system, system.currentImage .fullPath, updateParticleTexture, delayedReloadImages,  "texture")
-					if system.currentShader ~= NULL     maybeReload(recentTime, watcher, project, system, system.currentShader.fullPath, updateParticleShader,  delayedReloadShaders, "shader")
-
+				for project: app.projects {
 					local Updater :: (project:Project, system:System, saveRecent:bool) -> bool
 
 					local maybeReload :: (recentTime:int, watcher:Watcher, project:Project, system:System, path:string, updater:Updater, delayeds:[]ProjectAndSystem, termForLog:string) {
 						local _, dir, filename = Path(path).getDirectoryAndFilename!()
-
 						static info: LF.FileInfo
 
-						if (
+						if not (
 							dir == watcher.directory
 							-- @Robustness: This is not optimal, but we probably have to use ReadDirectoryChanges() otherwise (which we could).
 							and LF.getInfo(filename, info) ~= nil and info.modtime ~= nil and cast(int)info.modtime >= recentTime
 						) {
-							if Windows_isWritable(path) {
-								for delayed: delayeds {
-									if delayed.project == project and delayed.system == system {
-										log("[hotLoader] Removing delay for %s '%s'.", termForLog, path)
-										remove(delayeds, itIndex)
-										break
-									}
-								}
-
-								log("[hotLoader] Reloading %s '%s'.", termForLog, path)
-								updater(project, system, false)
-
-							} else {
-								log("[hotLoader] Adding delay for %s '%s'.", termForLog, path)
-								local delayed: ProjectAndSystem = {
-									project = project,
-									system  = system,
-								}
-								insert(delayeds, delayed)
-							}
+							return
 						}
+
+						if Windows_isWritable(path) {
+							for delayed: delayeds {
+								if delayed.project == project and delayed.system == system {
+									log("[hotLoader] Removing delay for %s '%s'.", termForLog, path)
+									remove(delayeds, itIndex)
+									break
+								}
+							}
+
+							log("[hotLoader] Reloading %s '%s'.", termForLog, path)
+							updater(project, system, false)
+
+						} else {
+							log("[hotLoader] Adding delay for %s '%s'.", termForLog, path)
+							local delayed: ProjectAndSystem = {
+								project = project,
+								system  = system,
+							}
+							insert(delayeds, delayed)
+						}
+					}
+
+					if project.currentBgImage ~= NULL  maybeReload(recentTime, watcher, project, NULL, project.currentBgImage.fullPath, updateBackgroundTexture, delayedReloadBackgrounds, "texture")
+					for system: project.systems {
+						if not system.currentImage.bundled  maybeReload(recentTime, watcher, project, system, system.currentImage .fullPath, updateParticleTexture, delayedReloadImages,  "texture")
+						if system.currentShader ~= NULL     maybeReload(recentTime, watcher, project, system, system.currentShader.fullPath, updateParticleShader,  delayedReloadShaders, "shader")
 					}
 				}
 			}
@@ -364,24 +376,21 @@ local updateUniversal :: (dt:float) {
 
 		stop()
 
-		local pathSet: struct { !key:string, !value:bool }
+		local PathSet :: struct { !key:string, !value:bool }
+		local pathSet: PathSet
 
-		for project: app.projects  for system: project.systems {
-			if not system.currentImage.bundled {
-				local path = system.currentImage.fullPath
-				if not pathSet[path] and system.currentImage.modified >= 0 {
-					pathSet[path] = true
-					log("[hotLoader] Watching '%s'.", path)
-					insert(watchers, cast(Watcher) {path=path, modified=system.currentImage.modified})
-				}
-			}
-			if system.currentShader ~= NULL {
-				local path = system.currentShader.fullPath
-				if not pathSet[path] and system.currentShader.modified >= 0 {
-					pathSet[path] = true
-					log("[hotLoader] Watching '%s'.", path)
-					insert(watchers, cast(Watcher) {path=path, modified=system.currentShader.modified})
-				}
+		local addWatcher :: (pathSet:PathSet, path:string, modified:int) {
+			if pathSet[path] or modified < 0  return
+			pathSet[path] = true
+			log("[hotLoader] Watching '%s'.", path)
+			insert(watchers, cast(Watcher) {path=path, modified=modified})
+		}
+
+		for project: app.projects {
+			if project.currentBgImage ~= NULL  addWatcher(pathSet, project.currentBgImage.fullPath, project.currentBgImage.modified)
+			for system: project.systems {
+				if not system.currentImage.bundled  addWatcher(pathSet, system.currentImage .fullPath, system.currentImage .modified)
+				if system.currentShader ~= NULL     addWatcher(pathSet, system.currentShader.fullPath, system.currentShader.modified)
 			}
 		}
 
@@ -410,9 +419,12 @@ local updateUniversal :: (dt:float) {
 				if modified > watcher.modified {
 					log("[hotLoader] Reloading texture '%s'.", watcher.path)
 
-					for project: app.projects  for system: project.systems {
-						if                                  system.currentImage .fullPath == watcher.path  updateParticleTexture(project, system)
-						if system.currentShader ~= NULL and system.currentShader.fullPath == watcher.path  updateParticleShader (project, system)
+					for project: app.projects {
+						if project.currentBgImage ~= NULL and project.currentBgImage.fullPath == watcher.path  updateBackgroundTexture(project)
+						for system: project.systems {
+							if                                  system.currentImage .fullPath == watcher.path  updateParticleTexture(project, system)
+							if system.currentShader ~= NULL and system.currentShader.fullPath == watcher.path  updateParticleShader (project, system)
+						}
 					}
 
 					watcher.modified = modified

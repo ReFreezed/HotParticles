@@ -59,6 +59,18 @@ export setupGuiFrames :: () {
 						guiState.slider!({ name="bgChecker", labelLeft="pattern", min=-1, max=1,   exponential=true, readoutMulti=100,     readout="%d%%",  weight=2 }),
 						guiState.slider!({ name="bgSize",    labelLeft="size",    min=1,  max=128, exponential=true, isInt=true, inset=30, readout="%d px", weight=1 }), -- @UX: Maybe make this a global configuration?
 					}),
+					guiState.hbox!({
+						guiState.inputText!({ name="bgPath", labelLeft="path", tooltip="Absolute path, or relative to the .hotparticles file (Right-click for recent)", weight=1 }),
+						guiState.buttons!({ buttons={
+							{name="bgChoose", image="iconFolder", tooltip="Browse files"},
+							{name="bgReload", image="iconReload", tooltip="Reload background"},
+						}}),
+					}),
+					guiState.hbox!({
+						guiState.slider!({ name="bgScale", labelLeft="scale", min=0, max=4, exponential=true, limitName="bgScale", readoutMulti=100, readout="%d%%", weight=1 }),
+						guiState.checkbox!({ name="bgRepeatX", label="repeat x" }),
+						guiState.checkbox!({ name="bgRepeatY", label="repeat y" }),
+					}),
 				}),
 
 				guiState.separator!({ thick=false }),
@@ -891,6 +903,7 @@ export setupGuiCallbacks :: () {
 		}
 	}
 
+	-- Pixelate flags.
 	guiState.onRefresh.pixelateWorld = (checkbox:gui.Checkbox) {
 		local project    = app.projects[app.currentProjectIndex]
 		checkbox.checked = project.pixelateWorld
@@ -905,10 +918,11 @@ export setupGuiCallbacks :: () {
 	addEventHandlersForCheckbox("pixelateTextures", "Pixelate textures",
 		(project:Project, system:System, value:bool) {
 			project.pixelateTextures = value
-			updateParticleImageFilters()
+			updateImageFilters()
 		}
 	)
 
+	-- Background.
 	guiState.onRefresh.bgColor = (colorEl:gui.Color) {
 		local project    = app.projects[app.currentProjectIndex]
 		colorEl.color[1] = project.bgColor[1]
@@ -935,6 +949,117 @@ export setupGuiCallbacks :: () {
 		(project:Project, system:System, value:float) {  project.bgSize = math.round(value)  }
 	)
 
+	guiState.onRefresh.bgPath = (input:gui.InputText) {
+		local project = app.projects[app.currentProjectIndex]
+		input.value   = project.bgPath
+	}
+	guiState.onAction.bgPath = (input:gui.InputText) {
+		local project = app.projects[app.currentProjectIndex]
+		setBackgroundPath(project, Path(trim(input.value)).toString!())
+	}
+	guiState.onOption.bgPath = (input:gui.InputText, _:int) {
+		showRecentFilesContextMenu("Recent textures", app.recentTextures, (path:string) {
+			local project = app.projects[app.currentProjectIndex]
+			setBackgroundPath(project, path)
+		})
+	}
+
+	guiState.onAction.bgChoose = (buttons:gui.Buttons, buttonIndex:int) {
+		local project = app.projects[app.currentProjectIndex]
+		local pathObj = Path(project.bgPath)
+		local ok, dir = pathObj.getDirectory!()
+
+		if not ok {
+			dir = getSaveDirectory().."/projects"
+
+		} else {
+			local dirObj = Path(dir)
+
+			if not dirObj.isAbsolute {
+				ok, dir = Path(project.path).getDirectory!()
+				dirObj.prepend!(ok ? dir : getSaveDirectory().."/projects")
+				dir = dirObj.toString!()
+			}
+		}
+
+		local ^ok, filename = pathObj.getFilename!()
+		if not ok  filename = ""
+
+		showFileDialog("Choose texture", dir, filename,
+			onHighlight = (pathObj:Path) {
+				textureBrowserPreviewImage = NULL
+
+				local _, dir, filename = pathObj.getDirectoryAndFilename!()
+				if not connectToRemoteDirectory(dir)  return
+				defer disconnectFromRemoteDirectory()
+
+				local ^textureBrowserPreviewImage, err = pcall_newImage(filename)
+				if textureBrowserPreviewImage == NULL {
+					log(err)
+					return
+				}
+
+				local project = app.projects[app.currentProjectIndex]
+				local filter  = project.pixelateTextures ? LG.FilterMode.NEAREST : LG.FilterMode.LINEAR
+				textureBrowserPreviewImage.setFilter!(filter, filter)
+			},
+			onChoose = (pathObj:Path) {
+				local ok, dir, filename = pathObj.getDirectoryAndFilename!()
+				assert(ok)
+
+				if not connectToRemoteDirectory(dir) {
+					setErrorText("Could not access folder '%s'", dir)
+					return
+				}
+				defer disconnectFromRemoteDirectory()
+
+				addRecent(app.recentFolders, dir, app.maxRecentFolders)
+
+				local image = pcall_newImage(filename)
+				if image == NULL {
+					setErrorText("'%s' is not a valid texture file", filename)
+					return
+				}
+
+				local project = app.projects[app.currentProjectIndex]
+				setBackgroundPath(project, pathObj.toString!())
+				popPanel()
+			},
+			onClose = () {
+				textureBrowserPreviewImage = NULL
+			}
+		)
+	}
+
+	guiState.onAction.bgReload = (buttons:gui.Buttons, buttonIndex:int) {
+		local project = app.projects[app.currentProjectIndex]
+		if project.bgPath  updateBackgroundTexture(project)
+	}
+
+	guiState.onRefresh.bgScale = (slider:gui.Slider) {
+		local project = app.projects[app.currentProjectIndex]
+		slider.value  = project.bgScale
+	}
+	addEventHandlersForSlider("bgScale", "Background scale",
+		(project:Project, system:System, value:float) {  project.bgScale = value  }
+	)
+
+	guiState.onRefresh.bgRepeatX = (checkbox:gui.Checkbox) {
+		local project    = app.projects[app.currentProjectIndex]
+		checkbox.checked = project.bgRepeatX
+	}
+	guiState.onRefresh.bgRepeatY = (checkbox:gui.Checkbox) {
+		local project    = app.projects[app.currentProjectIndex]
+		checkbox.checked = project.bgRepeatY
+	}
+	addEventHandlersForCheckbox("bgRepeatX", "Background repeat",
+		(project:Project, system:System, value:bool) {  project.bgRepeatX = value  }
+	)
+	addEventHandlersForCheckbox("bgRepeatY", "Background repeat",
+		(project:Project, system:System, value:bool) {  project.bgRepeatY = value  }
+	)
+
+	-- Emitter.
 	guiState.onRefresh.emitterMovement = (radio:gui.Radio) {
 		local project  = app.projects[app.currentProjectIndex]
 		local found, i = indexWith(radio.buttons, "value", project.movementPreset)
@@ -966,6 +1091,7 @@ export setupGuiCallbacks :: () {
 		(project:Project, system:System, value:float) {  project.movementSpeed = value  }
 	)
 
+	-- Custom data.
 	guiState.onRefresh.customDataProject = (input:gui.InputText) {
 		local project = app.projects[app.currentProjectIndex]
 		input.value   = project.customData
@@ -1163,24 +1289,9 @@ export setupGuiCallbacks :: () {
 		setTexturePath(project, system, Path(trim(input.value)).toString!())
 	}
 	guiState.onOption.texturePath = (input:gui.InputText, _:int) {
-		local items = {"Recent textures:"}
-
-		if app.recentTextures {
-			for app.recentTextures  insert(items, it)
-			insert(items, "Clear history")
-		} else {
-			insert(items, "(no recent files)")
-		}
-
-		guiState.showContextMenu!(items, [items] (choice:int) {
-			if choice <= 1 or not app.recentTextures {
-				-- void
-			} elseif choice == #items {
-				app.recentTextures = {}
-			} else {
-				local project, system = getCurrentProjectAndSystem()
-				setTexturePath(project, system, items[choice])
-			}
+		showRecentFilesContextMenu("Recent textures", app.recentTextures, (path:string) {
+			local project, system = getCurrentProjectAndSystem()
+			setTexturePath(project, system, path)
 		})
 	}
 
@@ -1202,7 +1313,7 @@ export setupGuiCallbacks :: () {
 			}
 		}
 
-		local ^ok, filename = Path(system.texturePath).getFilename!()
+		local ^ok, filename = pathObj.getFilename!()
 		if not ok  filename = ""
 
 		showFileDialog("Choose texture", dir, filename,
@@ -1862,24 +1973,9 @@ export setupGuiCallbacks :: () {
 		setShaderPath(project, system, Path(trim(input.value)).toString!())
 	}
 	guiState.onOption.shaderPath = (input:gui.InputText, _:int) {
-		local items = {"Recent shaders:"}
-
-		if app.recentShaders {
-			for app.recentShaders  insert(items, it)
-			insert(items, "Clear history")
-		} else {
-			insert(items, "(no recent files)")
-		}
-
-		guiState.showContextMenu!(items, [items] (choice:int) {
-			if choice <= 1 or not app.recentShaders {
-				-- void
-			} elseif choice == #items {
-				app.recentShaders = {}
-			} else {
-				local project, system = getCurrentProjectAndSystem()
-				setShaderPath(project, system, items[choice])
-			}
+		showRecentFilesContextMenu("Recent shaders", app.recentShaders, (path:string) {
+			local project, system = getCurrentProjectAndSystem()
+			setShaderPath(project, system, path)
 		})
 	}
 

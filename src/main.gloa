@@ -228,6 +228,10 @@ export Project :: struct {
 	bgColor: []float = {0,0,.15}, -- HSV
 	bgChecker = 0.0,
 	bgSize    = 8,
+	bgPath    = "",
+	bgScale   = 1.0,
+	bgRepeatX = false,
+	bgRepeatY = false,
 
 	pixelateWorld    = false,
 	pixelateTextures = false,
@@ -288,6 +292,8 @@ export Project :: struct {
 
 	particleEmitDuration = 0.00,
 
+	currentBgImage: ImageAndInfo = NULL,
+
 	changes: []Change,
 	changeIndex = 1, -- Should point at the next slot in 'changes'.
 
@@ -307,6 +313,10 @@ export Project :: struct {
 			bgColor                  = {source.bgColor[1], source.bgColor[2], source.bgColor[3]},
 			bgChecker                = source.bgChecker,
 			bgSize                   = source.bgSize,
+			bgPath                   = source.bgPath,
+			bgScale                  = source.bgScale,
+			bgRepeatX                = source.bgRepeatX,
+			bgRepeatY                = source.bgRepeatY,
 			pixelateWorld            = source.pixelateWorld,
 			pixelateTextures         = source.pixelateTextures,
 			zoomLevel                = source.zoomLevel,
@@ -556,6 +566,103 @@ export updateParticleTextures :: (project:Project) {
 	for project.systems  updateParticleTexture(project, it)
 }
 
+export updateParticleAnimation :: (system:System) {
+	if system.frames {
+		local iw, ih = system.currentImage.image.getDimensions!()
+		local quads: []LG.Quad
+
+		for system.frames {
+			insert(quads, LG.newQuad(it.x, it.y, it.w, it.h, iw, ih))
+		}
+
+		system.particles.setQuads!(quads)
+
+	} else {
+		system.particles.setQuads!()
+	}
+
+	updateParticleTextureOffset(system)
+}
+
+export updateParticleTextureOffset :: (system:System) {
+	if system.frames {
+		local animFrame1 = system.frames[1]
+		system.particles.setOffset!(animFrame1.w*system.offsetX, animFrame1.h*system.offsetY)
+	} else {
+		local iw, ih = system.currentImage.image.getDimensions!()
+		system.particles.setOffset!(iw*system.offsetX, ih*system.offsetY)
+	}
+}
+
+
+
+-- @Cleanup: The following update* functions are very similar!
+
+export updateBackgroundTexture :: (project:Project, dummy:System=NULL, saveRecent=false) -> (dummy:bool) {
+	local loadBackgroundTexture :: (project:Project, saveRecent:bool) -> ImageAndInfo {
+		local ok, path, isDangling = getBackgroundFullPath(project)
+		if not ok {
+			if isDangling
+				setErrorText("Relative paths require the project to be saved: %s", path)
+			else
+				setErrorText("Bad texture path '%s'", path)
+			return NULL
+		}
+
+		local ^ok, dir, filename = Path(path).getDirectoryAndFilename!()
+		assert(ok)
+
+		if not connectToRemoteDirectory(dir) {
+			setErrorText("Could not access folder '%s'", dir)
+			return NULL
+		}
+		defer disconnectFromRemoteDirectory()
+
+		local imageData, err = LF.newFileData(filename)
+
+		if imageData == NULL {
+			setErrorText(err)
+			return NULL
+		}
+
+		if saveRecent  addRecent(app.recentTextures, project.bgPath, app.maxRecentFiles)
+		-- if saveRecent  addRecent(app.recentTextures, path, app.maxRecentFiles)
+
+		local image, ^err = pcall_newImage(filename)
+		if image == NULL {
+			log(err)
+			setErrorText("Could not load texture '%s'", filename)
+			return NULL
+		}
+
+		static info: LF.FileInfo
+
+		local imageAndInfo: ImageAndInfo = {
+			fullPath = path,
+			fileData = cast(LF.FileData)imageData,
+			image    = image,
+			bundled  = false,
+			modified = (LF.getInfo(filename, info) ~= nil and info.modtime ~= nil) ? cast(int)info.modtime : -1,
+		}
+		return imageAndInfo
+	}
+
+	local imageAndInfo: ImageAndInfo = NULL
+
+	if project.bgPath  imageAndInfo = loadBackgroundTexture(project, saveRecent) -- @Speed: Don't reload the texture if there's no change (and we don't want to force a reload).
+
+	project.currentBgImage = imageAndInfo
+
+	if imageAndInfo ~= NULL {
+		local filter = project.pixelateTextures ? LG.FilterMode.NEAREST : .LINEAR
+		imageAndInfo.image.setFilter!(filter, filter)
+		imageAndInfo.image.setWrap!(.REPEAT, .REPEAT) -- @Polish: Only use repeat when necessary to avoid artifacts around the background image.
+	}
+
+	hotLoader.watchersNeedUpdate = true
+	return false -- Dummy value for hot-loader.
+}
+
 export updateParticleTexture :: (project:Project, system:System, saveRecent=false) -> (loadedCustomTexture:bool) {
 	local loadParticleTexture :: (project:Project, system:System, saveRecent:bool) -> ImageAndInfo {
 		local ok, path, isDangling = getTextureFullPath(project, system)
@@ -704,39 +811,15 @@ export updateParticleShader :: (project:Project, system:System, saveRecent=false
 	return false -- Dummy value for hot-loader.
 }
 
-export updateParticleAnimation :: (system:System) {
-	if system.frames {
-		local iw, ih = system.currentImage.image.getDimensions!()
-		local quads: []LG.Quad
-
-		for system.frames {
-			insert(quads, LG.newQuad(it.x, it.y, it.w, it.h, iw, ih))
-		}
-
-		system.particles.setQuads!(quads)
-
-	} else {
-		system.particles.setQuads!()
-	}
-
-	updateParticleTextureOffset(system)
-}
-
-export updateParticleTextureOffset :: (system:System) {
-	if system.frames {
-		local animFrame1 = system.frames[1]
-		system.particles.setOffset!(animFrame1.w*system.offsetX, animFrame1.h*system.offsetY)
-	} else {
-		local iw, ih = system.currentImage.image.getDimensions!()
-		system.particles.setOffset!(iw*system.offsetX, ih*system.offsetY)
-	}
-}
 
 
-
-export updateParticleImageFilters :: () {
+export updateImageFilters :: () {
 	local project = app.projects[app.currentProjectIndex]
 	local filter  = (project.pixelateTextures or forcePixelatedTextures) ? LG.FilterMode.NEAREST : .LINEAR
+
+	if project.currentBgImage ~= NULL {
+		project.currentBgImage.image.setFilter!(filter, filter)
+	}
 
 	for particleImageNames {
 		particleImages[it].image.setFilter!(filter, filter)
@@ -1022,7 +1105,10 @@ local onLoad :: (args:[]string, argsRaw:[]string) {
 			addNewProject()
 		}
 
-		for app.projects  updateParticles(it)
+		for app.projects {
+			updateParticles(it)
+			updateBackgroundTexture(it)
+		}
 
 		local w = app.windowWidth  ?: 1400
 		local h = app.windowHeight ?: 800
@@ -1601,7 +1687,7 @@ local getVisibilityFlags :: () -> bool, bool, bool, bool, bool, bool {
 	if showWorld ~= didShowWorld {
 		didShowWorld           = showWorld
 		forcePixelatedTextures = not showWorld -- A bit misplaced... @Cleanup
-		updateParticleImageFilters()
+		updateImageFilters()
 	}
 
 	return showWorld, showTextureOffset, showAreaDistribution, showAnimationFrames, showTexturePreview, showEmitterPosition
@@ -1620,21 +1706,55 @@ local onDraw :: () {
 
 	-- World.
 	do {
+		local midX = (ww-MAIN_PANEL_WIDTH)/2
+		local midY = wh/2
+
 		LG.setCanvas(canvasWorld)
 
 		local r, g, b = hsvToRgb(project.bgColor)
-		LG.clear(r, g, b)
+		LG.clear(r, g, b, 1)
 
+		-- Background pattern.
 		if math.abs(project.bgChecker) > .9/255 {
 			if project.bgChecker > 0
 				LG.setColor(1, 1, 1, project.bgChecker)
 			else
 				LG.setColor(0, 0, 0, -project.bgChecker)
-			gui.drawChecker(0, 0, ww, wh, project.bgSize/4)
+			gui.drawChecker(0, 0, ww-MAIN_PANEL_WIDTH, wh, project.bgSize/4)
 		}
 
+		-- Background image.
+		if project.currentBgImage ~= NULL {
+			local scale = project.bgScale
+			if not project.pixelateWorld  scale *= project.zoom
+
+			local iw, ih = project.currentBgImage.image.getDimensions!()
+
+			static quad: LG.Quad = NULL
+			if quad == NULL  quad = LG.newQuad(0,0, 1,1, 1,1)
+
+			quad.setViewport!(
+				x  = project.bgRepeatX ? -midX/scale - iw/2 : 0,
+				y  = project.bgRepeatY ? -midY/scale - ih/2 : 0,
+				w  = project.bgRepeatX ? 2*midX/scale       : iw,
+				h  = project.bgRepeatY ? 2*midY/scale       : ih,
+				sw = iw,
+				sh = ih
+			)
+
+			LG.setColor(1, 1, 1)
+			LG.draw(
+				project.currentBgImage.image, quad,
+				x  = project.bgRepeatX ? 0 : midX-iw/2*scale,
+				y  = project.bgRepeatY ? 0 : midY-ih/2*scale,
+				r  = 0,
+				sx = scale
+			)
+		}
+
+		-- Particles.
 		if showWorld {
-			LG.translate((ww-MAIN_PANEL_WIDTH)/2, wh/2)
+			LG.translate(midX, midY)
 			if not project.pixelateWorld  LG.scale(project.zoom)
 
 			local time = LT.getTime()
@@ -1823,7 +1943,7 @@ local onDraw :: () {
 	-- GUI.
 	do {
 		LG.setCanvas(canvasGui)
-		LG.clear()
+		LG.clear(0, 0, 0, 0)
 
 		LG.setFont(fontNormal)
 
@@ -2247,7 +2367,7 @@ export setCurrentProject :: (i:int, force=false) {
 	guiState.refreshRecursively!("undoRedoText")
 
 	scheduleRecreateCanvases = true
-	updateParticleImageFilters()
+	updateImageFilters()
 
 	setCurrentSystem(app.projects[i].systemIndex, force=true)
 
@@ -2326,6 +2446,7 @@ export openProject :: (path:string, asPreview=false) -> (success:bool, project:P
 	insert(app.projects, project)
 
 	updateParticles(project)
+	updateBackgroundTexture(project)
 
 	local currentProject = app.projects[app.currentProjectIndex]
 	if not asPreview and isProjectEmpty(currentProject) {
@@ -2400,7 +2521,7 @@ export confirmDeleteSystem :: (systemIndexToDelete:int) {
 
 		LG.setColor(1, 1, 1)
 
-		LG.clear(r, g, b)
+		LG.clear(r, g, b, 1)
 		LG.setShader(system.currentShader ~= NULL ? system.currentShader.shader : NULL)
 		LG.setBlendMode(system.blendMode)
 
@@ -2550,6 +2671,42 @@ export setShaderPath :: (project:Project, system:System, pathNew:string) {
 		[system, pathNew            ] (project:Project) {  system.shaderPath = pathNew  },
 		[system, pathOld, saveRecent] (project:Project) {  system.shaderPath = pathOld ; saveRecent = false  },
 		[system,          saveRecent] (project:Project) {  updateParticleShader(project, system, saveRecent) ; saveRecent = false ; guiState.refreshRecursively!("shaderPath")  }
+	)
+}
+
+
+
+export getBackgroundFullPath :: (project:Project) -> (success:bool, path:string, isDanglingRelativePath:bool) {
+	local path = project.bgPath
+
+	if not path {
+		return false, "", false
+
+	} elseif Path(path).isAbsolute {
+		if not Path(path).getFilename!()  return false, "", false
+		return true, path, false
+
+	} elseif project.fileIsSaved {
+		local pathObj = Path(project.path)
+		pathObj.pop!() -- @Robustness: Should we check if the path empty after this?
+		pathObj.append!(path)
+		return true, pathObj.toString!(), false
+
+	} else {
+		return false, path, true
+	}
+}
+
+export setBackgroundPath :: (project:Project, pathNew:string) {
+	local pathOld = project.bgPath
+	if pathNew == pathOld  return
+
+	local saveRecent = true
+
+	recordChange("Background path",
+		[pathNew            ] (project:Project) {  project.bgPath = pathNew  },
+		[pathOld, saveRecent] (project:Project) {  project.bgPath = pathOld ; saveRecent = false  },
+		[         saveRecent] (project:Project) {  updateBackgroundTexture(project, NULL, saveRecent) ; saveRecent = false ; guiState.refreshRecursively!("bgPath")  }
 	)
 }
 
@@ -2924,6 +3081,29 @@ export showOpenProjectDialog :: () {
 			projectBeingSaved = NULL
 		}
 	)
+}
+
+
+
+export showRecentFilesContextMenu :: (title:string, recentPaths:[]string, onChoose:(path:string)) {
+	local items = {title..":"}
+
+	if recentPaths {
+		for recentPaths  insert(items, it)
+		insert(items, "Clear history")
+	} else {
+		insert(items, "(no recent files)")
+	}
+
+	guiState.showContextMenu!(items, [items, recentPaths, onChoose] (choice:int) {
+		if choice <= 1 or not recentPaths {
+			-- void
+		} elseif choice == #items {
+			for recentPaths  recentPaths[itIndex] = NULL
+		} else {
+			onChoose(items[choice])
+		}
+	})
 }
 
 
