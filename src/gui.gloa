@@ -1019,9 +1019,16 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int, begin=false, end=fals
 
 		if not state.currentTooltip {
 			state.currentTooltip = widget.tooltip
-			state.tooltipX       = widget.layoutX
-			state.tooltipY1      = widget.layoutY
-			state.tooltipY2      = widget.layoutY + widget.layoutHeight
+			if widget.type ~= Section
+				{} -- void
+			elseif widget.tooltip
+				state.currentTooltip ..= (app.hiddenSections[widget.name] ? " (Click to expand)" : " (Click to collapse)")
+			else
+				state.currentTooltip   = (app.hiddenSections[widget.name] ?   "Click to expand"  :   "Click to collapse" )
+
+			state.tooltipX  = widget.layoutX
+			state.tooltipY1 = widget.layoutY
+			state.tooltipY2 = widget.layoutY + widget.layoutHeight
 		}
 
 		if state.currentTooltip {

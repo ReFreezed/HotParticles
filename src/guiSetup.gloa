@@ -75,7 +75,7 @@ export setupGuiFrames :: () {
 
 				guiState.separator!({ thick=false }),
 
-				guiState.section!({ name="emitterMovementSection", label="EmitterMovem.", icon16="movement",
+				guiState.section!({ name="emitterMovementSection", label="EmitterMovem.", tooltip="Emitter movement", icon16="movement",
 					guiState.radio!({ name="emitterMovement",
 						buttons = {
 							{value=Movement.NONE,      label="none",      tooltip="No movement"},
@@ -95,7 +95,7 @@ export setupGuiFrames :: () {
 
 				guiState.separator!({ thick=false }),
 
-				guiState.section!({ name="scaleGlobalSection", label="GlobalScale", icon16="scaleGlobal",
+				guiState.section!({ name="scaleGlobalSection", label="GlobalScale", tooltip="Scale all parameters in all systems", icon16="scaleGlobal",
 					guiState.slider!({ name="scaleGlobalTime",  labelLeft="time",  min=0, max=4, exponential=true, limitName="scaleGlobalTime",  readoutMulti=100, readout="%d%%" }),
 					guiState.slider!({ name="scaleGlobalSpace", labelLeft="space", min=0, max=4, exponential=true, limitName="scaleGlobalSpace", readoutMulti=100, readout="%d%%", linkMultiDrag={"scaleGlobalSize"} }),
 					guiState.slider!({ name="scaleGlobalSize",  labelLeft="size",  min=0, max=4, exponential=true, limitName="scaleGlobalSize",  readoutMulti=100, readout="%d%%", linkMultiDrag={"scaleGlobalSpace"} }),
@@ -114,7 +114,7 @@ export setupGuiFrames :: () {
 
 					guiState.separator!({ thick=true }),
 
-					guiState.section!({ name="textureSection", label="Texture", icon16="texture",
+					guiState.section!({ name="textureSection", label="Texture", tooltip="Particle texture", icon16="texture",
 						guiState.radio!({ name="textureName", labelLeft="preset" }),
 						guiState.hbox!({
 							guiState.inputText!({ name="texturePath", labelLeft="path", tooltip="Absolute path, or relative to the .hotparticles file (Right-click for recent)", weight=1 }),
@@ -132,7 +132,7 @@ export setupGuiFrames :: () {
 
 					guiState.separator!({ thick=true }),
 
-					guiState.section!({ name="scaleAllSection", label="ScaleAll", icon16="scale",
+					guiState.section!({ name="scaleAllSection", label="ScaleAll", tooltip="Scale all parameters in this system", icon16="scale",
 						guiState.slider!({ name="scaleTime",  labelLeft="time",  min=0, max=4, exponential=true, limitName="scaleTime",  readoutMulti=100, readout="%d%%" }),
 						guiState.slider!({ name="scaleSpace", labelLeft="space", min=0, max=4, exponential=true, limitName="scaleSpace", readoutMulti=100, readout="%d%%", linkMultiDrag={"scaleSize"} }),
 						guiState.slider!({ name="scaleSize",  labelLeft="size",  min=0, max=4, exponential=true, limitName="scaleSize",  readoutMulti=100, readout="%d%%", linkMultiDrag={"scaleSpace"} }),
@@ -140,7 +140,7 @@ export setupGuiFrames :: () {
 
 					guiState.separator!({ thick=true }),
 
-					guiState.section!({ name="spawnSection", label="Spawn", icon16="spawn",
+					guiState.section!({ name="spawnSection", label="Spawn", tooltip="Particle spawning", icon16="spawn",
 						guiState.radio!({ name="insertMode", labelLeft="layer", buttons={
 							{value=LG.ParticleInsertMode.TOP,    label="front",  tooltip="Insert at top"},
 							{value=LG.ParticleInsertMode.BOTTOM, label="back",   tooltip="Insert at bottom"},
@@ -164,7 +164,7 @@ export setupGuiFrames :: () {
 
 					guiState.separator!({ thick=true }),
 
-					guiState.section!({ name="areaSection", label="Area", icon16="areaSize",
+					guiState.section!({ name="areaSection", label="Area", tooltip="Spawning area", icon16="areaSize",
 						guiState.radio!({ name="areaDistribution", labelLeft="distribution", buttons={
 							{value=LG.AreaSpreadDistribution.NONE,             label="none",    tooltip="None"},
 							{value=LG.AreaSpreadDistribution.ELLIPSE,          label="ellip",   tooltip="Ellipse"},
@@ -185,7 +185,7 @@ export setupGuiFrames :: () {
 
 					guiState.separator!({ thick=false }),
 
-					guiState.section!({ name="directionSection", label="Direction", icon16="direction",
+					guiState.section!({ name="directionSection", label="Direction", tooltip="Movement direction", icon16="direction",
 						guiState.hbox!({
 							guiState.direction!({ name="direction", linkSpread="directionSpread" }),
 							guiState.slider!({ name="directionSpread", labelLeft="spread", min=0, max=math.TAU, readoutMulti=360/math.TAU, readout="%d°", weight=1, inset=50 }),
@@ -194,14 +194,14 @@ export setupGuiFrames :: () {
 
 					guiState.separator!({ thick=true }),
 
-					guiState.section!({ name="speedSection", label="Speed", icon16="speed",
+					guiState.section!({ name="speedSection", label="Speed", tooltip="Initial velocity", icon16="speed",
 						guiState.slider!({ name="speedMin", labelLeft="min", min=-2000, max=2000, exponential=true, limitName="speed", readout="%.0f / sec", linkMultiDrag={"speedMax"} }),
 						guiState.slider!({ name="speedMax", labelLeft="max", min=-2000, max=2000, exponential=true, limitName="speed", readout="%.0f / sec", linkMultiDrag={"speedMin"} }),
 					}),
 
 					guiState.separator!({ thick=false }),
 
-					guiState.section!({ name="accelerationLinearSection", label="AccLinear", icon16="accelerationLinear",
+					guiState.section!({ name="accelerationLinearSection", label="AccLinear", tooltip="Acceleration, linear", icon16="accelerationLinear",
 						guiState.slider!({ name="accLinearXmin", labelLeft="xmin", min=-5000, max=5000, exponential=true, limitName="accLinear", readout="%.0f / sec²", linkMultiDrag={"accLinearXmax"} }),
 						guiState.slider!({ name="accLinearXmax", labelLeft="xmax", min=-5000, max=5000, exponential=true, limitName="accLinear", readout="%.0f / sec²", linkMultiDrag={"accLinearXmin"} }),
 						guiState.slider!({ name="accLinearYmin", labelLeft="ymin", min=-5000, max=5000, exponential=true, limitName="accLinear", readout="%.0f / sec²", linkMultiDrag={"accLinearYmax"} }),
@@ -210,28 +210,28 @@ export setupGuiFrames :: () {
 
 					guiState.separator!({ thick=false }),
 
-					guiState.section!({ name="accelerationRadialSection", label="AccRadial", icon16="accelerationRadial",
+					guiState.section!({ name="accelerationRadialSection", label="AccRadial", tooltip="Acceleration, radial", icon16="accelerationRadial",
 						guiState.slider!({ name="radialAccelerationMin", labelLeft="min", min=-10000, max=10000, exponential=true, limitName="radialAcceleration", readout="%.0f / sec²", linkMultiDrag={"radialAccelerationMax"} }),
 						guiState.slider!({ name="radialAccelerationMax", labelLeft="max", min=-10000, max=10000, exponential=true, limitName="radialAcceleration", readout="%.0f / sec²", linkMultiDrag={"radialAccelerationMin"} }),
 					}),
 
 					guiState.separator!({ thick=false }),
 
-					guiState.section!({ name="accelerationTangentSection", label="AccTangent", icon16="accelerationTangent",
+					guiState.section!({ name="accelerationTangentSection", label="AccTangent", tooltip="Acceleration, tangential", icon16="accelerationTangent",
 						guiState.slider!({ name="tangentialAccelerationMin", labelLeft="min", min=-10000, max=10000, exponential=true, limitName="tangentialAcceleration", readout="%.0f / sec²", linkMultiDrag={"tangentialAccelerationMax"} }),
 						guiState.slider!({ name="tangentialAccelerationMax", labelLeft="max", min=-10000, max=10000, exponential=true, limitName="tangentialAcceleration", readout="%.0f / sec²", linkMultiDrag={"tangentialAccelerationMin"} }),
 					}),
 
 					guiState.separator!({ thick=false }),
 
-					guiState.section!({ name="dampingSection", label="Damping", icon16="damping",
+					guiState.section!({ name="dampingSection", label="Damping", tooltip="Velocity damping", icon16="damping",
 						guiState.slider!({ name="linearDampingMin", labelLeft="min", min=-20, max=20, exponential=true, limitName="linearDamping", readout="%.2f", linkMultiDrag={"linearDampingMax"} }),
 						guiState.slider!({ name="linearDampingMax", labelLeft="max", min=-20, max=20, exponential=true, limitName="linearDamping", readout="%.2f", linkMultiDrag={"linearDampingMin"} }),
 					}),
 
 					guiState.separator!({ thick=true }),
 
-					guiState.section!({ name="rotationSection", label="Rotation", icon16="rotation",
+					guiState.section!({ name="rotationSection", label="Rotation", tooltip="Particle rotation", icon16="rotation",
 						guiState.hbox!({
 							guiState.direction!({ name="rotationMin", linkOther="rotationMax", linkMultiDrag={"rotationMax"}, labelLeft="min/max" }),
 							guiState.direction!({ name="rotationMax", linkOther="rotationMin", linkMultiDrag={"rotationMin"}, }),
@@ -241,7 +241,7 @@ export setupGuiFrames :: () {
 
 					guiState.separator!({ thick=false }),
 
-					guiState.section!({ name="spinSection", label="Spin", icon16="spin",
+					guiState.section!({ name="spinSection", label="Spin", tooltip="Particle spin", icon16="spin",
 						guiState.slider!({ name="spinMin",       labelLeft="at start",  min=-8, max=8, exponential=true, limitName="spin", readout="%.2f turns / sec", linkMultiDrag={"spinMax"} }),
 						guiState.slider!({ name="spinMax",       labelLeft="at end",    min=-8, max=8, exponential=true, limitName="spin", readout="%.2f turns / sec", linkMultiDrag={"spinMin"} }),
 						guiState.slider!({ name="spinVariation", labelLeft="variation", min=0,  max=1, readoutMulti=100, readout="%d%%" }),
@@ -345,7 +345,7 @@ export setupGuiFrames :: () {
 
 					guiState.separator!({ thick=true }),
 
-					guiState.section!({ name="shaderSection", label="Shader", icon16="shader",
+					guiState.section!({ name="shaderSection", label="Shader", tooltip="Fragment shader", icon16="shader",
 						guiState.hbox!({
 							guiState.inputText!({ name="shaderPath", labelLeft="path", tooltip="Absolute path, or relative to the .hotparticles file", weight=1 }),
 							guiState.buttons!({ buttons={
