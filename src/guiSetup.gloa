@@ -3265,13 +3265,17 @@ export setupGuiCallbacks :: () {
 			"animation_sequence_columns",
 		}
 
-		static savedFrames: []AnimationFrame = NULL
 		static savedEdited: bool             = NULL
+		static savedFrames: []AnimationFrame = NULL
+		static savedLifetimeMin: float       = NULL
+		static savedLifetimeMax: float       = NULL
 
 		guiState.onActive.animation = (frame:gui.Frame) {
 			local project, system = getCurrentProjectAndSystem()
-			savedFrames           = system.frames
 			savedEdited           = project.edited
+			savedFrames           = system.frames
+			savedLifetimeMin      = system.psParticleLifetimeMin
+			savedLifetimeMax      = system.psParticleLifetimeMax
 			system.frames         = copyArray(system.frames)
 
 			for GUI_VALUE_ELEMENTS {
@@ -3284,26 +3288,45 @@ export setupGuiCallbacks :: () {
 		}
 
 		guiState.onAction.animation_ok = (buttons:gui.Buttons, buttonIndex:int) {
-			local project, system = getCurrentProjectAndSystem()
-			local framesNew       = system.frames
-			local framesOld       = savedFrames
+			local project,        system         = getCurrentProjectAndSystem()
+			local framesOld,      framesNew      = savedFrames,      system.frames
+			local lifetimeMinOld, lifetimeMinNew = savedLifetimeMin, system.psParticleLifetimeMin
+			local lifetimeMaxOld, lifetimeMaxNew = savedLifetimeMax, system.psParticleLifetimeMax
 
 			recordChange("Animation",
-				[system, framesNew] (project:Project) {  system.frames = framesNew  },
-				[system, framesOld] (project:Project) {  system.frames = framesOld  },
-				[system           ] (project:Project) {  updateParticleAnimation(system)  }
+				[system, framesNew, lifetimeMinNew, lifetimeMaxNew] (project:Project) {
+					system.frames                = framesNew
+					system.psParticleLifetimeMin = lifetimeMinNew
+					system.psParticleLifetimeMax = lifetimeMaxNew
+				},
+				[system, framesOld, lifetimeMinOld, lifetimeMaxOld] (project:Project) {
+					system.frames                = framesOld
+					system.psParticleLifetimeMin = lifetimeMinOld
+					system.psParticleLifetimeMax = lifetimeMaxOld
+				},
+				[system] (project:Project) {
+					updateParticleAnimation(system)
+					updateParticleParams(project, system)
+					guiState.refreshRecursively!("particleLifetimeMin")
+					guiState.refreshRecursively!("particleLifetimeMax")
+				}
 			)
 
 			popPanel()
 		}
 		guiState.onAction.animation_cancel = (buttons:gui.Buttons, buttonIndex:int) {
-			local project, system = getCurrentProjectAndSystem()
-			system.frames         = savedFrames
-			project.edited        = savedEdited
+			local project, system        = getCurrentProjectAndSystem()
+			project.edited               = savedEdited
+			system.frames                = savedFrames
+			system.psParticleLifetimeMin = savedLifetimeMin
+			system.psParticleLifetimeMax = savedLifetimeMax
 
 			updateParticleAnimation(system)
+			updateParticleParams(project, system)
 			popPanel()
-			guiState.refreshRecursively!("projects")
+			guiState.refreshRecursively!("particleLifetimeMin")
+			guiState.refreshRecursively!("particleLifetimeMax")
+			guiState.refreshRecursively!("projects") -- For the modification indicator.
 			updateWindowTitle()
 		}
 
@@ -3353,24 +3376,20 @@ export setupGuiCallbacks :: () {
 			local project, system = getCurrentProjectAndSystem()
 			slider.value          = system.psParticleLifetimeMin
 		}
-		addEventHandlersForSlider(forSystem=true, "animation_particleLifetimeMin", "Particle lifetime",
-			(project:Project, system:System, value:float) {
-				system.psParticleLifetimeMin = value
-				updateParticleParams(project, system)
-				guiState.refreshRecursively!("particleLifetimeMin")
-			}
-		)
+		guiState.onAction.animation_particleLifetimeMin = (slider:gui.Slider, _:int) {
+			local project, system        = getCurrentProjectAndSystem()
+			system.psParticleLifetimeMin = slider.value
+			updateParticleParams(project, system)
+		}
 		guiState.onRefresh.animation_particleLifetimeMax = (slider:gui.Slider) {
 			local project, system = getCurrentProjectAndSystem()
 			slider.value          = system.psParticleLifetimeMax
 		}
-		addEventHandlersForSlider(forSystem=true, "animation_particleLifetimeMax", "Particle lifetime",
-			(project:Project, system:System, value:float) {
-				system.psParticleLifetimeMax = value
-				updateParticleParams(project, system)
-				guiState.refreshRecursively!("particleLifetimeMax")
-			}
-		)
+		guiState.onAction.animation_particleLifetimeMax = (slider:gui.Slider, _:int) {
+			local project, system        = getCurrentProjectAndSystem()
+			system.psParticleLifetimeMax = slider.value
+			updateParticleParams(project, system)
+		}
 
 		guiState.onAction.animation_empty = (buttons:gui.Buttons, buttonIndex:int) {
 			local project, system = getCurrentProjectAndSystem()
