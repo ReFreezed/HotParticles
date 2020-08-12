@@ -107,6 +107,9 @@ Ctrl+Shift+Z    Redo
 5. Parameters
 ==============================================================================
 
+Note: Many parameter controls have additional actions available through the
+context menu.
+
 
 Project settings
 ------------------------------------------------------------------------------
