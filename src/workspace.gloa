@@ -102,38 +102,49 @@ local writeProject :: (buffer:[]string, project:Project, isSavingWorkspace:bool)
 	for system: project.systems {
 		insert(buffer, ":system\n")
 
-		insert(buffer, "blendMode")         ; writeValue(buffer, eol=true, cast(string) system.blendMode)
-		insert(buffer, "colors")            ; writeValue(buffer, eol=true, system.colors)
-		insert(buffer, "direction")         ; writeValue(buffer, eol=true, system.psDirection)
-		insert(buffer, "emissionRate")      ; writeValue(buffer, eol=true, system.psEmissionRate)
-		insert(buffer, "emitterContinuous") ; writeValue(buffer, eol=true, system.psEmitterContinuous)
-		insert(buffer, "emitterLifetime")   ; writeValue(buffer, eol=true, system.psEmitterLifetime)
-		insert(buffer, "insertMode")        ; writeValue(buffer, eol=true, cast(string) system.psInsertMode)
-		insert(buffer, "kickStartEmit")     ; writeValue(buffer, eol=true, system.kickStartEmit)
-		insert(buffer, "kickStartSteps")    ; writeValue(buffer, eol=true, system.kickStartSteps)
-		insert(buffer, "relativeRotation")  ; writeValue(buffer, eol=true, system.psRelativeRotation)
-		insert(buffer, "scaleSize")         ; writeValue(buffer, eol=true, system.scaleSize)
-		insert(buffer, "scaleSpace")        ; writeValue(buffer, eol=true, system.scaleSpace)
-		insert(buffer, "scaleTime")         ; writeValue(buffer, eol=true, system.scaleTime)
-		insert(buffer, "shaderPath")        ; writeValue(buffer, eol=true, system.shaderPath)
-		insert(buffer, "sizes")             ; writeValue(buffer, eol=true, system.psSizes)
-		insert(buffer, "sizeVariation")     ; writeValue(buffer, eol=true, system.psSizeVariation)
-		insert(buffer, "spinVariation")     ; writeValue(buffer, eol=true, system.psSpinVariation)
-		insert(buffer, "spread")            ; writeValue(buffer, eol=true, system.psSpread)
-		insert(buffer, "texture")           ; writeValue(buffer, eol=true, system.textureName)
-		insert(buffer, "texturePath")       ; writeValue(buffer, eol=true, system.texturePath)
-		insert(buffer, "title")             ; writeValue(buffer, eol=true, system.title)
-		insert(buffer, "customData")        ; writeValue(buffer, eol=true, system.customData)
+		insert(buffer, "blendMode")                     ; writeValue (buffer, eol=true, cast(string) system.blendMode)
+		insert(buffer, "colors")                        ; writeValue (buffer, eol=true, system.colors)
+		insert(buffer, "customData")                    ; writeValue (buffer, eol=true, system.customData)
+		insert(buffer, "directionEnabled")              ; writeValue (buffer, eol=true, system.psDirectionEnabled)
+		insert(buffer, "direction")                     ; writeValue (buffer, eol=true, system.psDirection)
+		insert(buffer, "emissionRate")                  ; writeValue (buffer, eol=true, system.psEmissionRate)
+		insert(buffer, "emitterContinuous")             ; writeValue (buffer, eol=true, system.psEmitterContinuous)
+		insert(buffer, "emitterLifetime")               ; writeValue (buffer, eol=true, system.psEmitterLifetime)
+		insert(buffer, "insertMode")                    ; writeValue (buffer, eol=true, cast(string) system.psInsertMode)
+		insert(buffer, "kickStartEmit")                 ; writeValue (buffer, eol=true, system.kickStartEmit)
+		insert(buffer, "kickStartSteps")                ; writeValue (buffer, eol=true, system.kickStartSteps)
+		insert(buffer, "linearDampingEnabled")          ; writeValue (buffer, eol=true, system.psLinearDampingEnabled)
+		insert(buffer, "linearDamping")                 ; writeValues(buffer, eol=true, system.psLinearDampingMin, system.psLinearDampingMax)
+		insert(buffer, "offset")                        ; writeValues(buffer, eol=true, system.offsetX, system.offsetY)
+		insert(buffer, "particleLifetime")              ; writeValues(buffer, eol=true, system.psParticleLifetimeMin, system.psParticleLifetimeMax)
+		insert(buffer, "radialAccelerationEnabled")     ; writeValue (buffer, eol=true, system.psRadialAccelerationEnabled)
+		insert(buffer, "radialAcceleration")            ; writeValues(buffer, eol=true, system.psRadialAccelerationMin, system.psRadialAccelerationMax)
+		insert(buffer, "relativeRotation")              ; writeValue (buffer, eol=true, system.psRelativeRotation)
+		insert(buffer, "rotationEnabled")               ; writeValue (buffer, eol=true, system.psRotationEnabled)
+		insert(buffer, "rotation")                      ; writeValues(buffer, eol=true, system.psRotationMin, system.psRotationMax)
+		insert(buffer, "scaleSize")                     ; writeValue (buffer, eol=true, system.scaleSize)
+		insert(buffer, "scaleSpace")                    ; writeValue (buffer, eol=true, system.scaleSpace)
+		insert(buffer, "scaleTime")                     ; writeValue (buffer, eol=true, system.scaleTime)
+		insert(buffer, "shaderPath")                    ; writeValue (buffer, eol=true, system.shaderPath)
+		insert(buffer, "sizes")                         ; writeValue (buffer, eol=true, system.psSizes)
+		insert(buffer, "sizeVariationEnabled")          ; writeValue (buffer, eol=true, system.psSizeVariationEnabled)
+		insert(buffer, "sizeVariation")                 ; writeValue (buffer, eol=true, system.psSizeVariation)
+		insert(buffer, "speedEnabled")                  ; writeValue (buffer, eol=true, system.psSpeedEnabled)
+		insert(buffer, "speed")                         ; writeValues(buffer, eol=true, system.psSpeedMin, system.psSpeedMax)
+		insert(buffer, "spinEnabled")                   ; writeValues(buffer, eol=true, system.psSpinMinEnabled, system.psSpinMaxEnabled)
+		insert(buffer, "spin")                          ; writeValues(buffer, eol=true, system.psSpinMin, system.psSpinMax)
+		insert(buffer, "spinVariationEnabled")          ; writeValue (buffer, eol=true, system.psSpinVariationEnabled)
+		insert(buffer, "spinVariation")                 ; writeValue (buffer, eol=true, system.psSpinVariation)
+		insert(buffer, "spreadEnabled")                 ; writeValue (buffer, eol=true, system.psSpreadEnabled)
+		insert(buffer, "spread")                        ; writeValue (buffer, eol=true, system.psSpread)
+		insert(buffer, "tangentialAccelerationEnabled") ; writeValue (buffer, eol=true, system.psTangentialAccelerationEnabled)
+		insert(buffer, "tangentialAcceleration")        ; writeValues(buffer, eol=true, system.psTangentialAccelerationMin, system.psTangentialAccelerationMax)
+		insert(buffer, "texture")                       ; writeValue (buffer, eol=true, system.textureName)
+		insert(buffer, "texturePath")                   ; writeValue (buffer, eol=true, system.texturePath)
+		insert(buffer, "title")                         ; writeValue (buffer, eol=true, system.title)
 
-		insert(buffer, "linearDamping")          ; writeValues(buffer, eol=true, system.psLinearDampingMin,          system.psLinearDampingMax)
-		insert(buffer, "offset")                 ; writeValues(buffer, eol=true, system.offsetX,                     system.offsetY)
-		insert(buffer, "particleLifetime")       ; writeValues(buffer, eol=true, system.psParticleLifetimeMin,       system.psParticleLifetimeMax)
-		insert(buffer, "radialAcceleration")     ; writeValues(buffer, eol=true, system.psRadialAccelerationMin,     system.psRadialAccelerationMax)
-		insert(buffer, "rotation")               ; writeValues(buffer, eol=true, system.psRotationMin,               system.psRotationMax)
-		insert(buffer, "speed")                  ; writeValues(buffer, eol=true, system.psSpeedMin,                  system.psSpeedMax)
-		insert(buffer, "spin")                   ; writeValues(buffer, eol=true, system.psSpinMin,                   system.psSpinMax)
-		insert(buffer, "tangentialAcceleration") ; writeValues(buffer, eol=true, system.psTangentialAccelerationMin, system.psTangentialAccelerationMax)
-
+		insert(buffer, "emissionAreaAngleEnabled") ; writeValue (buffer, eol=true, system.psEmissionAreaAngleEnabled)
+		insert(buffer, "emissionAreaDeltaEnabled") ; writeValues(buffer, eol=true, system.psEmissionAreaDxEnabled, system.psEmissionAreaDyEnabled)
 		do {
 			insert(buffer, "emissionArea")
 			writeValue(buffer, cast(string) system.psEmissionAreaDistribution)
@@ -143,6 +154,8 @@ local writeProject :: (buffer:[]string, project:Project, isSavingWorkspace:bool)
 			writeValue(buffer, system.psEmissionAreaRelative)
 			insert(buffer, "\n")
 		}
+
+		insert(buffer, "linearAccelerationEnabled") ; writeValues(buffer, eol=true, system.psLinearAccelerationXEnabled, system.psLinearAccelerationYEnabled)
 		do {
 			insert(buffer, "linearAcceleration")
 			writeValue(buffer, system.psLinearAccelerationXmin)
@@ -728,6 +741,10 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 					case "bufferSize":
 						-- void @Obsolete
 
+					case "directionEnabled":
+						local ^ok, ^ptr, enabled = readBool(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
+						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
+						system.psDirectionEnabled = enabled
 					case "direction":
 						local ^ok, ^ptr, dir = readFloat(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
@@ -766,18 +783,20 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
 						system.psSizes = sizes
 
+					case "sizeVariationEnabled":
+						local ^ok, ^ptr, enabled = readBool(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
+						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
+						system.psSizeVariationEnabled = enabled
 					case "sizeVariation":
 						local ^ok, ^ptr, variation = readFloat(version, line, cast(int)ptr)
 						if not ok                 return parsingError(path, ln, "Bad value format: %s", line)
 						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
 						system.psSizeVariation = variation
 
-					case "spinVariation":
-						local ^ok, ^ptr, variation = readFloat(version, line, cast(int)ptr)
-						if not ok                 return parsingError(path, ln, "Bad value format: %s", line)
+					case "spreadEnabled":
+						local ^ok, ^ptr, enabled = readBool(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
-						system.psSpinVariation = variation
-
+						system.psSpreadEnabled = enabled
 					case "spread":
 						local ^ok, ^ptr, spread = readFloat(version, line, cast(int)ptr)
 						if not ok                 return parsingError(path, ln, "Bad value format: %s", line)
@@ -829,6 +848,10 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
 						system.customData = data
 
+					case "linearDampingEnabled":
+						local ^ok, ^ptr, enabled = readBool(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
+						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
+						system.psLinearDampingEnabled = enabled
 					case "linearDamping":
 						local ^ok, ^ptr, min = readFloat(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 						local ^ok, ^ptr, max = readFloat(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
@@ -843,6 +866,10 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 						system.psParticleLifetimeMin = min
 						system.psParticleLifetimeMax = max
 
+					case "radialAccelerationEnabled":
+						local ^ok, ^ptr, enabled = readBool(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
+						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
+						system.psRadialAccelerationEnabled = enabled
 					case "radialAcceleration":
 						local ^ok, ^ptr, min = readFloat(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 						local ^ok, ^ptr, max = readFloat(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
@@ -850,6 +877,10 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 						system.psRadialAccelerationMin = min
 						system.psRadialAccelerationMax = max
 
+					case "rotationEnabled":
+						local ^ok, ^ptr, enabled = readBool(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
+						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
+						system.psRotationEnabled = enabled
 					case "rotation":
 						local ^ok, ^ptr, min = readFloat(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 						local ^ok, ^ptr, max = readFloat(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
@@ -857,6 +888,10 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 						system.psRotationMin = min
 						system.psRotationMax = max
 
+					case "speedEnabled":
+						local ^ok, ^ptr, enabled = readBool(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
+						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
+						system.psSpeedEnabled = enabled
 					case "speed":
 						local ^ok, ^ptr, min = readFloat(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 						local ^ok, ^ptr, max = readFloat(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
@@ -864,6 +899,12 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 						system.psSpeedMin = min
 						system.psSpeedMax = max
 
+					case "spinEnabled":
+						local ^ok, ^ptr, enabledMin = readBool(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
+						local ^ok, ^ptr, enabledMax = readBool(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
+						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
+						system.psSpinMinEnabled = enabledMin
+						system.psSpinMaxEnabled = enabledMax
 					case "spin":
 						local ^ok, ^ptr, min = readFloat(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 						local ^ok, ^ptr, max = readFloat(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
@@ -873,6 +914,20 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 						system.psSpinMin = min
 						system.psSpinMax = max
 
+					case "spinVariationEnabled":
+						local ^ok, ^ptr, enabled = readBool(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
+						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
+						system.psSpinVariationEnabled = enabled
+					case "spinVariation":
+						local ^ok, ^ptr, variation = readFloat(version, line, cast(int)ptr)
+						if not ok                 return parsingError(path, ln, "Bad value format: %s", line)
+						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
+						system.psSpinVariation = variation
+
+					case "tangentialAccelerationEnabled":
+						local ^ok, ^ptr, enabled = readBool(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
+						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
+						system.psTangentialAccelerationEnabled = enabled
 					case "tangentialAcceleration":
 						local ^ok, ^ptr, min = readFloat(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 						local ^ok, ^ptr, max = readFloat(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
@@ -887,6 +942,16 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 						system.offsetX = x
 						system.offsetY = y
 
+					case "emissionAreaAngleEnabled":
+						local ^ok, ^ptr, enabled = readBool(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
+						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
+						system.psEmissionAreaAngleEnabled = enabled
+					case "emissionAreaDeltaEnabled":
+						local ^ok, ^ptr, enabledX = readBool(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
+						local ^ok, ^ptr, enabledY = readBool(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
+						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
+						system.psEmissionAreaDxEnabled = enabledX
+						system.psEmissionAreaDyEnabled = enabledY
 					case "emissionArea":
 						local ^ok, ^ptr, distribution = readString(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 						local ^ok, ^ptr, dx           = readFloat (version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
@@ -900,6 +965,12 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 						system.psEmissionAreaAngle        = angle
 						system.psEmissionAreaRelative     = relative
 
+					case "linearAccelerationEnabled":
+						local ^ok, ^ptr, enabledX = readBool(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
+						local ^ok, ^ptr, enabledY = readBool(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
+						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
+						system.psLinearAccelerationXEnabled = enabledX
+						system.psLinearAccelerationYEnabled = enabledY
 					case "linearAcceleration":
 						local ^ok, ^ptr, xmin = readFloat(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 						local ^ok, ^ptr, ymin = readFloat(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)

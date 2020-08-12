@@ -354,39 +354,55 @@ export Project :: struct {
 
 export System :: struct {
 	-- Saved:
-	psDirection                 = 0.0,
-	psEmissionAreaDistribution  = LG.AreaSpreadDistribution.NONE,
-	psEmissionAreaDx            = 100.0,
-	psEmissionAreaDy            = 100.0,
-	psEmissionAreaAngle         = 0.0,
-	psEmissionAreaRelative      = false,
-	psEmissionRate              = 1.0,
-	psEmitterContinuous         = true,
-	psEmitterLifetime           = 0.0,
-	psInsertMode                = LG.ParticleInsertMode.TOP,
-	psLinearAccelerationXmin    = 0.0,
-	psLinearAccelerationYmin    = 0.0,
-	psLinearAccelerationXmax    = 0.0,
-	psLinearAccelerationYmax    = 0.0,
-	psLinearDampingMin          = 0.0,
-	psLinearDampingMax          = 0.0,
-	psParticleLifetimeMin       = 1.0,
-	psParticleLifetimeMax       = 1.0,
-	psRadialAccelerationMin     = 0.0,
-	psRadialAccelerationMax     = 0.0,
-	psRelativeRotation          = false,
-	psRotationMin               = 0.0,
-	psRotationMax               = 0.0,
-	psSizes: []float            = {1},
-	psSizeVariation             = 0.0,
-	psSpeedMin                  = 0.0,
-	psSpeedMax                  = 0.0,
-	psSpinMin                   = 0.0, -- Turns, not angle.
-	psSpinMax                   = 0.0, -- Turns, not angle.
-	psSpinVariation             = 0.0,
-	psSpread                    = 0.0,
-	psTangentialAccelerationMin = 0.0,
-	psTangentialAccelerationMax = 0.0,
+	psDirectionEnabled              = true,
+	psDirection                     = 0.0,
+	psEmissionAreaDistribution      = LG.AreaSpreadDistribution.NONE,
+	psEmissionAreaDxEnabled         = true, -- @Cleanup: Should we join psEmissionAreaDxEnabled and psEmissionAreaDyEnabled?
+	psEmissionAreaDx                = 100.0,
+	psEmissionAreaDyEnabled         = true,
+	psEmissionAreaDy                = 100.0,
+	psEmissionAreaAngleEnabled      = true,
+	psEmissionAreaAngle             = 0.0,
+	psEmissionAreaRelative          = false,
+	psEmissionRate                  = 1.0,
+	psEmitterContinuous             = true,
+	psEmitterLifetime               = 0.0,
+	psInsertMode                    = LG.ParticleInsertMode.TOP,
+	psLinearAccelerationXEnabled    = true, -- @Cleanup: Should we join psLinearAccelerationXEnabled and psLinearAccelerationYEnabled?
+	psLinearAccelerationYEnabled    = true,
+	psLinearAccelerationXmin        = 0.0,
+	psLinearAccelerationYmin        = 0.0,
+	psLinearAccelerationXmax        = 0.0,
+	psLinearAccelerationYmax        = 0.0,
+	psLinearDampingEnabled          = true,
+	psLinearDampingMin              = 0.0,
+	psLinearDampingMax              = 0.0,
+	psParticleLifetimeMin           = 1.0,
+	psParticleLifetimeMax           = 1.0,
+	psRadialAccelerationEnabled     = true,
+	psRadialAccelerationMin         = 0.0,
+	psRadialAccelerationMax         = 0.0,
+	psRelativeRotation              = false,
+	psRotationEnabled               = true,
+	psRotationMin                   = 0.0,
+	psRotationMax                   = 0.0,
+	psSizes: []float                = {1},
+	psSizeVariationEnabled          = true,
+	psSizeVariation                 = 0.0,
+	psSpeedEnabled                  = true,
+	psSpeedMin                      = 0.0,
+	psSpeedMax                      = 0.0,
+	psSpinMinEnabled                = true, -- @Cleanup: Should we join psSpinMinEnabled and psSpinMaxEnabled?
+	psSpinMin                       = 0.0, -- Turns, not angle.
+	psSpinMaxEnabled                = true,
+	psSpinMax                       = 0.0, -- Turns, not angle.
+	psSpinVariationEnabled          = true,
+	psSpinVariation                 = 0.0,
+	psSpreadEnabled                 = true,
+	psSpread                        = 0.0,
+	psTangentialAccelerationEnabled = true,
+	psTangentialAccelerationMin     = 0.0,
+	psTangentialAccelerationMax     = 0.0,
 
 	colors: []float = {0,0,1,1}, -- {h1,s1,v1,a1,...}
 	blendMode = LG.BlendMode.ADD,
@@ -433,54 +449,70 @@ export System :: struct {
 
 	clone :: (source:System) -> System {
 		local system: System = {
-			psDirection                 = source.psDirection,
-			psEmissionAreaDistribution  = source.psEmissionAreaDistribution,
-			psEmissionAreaDx            = source.psEmissionAreaDx,
-			psEmissionAreaDy            = source.psEmissionAreaDy,
-			psEmissionAreaAngle         = source.psEmissionAreaAngle,
-			psEmissionAreaRelative      = source.psEmissionAreaRelative,
-			psEmissionRate              = source.psEmissionRate,
-			psEmitterContinuous         = source.psEmitterContinuous,
-			psEmitterLifetime           = source.psEmitterLifetime,
-			psInsertMode                = source.psInsertMode,
-			psLinearAccelerationXmin    = source.psLinearAccelerationXmin,
-			psLinearAccelerationYmin    = source.psLinearAccelerationYmin,
-			psLinearAccelerationXmax    = source.psLinearAccelerationXmax,
-			psLinearAccelerationYmax    = source.psLinearAccelerationYmax,
-			psLinearDampingMin          = source.psLinearDampingMin,
-			psLinearDampingMax          = source.psLinearDampingMax,
-			psParticleLifetimeMin       = source.psParticleLifetimeMin,
-			psParticleLifetimeMax       = source.psParticleLifetimeMax,
-			psRadialAccelerationMin     = source.psRadialAccelerationMin,
-			psRadialAccelerationMax     = source.psRadialAccelerationMax,
-			psRelativeRotation          = source.psRelativeRotation,
-			psRotationMin               = source.psRotationMin,
-			psRotationMax               = source.psRotationMax,
-			psSizes                     = {unpack(source.psSizes)},
-			psSizeVariation             = source.psSizeVariation,
-			psSpeedMin                  = source.psSpeedMin,
-			psSpeedMax                  = source.psSpeedMax,
-			psSpinMin                   = source.psSpinMin,
-			psSpinMax                   = source.psSpinMax,
-			psSpinVariation             = source.psSpinVariation,
-			psSpread                    = source.psSpread,
-			psTangentialAccelerationMin = source.psTangentialAccelerationMin,
-			psTangentialAccelerationMax = source.psTangentialAccelerationMax,
-			colors                      = {unpack(source.colors)},
-			blendMode                   = source.blendMode,
-			texturePath                 = source.texturePath,
-			textureName                 = source.textureName,
-			offsetX                     = source.offsetX,
-			offsetY                     = source.offsetY,
-			shaderPath                  = source.shaderPath,
-			scaleTime                   = source.scaleTime,
-			scaleSpace                  = source.scaleSpace,
-			scaleSize                   = source.scaleSize,
-			kickStartEmit               = source.kickStartEmit,
-			kickStartSteps              = source.kickStartSteps,
-			title                       = source.title,
-			customData                  = source.customData,
-			gui                         = copyTable(source.gui),
+			psDirectionEnabled              = source.psDirectionEnabled,
+			psDirection                     = source.psDirection,
+			psEmissionAreaDistribution      = source.psEmissionAreaDistribution,
+			psEmissionAreaDxEnabled         = source.psEmissionAreaDxEnabled,
+			psEmissionAreaDx                = source.psEmissionAreaDx,
+			psEmissionAreaDyEnabled         = source.psEmissionAreaDyEnabled,
+			psEmissionAreaDy                = source.psEmissionAreaDy,
+			psEmissionAreaAngleEnabled      = source.psEmissionAreaAngleEnabled,
+			psEmissionAreaAngle             = source.psEmissionAreaAngle,
+			psEmissionAreaRelative          = source.psEmissionAreaRelative,
+			psEmissionRate                  = source.psEmissionRate,
+			psEmitterContinuous             = source.psEmitterContinuous,
+			psEmitterLifetime               = source.psEmitterLifetime,
+			psInsertMode                    = source.psInsertMode,
+			psLinearAccelerationXEnabled    = source.psLinearAccelerationXEnabled,
+			psLinearAccelerationYEnabled    = source.psLinearAccelerationYEnabled,
+			psLinearAccelerationXmin        = source.psLinearAccelerationXmin,
+			psLinearAccelerationYmin        = source.psLinearAccelerationYmin,
+			psLinearAccelerationXmax        = source.psLinearAccelerationXmax,
+			psLinearAccelerationYmax        = source.psLinearAccelerationYmax,
+			psLinearDampingEnabled          = source.psLinearDampingEnabled,
+			psLinearDampingMin              = source.psLinearDampingMin,
+			psLinearDampingMax              = source.psLinearDampingMax,
+			psParticleLifetimeMin           = source.psParticleLifetimeMin,
+			psParticleLifetimeMax           = source.psParticleLifetimeMax,
+			psRadialAccelerationEnabled     = source.psRadialAccelerationEnabled,
+			psRadialAccelerationMin         = source.psRadialAccelerationMin,
+			psRadialAccelerationMax         = source.psRadialAccelerationMax,
+			psRelativeRotation              = source.psRelativeRotation,
+			psRotationEnabled               = source.psRotationEnabled,
+			psRotationMin                   = source.psRotationMin,
+			psRotationMax                   = source.psRotationMax,
+			psSizes                         = {unpack(source.psSizes)},
+			psSizeVariationEnabled          = source.psSizeVariationEnabled,
+			psSizeVariation                 = source.psSizeVariation,
+			psSpeedEnabled                  = source.psSpeedEnabled,
+			psSpeedMin                      = source.psSpeedMin,
+			psSpeedMax                      = source.psSpeedMax,
+			psSpinMinEnabled                = source.psSpinMinEnabled,
+			psSpinMin                       = source.psSpinMin, -- @Cleanup: Rename min/max to something more accurate.
+			psSpinMaxEnabled                = source.psSpinMaxEnabled,
+			psSpinMax                       = source.psSpinMax,
+			psSpinVariationEnabled          = source.psSpinVariationEnabled,
+			psSpinVariation                 = source.psSpinVariation,
+			psSpreadEnabled                 = source.psSpreadEnabled,
+			psSpread                        = source.psSpread,
+			psTangentialAccelerationEnabled = source.psTangentialAccelerationEnabled,
+			psTangentialAccelerationMin     = source.psTangentialAccelerationMin,
+			psTangentialAccelerationMax     = source.psTangentialAccelerationMax,
+			colors                          = {unpack(source.colors)},
+			blendMode                       = source.blendMode,
+			texturePath                     = source.texturePath,
+			textureName                     = source.textureName,
+			offsetX                         = source.offsetX,
+			offsetY                         = source.offsetY,
+			shaderPath                      = source.shaderPath,
+			scaleTime                       = source.scaleTime,
+			scaleSpace                      = source.scaleSpace,
+			scaleSize                       = source.scaleSize,
+			kickStartEmit                   = source.kickStartEmit,
+			kickStartSteps                  = source.kickStartSteps,
+			title                           = source.title,
+			customData                      = source.customData,
+			gui                             = copyTable(source.gui),
 
 			particles    = source.particles.clone!(),
 			currentImage = source.currentImage,
@@ -523,28 +555,79 @@ export updateParticleParams :: (project:Project, s:System) {
 	local time  = s.scaleTime  * project.scaleGlobalTime
 	local space = s.scaleSpace * project.scaleGlobalSpace
 	local size  = s.scaleSize  * project.scaleGlobalSize
+	local time2 = time ^ 2
 
 	local sizes: []float
 	for s.psSizes  insert(sizes, it*size)
 
-	ps.setDirection!(s.psDirection)
-	ps.setEmissionArea!(s.psEmissionAreaDistribution, s.psEmissionAreaDx*space, s.psEmissionAreaDy*space, s.psEmissionAreaAngle, s.psEmissionAreaRelative)
-	ps.setEmissionRate!(s.psEmissionRate*time)
-	ps.setEmitterLifetime!(s.psEmitterContinuous ? -1 : s.psEmitterLifetime/time)
-	ps.setInsertMode!(s.psInsertMode)
-	ps.setLinearAcceleration!(s.psLinearAccelerationXmin*space*time^2, s.psLinearAccelerationYmin*space*time^2, s.psLinearAccelerationXmax*space*time^2, s.psLinearAccelerationYmax*space*time^2)
-	ps.setLinearDamping!(s.psLinearDampingMin*time, s.psLinearDampingMax*time)
-	ps.setParticleLifetime!(s.psParticleLifetimeMin/time, s.psParticleLifetimeMax/time)
-	ps.setRadialAcceleration!(s.psRadialAccelerationMin*space*time^2, s.psRadialAccelerationMax*space*time^2)
-	ps.setRelativeRotation!(s.psRelativeRotation)
-	ps.setRotation!(s.psRotationMin, s.psRotationMax)
-	ps.setSizes!(sizes)
-	ps.setSizeVariation!(s.psSizeVariation)
-	ps.setSpeed!(s.psSpeedMin*space*time, s.psSpeedMax*space*time)
-	ps.setSpin!(s.psSpinMin*time*math.TAU, s.psSpinMax*time*math.TAU)
-	ps.setSpinVariation!(s.psSpinVariation)
-	ps.setSpread!(s.psSpread)
-	ps.setTangentialAcceleration!(s.psTangentialAccelerationMin*space*time^2, s.psTangentialAccelerationMax*space*time^2)
+	ps.setDirection!(
+		s.psDirectionEnabled ? s.psDirection : 0
+	)
+	ps.setEmissionArea!(
+		s.psEmissionAreaDistribution,
+		s.psEmissionAreaDxEnabled    ? s.psEmissionAreaDx * space : 0,
+		s.psEmissionAreaDyEnabled    ? s.psEmissionAreaDy * space : 0,
+		s.psEmissionAreaAngleEnabled ? s.psEmissionAreaAngle      : 0,
+		s.psEmissionAreaRelative
+	)
+	ps.setEmissionRate!(
+		s.psEmissionRate * time
+	)
+	ps.setEmitterLifetime!(
+		s.psEmitterContinuous ? -1 : s.psEmitterLifetime / time
+	)
+	ps.setInsertMode!(
+		s.psInsertMode
+	)
+	ps.setLinearAcceleration!(
+		s.psLinearAccelerationXEnabled ? s.psLinearAccelerationXmin * space * time2 : 0,
+		s.psLinearAccelerationYEnabled ? s.psLinearAccelerationYmin * space * time2 : 0,
+		s.psLinearAccelerationXEnabled ? s.psLinearAccelerationXmax * space * time2 : 0,
+		s.psLinearAccelerationYEnabled ? s.psLinearAccelerationYmax * space * time2 : 0
+	)
+	ps.setLinearDamping!(
+		s.psLinearDampingEnabled ? s.psLinearDampingMin * time : 0,
+		s.psLinearDampingEnabled ? s.psLinearDampingMax * time : 0
+	)
+	ps.setParticleLifetime!(
+		s.psParticleLifetimeMin / time,
+		s.psParticleLifetimeMax / time
+	)
+	ps.setRadialAcceleration!(
+		s.psRadialAccelerationEnabled ? s.psRadialAccelerationMin * space * time2 : 0,
+		s.psRadialAccelerationEnabled ? s.psRadialAccelerationMax * space * time2 : 0
+	)
+	ps.setRelativeRotation!(
+		s.psRelativeRotation
+	)
+	ps.setRotation!(
+		s.psRotationEnabled ? s.psRotationMin : 0,
+		s.psRotationEnabled ? s.psRotationMax : 0
+	)
+	ps.setSizes!(
+		sizes
+	)
+	ps.setSizeVariation!(
+		s.psSizeVariationEnabled ? s.psSizeVariation : 0
+	)
+	ps.setSpeed!(
+		s.psSpeedEnabled ? s.psSpeedMin * space * time : 0,
+		s.psSpeedEnabled ? s.psSpeedMax * space * time : 0
+	)
+	ps.setSpin!(
+		s.psSpinMinEnabled ? s.psSpinMin * time * math.TAU : 0,
+		s.psSpinMaxEnabled ? s.psSpinMax * time * math.TAU : 0
+	)
+	ps.setSpinVariation!(
+		s.psSpinVariationEnabled ? s.psSpinVariation : 0
+	)
+	ps.setSpread!(
+		s.psSpreadEnabled ? s.psSpread : 0
+	)
+	ps.setTangentialAcceleration!(
+		s.psTangentialAccelerationEnabled ? s.psTangentialAccelerationMin * space * time2 : 0,
+		s.psTangentialAccelerationEnabled ? s.psTangentialAccelerationMax * space * time2 : 0
+	)
 }
 
 export updateParticleColors :: (system:System) {
@@ -1638,12 +1721,9 @@ local onUpdate :: (dt:float) {
 
 
 local getVisibilityFlags :: () -> bool, bool, bool, bool, bool, bool {
-	static wasHoveringTextureOffset    = false
-	static wasHoveringAreaDistribution = false
-	static wasHoveringEmitterRelated   = false
-	static hoverTimeTextureOffset      = -9999.00
-	static hoverTimeAreaDistribution   = -9999.00
-	static hoverTimeEmitterRelated     = -9999.00
+	static wasHoveringTextureOffset,    hoverTimeTextureOffset    = false, -9999.00
+	static wasHoveringAreaDistribution, hoverTimeAreaDistribution = false, -9999.00
+	static wasHoveringEmitterRelated,   hoverTimeEmitterRelated   = false, -9999.00
 
 	local isHoveringTextureOffset
 		=  math.max(guiState.activeId, guiState.hoveredId) == guiState.getElement!("textureOffsetX").id
@@ -1651,6 +1731,7 @@ local getVisibilityFlags :: () -> bool, bool, bool, bool, bool, bool {
 
 	local isHoveringAreaDistribution
 		=  math.max(guiState.activeId, guiState.hoveredId) == guiState.getElement!("areaDistribution").id
+		or math.max(guiState.activeId, guiState.hoveredId) == guiState.getElement!("areaAngle").id
 		or math.max(guiState.activeId, guiState.hoveredId) == guiState.getElement!("areaDx").id
 		or math.max(guiState.activeId, guiState.hoveredId) == guiState.getElement!("areaDy").id
 
@@ -1671,7 +1752,7 @@ local getVisibilityFlags :: () -> bool, bool, bool, bool, bool, bool {
 	}
 	if isHoveringEmitterRelated ~= wasHoveringEmitterRelated {
 		wasHoveringEmitterRelated = isHoveringEmitterRelated
-		hoverTimeAreaDistribution = LT.getTime()
+		hoverTimeEmitterRelated   = LT.getTime()
 	}
 
 	local DELAY :: 4/60
@@ -1783,39 +1864,43 @@ local onDraw :: () {
 			if showAreaDistribution {
 				local system = project.systems[project.systemIndex]
 				local x,  y  = system.particles.getPosition!()
-				local dx     = system.psEmissionAreaDx * system.scaleSpace
-				local dy     = system.psEmissionAreaDy * system.scaleSpace
+				local dx     = system.psEmissionAreaDxEnabled    ? system.psEmissionAreaDx * system.scaleSpace : 0
+				local dy     = system.psEmissionAreaDyEnabled    ? system.psEmissionAreaDy * system.scaleSpace : 0
+				local angle  = system.psEmissionAreaAngleEnabled ? system.psEmissionAreaAngle                  : 0
 
 				using system.psEmissionAreaDistribution
 
-				LG.setColor(1, 0, 0, .6)
+				LG.pushAll()
+				LG.translate(x, y)
+				LG.rotate(angle)
 				LG.setLineWidth(math.max(8/project.zoom, (project.pixelateWorld ? 1 : 0)))
+				LG.setColor(1, 0, 0, .6)
 
 				if !complete system.psEmissionAreaDistribution == {
 					case NONE:
 						-- void
 
 					case ELLIPSE:
-						LG.ellipse(LG.DrawMode.FILL, x,y, dx,dy, 64)
+						LG.ellipse(LG.DrawMode.FILL, 0,0, dx,dy, 64)
 
 					case UNIFORM:
-						LG.rectangle(LG.DrawMode.FILL, x-dx,y-dy, 2*dx, 2*dy)
+						LG.rectangle(LG.DrawMode.FILL, -dx,-dy, 2*dx, 2*dy)
 
 					case BORDER_ELLIPSE:
-						LG.ellipse(LG.DrawMode.LINE, x,y, dx,dy, 64)
+						LG.ellipse(LG.DrawMode.LINE, 0,0, dx,dy, 64)
 
 					case BORDER_RECTANGLE:
-						LG.rectangle(LG.DrawMode.LINE, x-dx,y-dy, 2*dx,2*dy)
+						LG.rectangle(LG.DrawMode.LINE, -dx,-dy, 2*dx,2*dy)
 
 					case NORMAL:
 						local STDDEV_IN_IMAGE :: .1411132813
 						local iw, ih = imageNormal.getDimensions!()
 						local sx     = dx / (iw * STDDEV_IN_IMAGE)
 						local sy     = dy / (ih * STDDEV_IN_IMAGE)
-						LG.draw(imageNormal, x,y, 0, sx,sy, iw/2,ih/2)
+						LG.draw(imageNormal, 0,0, 0, sx,sy, iw/2,ih/2)
 				}
 
-				LG.setLineWidth(1)
+				LG.pop()
 			}
 
 			if showEmitterPosition {

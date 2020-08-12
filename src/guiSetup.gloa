@@ -174,10 +174,10 @@ export setupGuiFrames :: () {
 							{value=LG.AreaSpreadDistribution.NORMAL,           label="norm",    tooltip="Normal distribution"},
 						}}),
 						guiState.hbox!({ name="areaParams", active=false,
-							guiState.direction!({ name="areaAngle", labelLeft="angle" }),
+							guiState.direction!({ name="areaAngle", labelLeft="angle", canDisable=true }),
 							guiState.vbox!({ weight=1,
-								guiState.slider!({ name="areaDx", labelLeft="dx", inset=30, min=0, max=1000, exponential=true, limitName="areaSize", readout="%.0f", linkMultiDrag={"areaDy"} }),
-								guiState.slider!({ name="areaDy", labelLeft="dy", inset=30, min=0, max=1000, exponential=true, limitName="areaSize", readout="%.0f", linkMultiDrag={"areaDx"} }),
+								guiState.slider!({ name="areaDx", labelLeft="dx", canDisable=true, inset=30, min=0, max=1000, exponential=true, limitName="areaSize", readout="%.0f", linkMultiDrag={"areaDy"} }),
+								guiState.slider!({ name="areaDy", labelLeft="dy", canDisable=true, inset=30, min=0, max=1000, exponential=true, limitName="areaSize", readout="%.0f", linkMultiDrag={"areaDx"} }),
 								guiState.checkbox!({ name="areaRelative", label="direction relative to area center", inset=14, weight=1 }),
 							}),
 						}),
@@ -187,54 +187,54 @@ export setupGuiFrames :: () {
 
 					guiState.section!({ name="directionSection", label="Direction", tooltip="Movement direction", icon16="direction",
 						guiState.hbox!({
-							guiState.direction!({ name="direction", linkSpread="directionSpread" }),
-							guiState.slider!({ name="directionSpread", labelLeft="spread", min=0, max=math.TAU, readoutMulti=360/math.TAU, readout="%d°", weight=1, inset=50 }),
+							guiState.direction!({ name="direction", canDisable=true, linkSpread="directionSpread" }),
+							guiState.slider!({ name="directionSpread", canDisable=true, labelLeft="spread", min=0, max=math.TAU, readoutMulti=360/math.TAU, readout="%d°", weight=1, inset=50 }),
 						}),
 					}),
 
 					guiState.separator!({ thick=true }),
 
 					guiState.section!({ name="speedSection", label="Speed", tooltip="Initial velocity", icon16="speed",
-						guiState.slider!({ name="speedMin", labelLeft="min", min=-2000, max=2000, exponential=true, limitName="speed", readout="%.0f / sec", linkMultiDrag={"speedMax"} }),
-						guiState.slider!({ name="speedMax", labelLeft="max", min=-2000, max=2000, exponential=true, limitName="speed", readout="%.0f / sec", linkMultiDrag={"speedMin"} }),
+						guiState.slider!({ name="speedMin", labelLeft="min", canDisable=true, min=-2000, max=2000, exponential=true, limitName="speed", readout="%.0f / sec", linkMultiDrag={"speedMax"} }),
+						guiState.slider!({ name="speedMax", labelLeft="max", canDisable=true, min=-2000, max=2000, exponential=true, limitName="speed", readout="%.0f / sec", linkMultiDrag={"speedMin"} }),
 					}),
 
 					guiState.separator!({ thick=false }),
 
 					guiState.section!({ name="accelerationLinearSection", label="AccLinear", tooltip="Acceleration, linear", icon16="accelerationLinear",
-						guiState.slider!({ name="accLinearXmin", labelLeft="xmin", min=-5000, max=5000, exponential=true, limitName="accLinear", readout="%.0f / sec²", linkMultiDrag={"accLinearXmax"} }),
-						guiState.slider!({ name="accLinearXmax", labelLeft="xmax", min=-5000, max=5000, exponential=true, limitName="accLinear", readout="%.0f / sec²", linkMultiDrag={"accLinearXmin"} }),
-						guiState.slider!({ name="accLinearYmin", labelLeft="ymin", min=-5000, max=5000, exponential=true, limitName="accLinear", readout="%.0f / sec²", linkMultiDrag={"accLinearYmax"} }),
-						guiState.slider!({ name="accLinearYmax", labelLeft="ymax", min=-5000, max=5000, exponential=true, limitName="accLinear", readout="%.0f / sec²", linkMultiDrag={"accLinearYmin"} }),
+						guiState.slider!({ name="accLinearXmin", labelLeft="xmin", canDisable=true, min=-5000, max=5000, exponential=true, limitName="accLinear", readout="%.0f / sec²", linkMultiDrag={"accLinearXmax"} }),
+						guiState.slider!({ name="accLinearXmax", labelLeft="xmax", canDisable=true, min=-5000, max=5000, exponential=true, limitName="accLinear", readout="%.0f / sec²", linkMultiDrag={"accLinearXmin"} }),
+						guiState.slider!({ name="accLinearYmin", labelLeft="ymin", canDisable=true, min=-5000, max=5000, exponential=true, limitName="accLinear", readout="%.0f / sec²", linkMultiDrag={"accLinearYmax"} }),
+						guiState.slider!({ name="accLinearYmax", labelLeft="ymax", canDisable=true, min=-5000, max=5000, exponential=true, limitName="accLinear", readout="%.0f / sec²", linkMultiDrag={"accLinearYmin"} }),
 					}),
 
 					guiState.separator!({ thick=false }),
 
 					guiState.section!({ name="accelerationRadialSection", label="AccRadial", tooltip="Acceleration, radial", icon16="accelerationRadial",
-						guiState.slider!({ name="radialAccelerationMin", labelLeft="min", min=-10000, max=10000, exponential=true, limitName="radialAcceleration", readout="%.0f / sec²", linkMultiDrag={"radialAccelerationMax"} }),
-						guiState.slider!({ name="radialAccelerationMax", labelLeft="max", min=-10000, max=10000, exponential=true, limitName="radialAcceleration", readout="%.0f / sec²", linkMultiDrag={"radialAccelerationMin"} }),
+						guiState.slider!({ name="accRadialMin", labelLeft="min", canDisable=true, min=-10000, max=10000, exponential=true, limitName="radialAcceleration", readout="%.0f / sec²", linkMultiDrag={"accRadialMax"} }),
+						guiState.slider!({ name="accRadialMax", labelLeft="max", canDisable=true, min=-10000, max=10000, exponential=true, limitName="radialAcceleration", readout="%.0f / sec²", linkMultiDrag={"accRadialMin"} }),
 					}),
 
 					guiState.separator!({ thick=false }),
 
 					guiState.section!({ name="accelerationTangentSection", label="AccTangent", tooltip="Acceleration, tangential", icon16="accelerationTangent",
-						guiState.slider!({ name="tangentialAccelerationMin", labelLeft="min", min=-10000, max=10000, exponential=true, limitName="tangentialAcceleration", readout="%.0f / sec²", linkMultiDrag={"tangentialAccelerationMax"} }),
-						guiState.slider!({ name="tangentialAccelerationMax", labelLeft="max", min=-10000, max=10000, exponential=true, limitName="tangentialAcceleration", readout="%.0f / sec²", linkMultiDrag={"tangentialAccelerationMin"} }),
+						guiState.slider!({ name="accTangentMin", labelLeft="min", canDisable=true, min=-10000, max=10000, exponential=true, limitName="tangentialAcceleration", readout="%.0f / sec²", linkMultiDrag={"accTangentMax"} }),
+						guiState.slider!({ name="accTangentMax", labelLeft="max", canDisable=true, min=-10000, max=10000, exponential=true, limitName="tangentialAcceleration", readout="%.0f / sec²", linkMultiDrag={"accTangentMin"} }),
 					}),
 
 					guiState.separator!({ thick=false }),
 
 					guiState.section!({ name="dampingSection", label="Damping", tooltip="Velocity damping", icon16="damping",
-						guiState.slider!({ name="linearDampingMin", labelLeft="min", min=-20, max=20, exponential=true, limitName="linearDamping", readout="%.2f", linkMultiDrag={"linearDampingMax"} }),
-						guiState.slider!({ name="linearDampingMax", labelLeft="max", min=-20, max=20, exponential=true, limitName="linearDamping", readout="%.2f", linkMultiDrag={"linearDampingMin"} }),
+						guiState.slider!({ name="linearDampingMin", labelLeft="min", canDisable=true, min=-20, max=20, exponential=true, limitName="linearDamping", readout="%.2f", linkMultiDrag={"linearDampingMax"} }),
+						guiState.slider!({ name="linearDampingMax", labelLeft="max", canDisable=true, min=-20, max=20, exponential=true, limitName="linearDamping", readout="%.2f", linkMultiDrag={"linearDampingMin"} }),
 					}),
 
 					guiState.separator!({ thick=true }),
 
 					guiState.section!({ name="rotationSection", label="Rotation", tooltip="Particle rotation", icon16="rotation",
 						guiState.hbox!({
-							guiState.direction!({ name="rotationMin", linkOther="rotationMax", linkMultiDrag={"rotationMax"}, labelLeft="min/max" }),
-							guiState.direction!({ name="rotationMax", linkOther="rotationMin", linkMultiDrag={"rotationMin"}, }),
+							guiState.direction!({ name="rotationMin", canDisable=true, linkOther="rotationMax", linkMultiDrag={"rotationMax"}, labelLeft="min/max" }),
+							guiState.direction!({ name="rotationMax", canDisable=true, linkOther="rotationMin", linkMultiDrag={"rotationMin"}, }),
 							guiState.checkbox!({ name="rotationRelative", label="rotation relative to direction", inset=10 }),
 						}),
 					}),
@@ -242,9 +242,9 @@ export setupGuiFrames :: () {
 					guiState.separator!({ thick=false }),
 
 					guiState.section!({ name="spinSection", label="Spin", tooltip="Particle spin", icon16="spin",
-						guiState.slider!({ name="spinMin",       labelLeft="at start",  min=-8, max=8, exponential=true, limitName="spin", readout="%.2f turns / sec", linkMultiDrag={"spinMax"} }),
-						guiState.slider!({ name="spinMax",       labelLeft="at end",    min=-8, max=8, exponential=true, limitName="spin", readout="%.2f turns / sec", linkMultiDrag={"spinMin"} }),
-						guiState.slider!({ name="spinVariation", labelLeft="variation", min=0,  max=1, readoutMulti=100, readout="%d%%" }),
+						guiState.slider!({ name="spinMin",       labelLeft="at start",  canDisable=true, min=-8, max=8, exponential=true, limitName="spin", readout="%.2f turns / sec", linkMultiDrag={"spinMax"} }),
+						guiState.slider!({ name="spinMax",       labelLeft="at end",    canDisable=true, min=-8, max=8, exponential=true, limitName="spin", readout="%.2f turns / sec", linkMultiDrag={"spinMin"} }),
+						guiState.slider!({ name="spinVariation", labelLeft="variation", canDisable=true, min=0,  max=1, readoutMulti=100, readout="%d%%" }),
 					}),
 
 					guiState.separator!({ thick=true }),
@@ -282,7 +282,7 @@ export setupGuiFrames :: () {
 							guiState.buttons!({ data=8, buttons={{name="sizeRemove",image="iconDelete",tooltip="Remove size"},{name="sizeAdd",image="iconAdd",tooltip="Add/duplicate size"}} }),
 							guiState.slider!({ name="size8", data=8, min=0, max=8, exponential=true, limitName="size", readout="%.2f", weight=1 }),
 						}),
-						guiState.slider!({ name="sizeVariation", labelLeft="variation", min=0, max=1, readoutMulti=100, readout="%d%%" }),
+						guiState.slider!({ name="sizeVariation", labelLeft="variation", canDisable=true, min=0, max=1, readoutMulti=100, readout="%d%%" }),
 					}),
 
 					guiState.separator!({ thick=true }),
@@ -769,15 +769,19 @@ export setupGuiCallbacks :: () {
 	}
 
 	-- Project settings.
-	local addEventHandlersForDirection :: (name:string, changeLabel:string, onUpdateValue:(project:Project, system:System, angle:float), finalize:(project:Project, system:System)=NULL) {
+	local addEventHandlersForDirection :: (name:string, changeLabel:string,
+		onUpdateValue: (project:Project, system:System, angle:float),
+		finalize:      (project:Project, system:System) = NULL,
+		forSystem = false
+	) {
 		guiState.onBegin[name] = (direction:gui.Direction, _:int) {
 			direction.dataTemp = direction.angle
 		}
-		guiState.onAction[name] = [onUpdateValue] (direction:gui.Direction, _:int) {
+		guiState.onAction[name] = [*] (direction:gui.Direction, _:int) {
 			local project, system = getCurrentProjectAndSystem()
 			onUpdateValue(project, system, direction.angle)
 		}
-		guiState.onEnd[name] = [name, changeLabel, onUpdateValue, finalize] (direction:gui.Direction, _:int) {
+		guiState.onEnd[name] = [*] (direction:gui.Direction, _:int) {
 			local project, system = getCurrentProjectAndSystem()
 			local valueOld        = cast(float) direction.dataTemp
 			local valueNew        = direction.angle
@@ -786,8 +790,10 @@ export setupGuiCallbacks :: () {
 			recordChange(changeLabel,
 				[system, valueNew, onUpdateValue] (project:Project) {  onUpdateValue(project, system, valueNew)  },
 				[system, valueOld, onUpdateValue] (project:Project) {  onUpdateValue(project, system, valueOld)  },
-				[system, name,     finalize]      (project:Project) {
-					if guiState.isElementVisible!(name)  guiState.refreshRecursively!(name)
+				[system, name, finalize, forSystem] (project:Project) {
+					if not (forSystem and not isSystemCurrent(system)) {
+						if guiState.isElementVisible!(name)  guiState.refreshRecursively!(name)
+					}
 					if finalize ~= NULL  finalize(project, system)
 				}
 			)
@@ -801,7 +807,7 @@ export setupGuiCallbacks :: () {
 		onEnd:         (project:Project, system:System) = NULL,
 		forSystem = false
 	) {
-		guiState.onBegin[name] = [onBegin] (slider:gui.Slider, _:int) {
+		guiState.onBegin[name] = [*] (slider:gui.Slider, _:int) {
 			slider.dataTemp = slider.value
 
 			if onBegin ~= NULL {
@@ -809,11 +815,11 @@ export setupGuiCallbacks :: () {
 				onBegin(project, system)
 			}
 		}
-		guiState.onAction[name] = [onUpdateValue] (slider:gui.Slider, _:int) {
+		guiState.onAction[name] = [*] (slider:gui.Slider, _:int) {
 			local project, system = getCurrentProjectAndSystem()
 			onUpdateValue(project, system, slider.value)
 		}
-		guiState.onEnd[name] = [name, changeLabel, onUpdateValue, finalize, onEnd, forSystem] (slider:gui.Slider, _:int) {
+		guiState.onEnd[name] = [*] (slider:gui.Slider, _:int) {
 			local project, system = getCurrentProjectAndSystem()
 			local valueOld        = cast(float) slider.dataTemp
 			local valueNew        = slider.value
@@ -840,7 +846,7 @@ export setupGuiCallbacks :: () {
 		onEnd:         (project:Project, system:System) = NULL,
 		forSystem = false
 	) {
-		guiState.onBegin[name] = [onBegin] (colorEl:gui.Color, component:int) {
+		guiState.onBegin[name] = [*] (colorEl:gui.Color, component:int) {
 			colorEl.dataTemp = colorEl.color[component]
 
 			if onBegin ~= NULL {
@@ -848,11 +854,11 @@ export setupGuiCallbacks :: () {
 				onBegin(project, system)
 			}
 		}
-		guiState.onAction[name] = [onUpdateValue] (colorEl:gui.Color, component:int) {
+		guiState.onAction[name] = [*] (colorEl:gui.Color, component:int) {
 			local project, system = getCurrentProjectAndSystem()
 			onUpdateValue(project, system, component, colorEl.color[component])
 		}
-		guiState.onEnd[name] = [name, changeLabel, onUpdateValue, finalize, onEnd, forSystem] (colorEl:gui.Color, component:int) {
+		guiState.onEnd[name] = [*] (colorEl:gui.Color, component:int) {
 			local project, system = getCurrentProjectAndSystem()
 			local valueOld        = cast(float) colorEl.dataTemp
 			local valueNew        = colorEl.color[component]
@@ -872,11 +878,13 @@ export setupGuiCallbacks :: () {
 		}
 	}
 
-	local addEventHandlersForRadio :: (name:string, $ValueType:Type, changeLabel:string, onUpdateValue:(project:Project, system:System, value:ValueType)) {
+	local addEventHandlersForRadio :: (name:string, $ValueType:Type, changeLabel:string,
+		onUpdateValue: (project:Project, system:System, value:ValueType)
+	) {
 		guiState.onBegin[name] = (radio:gui.Radio, buttonIndex:int) {
 			radio.dataTemp = radio.buttons[radio.index].value
 		}
-		guiState.onAction[name] = [name, changeLabel, onUpdateValue] (radio:gui.Radio, buttonIndex:int) {
+		guiState.onAction[name] = [*] (radio:gui.Radio, buttonIndex:int) {
 			local project, system = getCurrentProjectAndSystem()
 			local valueOld        = cast(ValueType) radio.dataTemp
 			local valueNew        = cast(ValueType) radio.buttons[buttonIndex].value
@@ -890,8 +898,10 @@ export setupGuiCallbacks :: () {
 		}
 	}
 
-	local addEventHandlersForCheckbox :: (name:string, changeLabel:string, onUpdateValue:(project:Project, system:System, value:bool)) {
-		guiState.onAction[name] = [name, changeLabel, onUpdateValue] (checkbox:gui.Checkbox, _:int) {
+	local addEventHandlersForCheckbox :: (name:string, changeLabel:string,
+		onUpdateValue: (project:Project, system:System, value:bool)
+	) {
+		guiState.onAction[name] = [*] (checkbox:gui.Checkbox, _:int) {
 			local project, system = getCurrentProjectAndSystem()
 			local valueNew        = checkbox.checked
 
@@ -899,6 +909,29 @@ export setupGuiCallbacks :: () {
 				[system, valueNew, onUpdateValue] (project:Project) {  onUpdateValue(project, system,     valueNew)  },
 				[system, valueNew, onUpdateValue] (project:Project) {  onUpdateValue(project, system, not valueNew)  },
 				[name                           ] (project:Project) {  if guiState.isElementVisible!(name)  guiState.refreshRecursively!(name)  }
+			)
+		}
+	}
+
+	local addToggleEventHandler :: (name:string, changeLabelPrefix:string,
+		onToggle: (project:Project, system:System, enabled:bool),
+		finalize: (project:Project, system:System) = NULL,
+		forSystem = false
+	) {
+		guiState.onToggle[name] = [*] (widget:gui.Widget, _:int) {
+			local project, system = getCurrentProjectAndSystem()
+			local enabled         = widget.enabled
+			local changeLabel     = changeLabelPrefix .. (enabled ? " enabled" : " disabled")
+
+			recordChange(changeLabel,
+				[system, onToggle, enabled        ] (project:Project) {  onToggle(project, system,     enabled)  },
+				[system, onToggle, enabled        ] (project:Project) {  onToggle(project, system, not enabled)  },
+				[system, name, finalize, forSystem] (project:Project) {
+					if not (forSystem and not isSystemCurrent(system)) {
+						if guiState.isElementVisible!(name)  guiState.refreshRecursively!(name)
+					}
+					if finalize ~= NULL  finalize(project, system)
+				}
 			)
 		}
 	}
@@ -1503,249 +1536,345 @@ export setupGuiCallbacks :: () {
 		(project:Project, system:System, value:float) {  system.kickStartSteps = math.round(value) ; updateParticleParams(project, system)  }
 	)
 
-	guiState.onRefresh.areaDistribution = (radio:gui.Radio) {
-		local project, system = getCurrentProjectAndSystem()
-		local found, i        = indexWith(radio.buttons, "value", system.psEmissionAreaDistribution)
-		assert(found)
-		radio.index = i
-		guiState.setActive!("areaParams", (i > 1))
-	}
-	addEventHandlersForRadio("areaDistribution", LG.AreaSpreadDistribution, "Distribution",
-		(project:Project, system:System, value:LG.AreaSpreadDistribution) {
-			system.psEmissionAreaDistribution = value
-			updateParticleParams(project, system)
-			guiState.setActive!("areaParams", (value == .NONE))
-			if value ~= .NONE  guiState.refreshRecursively!("areaParams")
+	-- Area distribution.
+	do {
+		guiState.onRefresh.areaDistribution = (radio:gui.Radio) {
+			local project, system = getCurrentProjectAndSystem()
+			local found, i        = indexWith(radio.buttons, "value", system.psEmissionAreaDistribution)
+			assert(found)
+			radio.index = i
+			guiState.setActive!("areaParams", (i > 1))
 		}
-	)
-	guiState.onRefresh.areaAngle = (direction:gui.Direction) {
-		local project, system = getCurrentProjectAndSystem()
-		direction.angle       = system.psEmissionAreaAngle
-	}
-	addEventHandlersForDirection("areaAngle", "Distribution angle",
-		(project:Project, system:System, value:float) {  system.psEmissionAreaAngle = value ; updateParticleParams(project, system)  }
-	)
-	guiState.onRefresh.areaDx = (slider:gui.Slider) {
-		local project, system = getCurrentProjectAndSystem()
-		slider.value          = system.psEmissionAreaDx
-	}
-	addEventHandlersForSlider(forSystem=true, "areaDx", "Distribution dx",
-		(project:Project, system:System, value:float) {  system.psEmissionAreaDx = value ; updateParticleParams(project, system)  }
-	)
-	guiState.onRefresh.areaDy = (slider:gui.Slider) {
-		local project, system = getCurrentProjectAndSystem()
-		slider.value          = system.psEmissionAreaDy
-	}
-	addEventHandlersForSlider(forSystem=true, "areaDy", "Distribution dy",
-		(project:Project, system:System, value:float) {  system.psEmissionAreaDy = value ; updateParticleParams(project, system)  }
-	)
-	guiState.onRefresh.areaRelative = (checkbox:gui.Checkbox) {
-		local project, system = getCurrentProjectAndSystem()
-		checkbox.checked      = system.psEmissionAreaRelative
-	}
-	addEventHandlersForCheckbox("areaRelative", "Relative direction",
-		(project:Project, system:System, value:bool) {  system.psEmissionAreaRelative = value ; updateParticleParams(project, system)  }
-	)
 
-	guiState.onRefresh.direction = (direction:gui.Direction) {
-		local project, system = getCurrentProjectAndSystem()
-		direction.angle       = system.psDirection
-	}
-	addEventHandlersForDirection("direction", "Direction",
-		(project:Project, system:System, value:float) {  system.psDirection = value ; updateParticleParams(project, system)  }
-	)
-	guiState.onRefresh.directionSpread = (slider:gui.Slider) {
-		local project, system = getCurrentProjectAndSystem()
-		slider.value          = system.psSpread
-	}
-	addEventHandlersForSlider(forSystem=true, "directionSpread", "Spread",
-		(project:Project, system:System, value:float) {  system.psSpread = value ; updateParticleParams(project, system)  }
-	)
+		addEventHandlersForRadio("areaDistribution", LG.AreaSpreadDistribution, "Distribution",
+			(project:Project, system:System, value:LG.AreaSpreadDistribution) {
+				system.psEmissionAreaDistribution = value
+				updateParticleParams(project, system)
+				guiState.setActive!("areaParams", (value == .NONE))
+				if value ~= .NONE  guiState.refreshRecursively!("areaParams")
+			}
+		)
 
-	guiState.onRefresh.speedMin = (slider:gui.Slider) {
-		local project, system = getCurrentProjectAndSystem()
-		slider.value          = system.psSpeedMin
-	}
-	addEventHandlersForSlider(forSystem=true, "speedMin", "Speed",
-		(project:Project, system:System, value:float) {  system.psSpeedMin = value ; updateParticleParams(project, system)  }
-	)
-	guiState.onRefresh.speedMax = (slider:gui.Slider) {
-		local project, system = getCurrentProjectAndSystem()
-		slider.value          = system.psSpeedMax
-	}
-	addEventHandlersForSlider(forSystem=true, "speedMax", "Speed",
-		(project:Project, system:System, value:float) {  system.psSpeedMax = value ; updateParticleParams(project, system)  }
-	)
+		guiState.onRefresh.areaAngle = (direction:gui.Direction) {
+			local project, system = getCurrentProjectAndSystem()
+			direction.enabled     = system.psEmissionAreaAngleEnabled
+			direction.angle       = system.psEmissionAreaAngle
+		}
+		addEventHandlersForDirection(forSystem=true, "areaAngle", "Distribution angle",
+			(project:Project, system:System, value:float) {  system.psEmissionAreaAngle = value ; updateParticleParams(project, system)  }
+		)
+		addToggleEventHandler(forSystem=true, "areaAngle", "Distribution angle",
+			onToggle = (project:Project, system:System, enabled:bool) {  system.psEmissionAreaAngleEnabled = enabled ; updateParticleParams(project, system)  }
+		)
 
-	guiState.onRefresh.accLinearXmin = (slider:gui.Slider) {
-		local project, system = getCurrentProjectAndSystem()
-		slider.value          = system.psLinearAccelerationXmin
-	}
-	addEventHandlersForSlider(forSystem=true, "accLinearXmin", "Linear acceleration",
-		(project:Project, system:System, value:float) {  system.psLinearAccelerationXmin = value ; updateParticleParams(project, system)  }
-	)
-	guiState.onRefresh.accLinearXmax = (slider:gui.Slider) {
-		local project, system = getCurrentProjectAndSystem()
-		slider.value          = system.psLinearAccelerationXmax
-	}
-	addEventHandlersForSlider(forSystem=true, "accLinearXmax", "Linear acceleration",
-		(project:Project, system:System, value:float) {  system.psLinearAccelerationXmax = value ; updateParticleParams(project, system)  }
-	)
-	guiState.onRefresh.accLinearYmin = (slider:gui.Slider) {
-		local project, system = getCurrentProjectAndSystem()
-		slider.value          = system.psLinearAccelerationYmin
-	}
-	addEventHandlersForSlider(forSystem=true, "accLinearYmin", "Linear acceleration",
-		(project:Project, system:System, value:float) {  system.psLinearAccelerationYmin = value ; updateParticleParams(project, system)  }
-	)
-	guiState.onRefresh.accLinearYmax = (slider:gui.Slider) {
-		local project, system = getCurrentProjectAndSystem()
-		slider.value          = system.psLinearAccelerationYmax
-	}
-	addEventHandlersForSlider(forSystem=true, "accLinearYmax", "Linear acceleration",
-		(project:Project, system:System, value:float) {  system.psLinearAccelerationYmax = value ; updateParticleParams(project, system)  }
-	)
+		guiState.onRefresh.areaDx = (slider:gui.Slider) {
+			local project, system = getCurrentProjectAndSystem()
+			slider.enabled        = system.psEmissionAreaDxEnabled
+			slider.value          = system.psEmissionAreaDx
+		}
+		guiState.onRefresh.areaDy = (slider:gui.Slider) {
+			local project, system = getCurrentProjectAndSystem()
+			slider.enabled        = system.psEmissionAreaDyEnabled
+			slider.value          = system.psEmissionAreaDy
+		}
+		addEventHandlersForSlider(forSystem=true, "areaDx", "Distribution dx",
+			(project:Project, system:System, value:float) {  system.psEmissionAreaDx = value ; updateParticleParams(project, system)  }
+		)
+		addEventHandlersForSlider(forSystem=true, "areaDy", "Distribution dy",
+			(project:Project, system:System, value:float) {  system.psEmissionAreaDy = value ; updateParticleParams(project, system)  }
+		)
+		addToggleEventHandler(forSystem=true, "areaDx", "Distribution dx",
+			onToggle = (project:Project, system:System, enabled:bool) {  system.psEmissionAreaDxEnabled = enabled ; updateParticleParams(project, system)  }
+		)
+		addToggleEventHandler(forSystem=true, "areaDy", "Distribution dy",
+			onToggle = (project:Project, system:System, enabled:bool) {  system.psEmissionAreaDyEnabled = enabled ; updateParticleParams(project, system)  }
+		)
 
-	guiState.onRefresh.radialAccelerationMin = (slider:gui.Slider) {
-		local project, system = getCurrentProjectAndSystem()
-		slider.value          = system.psRadialAccelerationMin
+		guiState.onRefresh.areaRelative = (checkbox:gui.Checkbox) {
+			local project, system = getCurrentProjectAndSystem()
+			checkbox.checked      = system.psEmissionAreaRelative
+		}
+		addEventHandlersForCheckbox("areaRelative", "Relative direction",
+			(project:Project, system:System, value:bool) {  system.psEmissionAreaRelative = value ; updateParticleParams(project, system)  }
+		)
 	}
-	addEventHandlersForSlider(forSystem=true, "radialAccelerationMin", "Radial acceleration",
-		(project:Project, system:System, value:float) {  system.psRadialAccelerationMin = value ; updateParticleParams(project, system)  }
-	)
-	guiState.onRefresh.radialAccelerationMax = (slider:gui.Slider) {
-		local project, system = getCurrentProjectAndSystem()
-		slider.value          = system.psRadialAccelerationMax
-	}
-	addEventHandlersForSlider(forSystem=true, "radialAccelerationMax", "Radial acceleration",
-		(project:Project, system:System, value:float) {  system.psRadialAccelerationMax = value ; updateParticleParams(project, system)  }
-	)
 
-	guiState.onRefresh.tangentialAccelerationMin = (slider:gui.Slider) {
-		local project, system = getCurrentProjectAndSystem()
-		slider.value          = system.psTangentialAccelerationMin
-	}
-	addEventHandlersForSlider(forSystem=true, "tangentialAccelerationMin", "Tangential acceleration",
-		(project:Project, system:System, value:float) {  system.psTangentialAccelerationMin = value ; updateParticleParams(project, system)  }
-	)
-	guiState.onRefresh.tangentialAccelerationMax = (slider:gui.Slider) {
-		local project, system = getCurrentProjectAndSystem()
-		slider.value          = system.psTangentialAccelerationMax
-	}
-	addEventHandlersForSlider(forSystem=true, "tangentialAccelerationMax", "Tangential acceleration",
-		(project:Project, system:System, value:float) {  system.psTangentialAccelerationMax = value ; updateParticleParams(project, system)  }
-	)
+	do {
+		guiState.onRefresh.direction = (direction:gui.Direction) {
+			local project, system = getCurrentProjectAndSystem()
+			direction.enabled     = system.psDirectionEnabled
+			direction.angle       = system.psDirection
+		}
+		addEventHandlersForDirection(forSystem=true, "direction", "Direction",
+			(project:Project, system:System, value:float) {  system.psDirection = value ; updateParticleParams(project, system)  }
+		)
+		addToggleEventHandler(forSystem=true, "direction", "Direction",
+			onToggle = (project:Project, system:System, enabled:bool) {  system.psDirectionEnabled = enabled ; updateParticleParams(project, system)  }
+		)
 
-	guiState.onRefresh.linearDampingMin = (slider:gui.Slider) {
-		local project, system = getCurrentProjectAndSystem()
-		slider.value          = system.psLinearDampingMin
+		guiState.onRefresh.directionSpread = (slider:gui.Slider) {
+			local project, system = getCurrentProjectAndSystem()
+			slider.enabled        = system.psSpreadEnabled
+			slider.value          = system.psSpread
+		}
+		addEventHandlersForSlider(forSystem=true, "directionSpread", "Spread",
+			(project:Project, system:System, value:float) {  system.psSpread = value ; updateParticleParams(project, system)  }
+		)
+		addToggleEventHandler(forSystem=true, "directionSpread", "Spread",
+			onToggle = (project:Project, system:System, enabled:bool) {  system.psSpreadEnabled = enabled ; updateParticleParams(project, system)  }
+		)
 	}
-	addEventHandlersForSlider(forSystem=true, "linearDampingMin", "Linear damping",
-		(project:Project, system:System, value:float) {  system.psLinearDampingMin = value ; updateParticleParams(project, system)  }
-	)
-	guiState.onRefresh.linearDampingMax = (slider:gui.Slider) {
-		local project, system = getCurrentProjectAndSystem()
-		slider.value          = system.psLinearDampingMax
-	}
-	addEventHandlersForSlider(forSystem=true, "linearDampingMax", "Linear damping",
-		(project:Project, system:System, value:float) {  system.psLinearDampingMax = value ; updateParticleParams(project, system)  }
-	)
 
-	guiState.onRefresh.rotationMin = (direction:gui.Direction) {
-		local project, system = getCurrentProjectAndSystem()
-		direction.angle       = system.psRotationMin
+	do {
+		guiState.onRefresh.speedMin = (slider:gui.Slider) {
+			local project, system = getCurrentProjectAndSystem()
+			slider.enabled        = system.psSpeedEnabled
+			slider.value          = system.psSpeedMin
+		}
+		guiState.onRefresh.speedMax = (slider:gui.Slider) {
+			local project, system = getCurrentProjectAndSystem()
+			slider.enabled        = system.psSpeedEnabled
+			slider.value          = system.psSpeedMax
+		}
+		addEventHandlersForSlider(forSystem=true, "speedMin", "Speed",
+			(project:Project, system:System, value:float) {  system.psSpeedMin = value ; updateParticleParams(project, system)  }
+		)
+		addEventHandlersForSlider(forSystem=true, "speedMax", "Speed",
+			(project:Project, system:System, value:float) {  system.psSpeedMax = value ; updateParticleParams(project, system)  }
+		)
+		addToggleEventHandler(forSystem=true, "speedMin", "Speed",
+			onToggle = (project:Project, system:System, enabled:bool) {  system.psSpeedEnabled = enabled ; updateParticleParams(project, system)  },
+			finalize = (project:Project, system:System              ) {  guiState.refreshRecursively!("speedMax")  }
+		)
+		addToggleEventHandler(forSystem=true, "speedMax", "Speed",
+			onToggle = (project:Project, system:System, enabled:bool) {  system.psSpeedEnabled = enabled ; updateParticleParams(project, system)  },
+			finalize = (project:Project, system:System              ) {  guiState.refreshRecursively!("speedMin")  }
+		)
 	}
-	addEventHandlersForDirection("rotationMin", "Rotation",
-		(project:Project, system:System, value:float) {  system.psRotationMin = value ; updateParticleParams(project, system)  }
-	)
-	guiState.onRefresh.rotationMax = (direction:gui.Direction) {
-		local project, system = getCurrentProjectAndSystem()
-		direction.angle       = system.psRotationMax
-	}
-	addEventHandlersForDirection("rotationMax", "Rotation",
-		(project:Project, system:System, value:float) {  system.psRotationMax = value ; updateParticleParams(project, system)  }
-	)
-	guiState.onRefresh.rotationRelative = (checkbox:gui.Checkbox) {
-		local project, system = getCurrentProjectAndSystem()
-		checkbox.checked      = system.psRelativeRotation
-	}
-	addEventHandlersForCheckbox("rotationRelative", "Relative rotation",
-		(project:Project, system:System, value:bool) {  system.psRelativeRotation = value ; updateParticleParams(project, system)  }
-	)
 
-	guiState.onRefresh.spinMin = (slider:gui.Slider) {
-		local project, system = getCurrentProjectAndSystem()
-		slider.value          = system.psSpinMin
+	do {
+		guiState.onRefresh.accLinearXmin = (slider:gui.Slider) {
+			local project, system = getCurrentProjectAndSystem()
+			slider.enabled        = system.psLinearAccelerationXEnabled
+			slider.value          = system.psLinearAccelerationXmin
+		}
+		guiState.onRefresh.accLinearXmax = (slider:gui.Slider) {
+			local project, system = getCurrentProjectAndSystem()
+			slider.enabled        = system.psLinearAccelerationXEnabled
+			slider.value          = system.psLinearAccelerationXmax
+		}
+		guiState.onRefresh.accLinearYmin = (slider:gui.Slider) {
+			local project, system = getCurrentProjectAndSystem()
+			slider.enabled        = system.psLinearAccelerationYEnabled
+			slider.value          = system.psLinearAccelerationYmin
+		}
+		guiState.onRefresh.accLinearYmax = (slider:gui.Slider) {
+			local project, system = getCurrentProjectAndSystem()
+			slider.enabled        = system.psLinearAccelerationYEnabled
+			slider.value          = system.psLinearAccelerationYmax
+		}
+		addEventHandlersForSlider(forSystem=true, "accLinearXmin", "Linear acceleration X",
+			(project:Project, system:System, value:float) {  system.psLinearAccelerationXmin = value ; updateParticleParams(project, system)  }
+		)
+		addEventHandlersForSlider(forSystem=true, "accLinearXmax", "Linear acceleration X",
+			(project:Project, system:System, value:float) {  system.psLinearAccelerationXmax = value ; updateParticleParams(project, system)  }
+		)
+		addEventHandlersForSlider(forSystem=true, "accLinearYmin", "Linear acceleration Y",
+			(project:Project, system:System, value:float) {  system.psLinearAccelerationYmin = value ; updateParticleParams(project, system)  }
+		)
+		addEventHandlersForSlider(forSystem=true, "accLinearYmax", "Linear acceleration Y",
+			(project:Project, system:System, value:float) {  system.psLinearAccelerationYmax = value ; updateParticleParams(project, system)  }
+		)
+		addToggleEventHandler(forSystem=true, "accLinearXmin", "Linear acceleration X",
+			onToggle = (project:Project, system:System, enabled:bool) {  system.psLinearAccelerationXEnabled = enabled ; updateParticleParams(project, system)  },
+			finalize = (project:Project, system:System              ) {  guiState.refreshRecursively!("accLinearXmax")  }
+		)
+		addToggleEventHandler(forSystem=true, "accLinearXmax", "Linear acceleration X",
+			onToggle = (project:Project, system:System, enabled:bool) {  system.psLinearAccelerationXEnabled = enabled ; updateParticleParams(project, system)  },
+			finalize = (project:Project, system:System              ) {  guiState.refreshRecursively!("accLinearXmin")  }
+		)
+		addToggleEventHandler(forSystem=true, "accLinearYmin", "Linear acceleration Y",
+			onToggle = (project:Project, system:System, enabled:bool) {  system.psLinearAccelerationYEnabled = enabled ; updateParticleParams(project, system)  },
+			finalize = (project:Project, system:System              ) {  guiState.refreshRecursively!("accLinearYmax")  }
+		)
+		addToggleEventHandler(forSystem=true, "accLinearYmax", "Linear acceleration Y",
+			onToggle = (project:Project, system:System, enabled:bool) {  system.psLinearAccelerationYEnabled = enabled ; updateParticleParams(project, system)  },
+			finalize = (project:Project, system:System              ) {  guiState.refreshRecursively!("accLinearYmin")  }
+		)
 	}
-	addEventHandlersForSlider(forSystem=true, "spinMin", "Spin",
-		(project:Project, system:System, value:float) {  system.psSpinMin = value ; updateParticleParams(project, system)  }
-	)
-	guiState.onRefresh.spinMax = (slider:gui.Slider) {
-		local project, system = getCurrentProjectAndSystem()
-		slider.value          = system.psSpinMax
+
+	do {
+		guiState.onRefresh.accRadialMin = (slider:gui.Slider) {
+			local project, system = getCurrentProjectAndSystem()
+			slider.enabled        = system.psRadialAccelerationEnabled
+			slider.value          = system.psRadialAccelerationMin
+		}
+		guiState.onRefresh.accRadialMax = (slider:gui.Slider) {
+			local project, system = getCurrentProjectAndSystem()
+			slider.enabled        = system.psRadialAccelerationEnabled
+			slider.value          = system.psRadialAccelerationMax
+		}
+		addEventHandlersForSlider(forSystem=true, "accRadialMin", "Radial acceleration",
+			(project:Project, system:System, value:float) {  system.psRadialAccelerationMin = value ; updateParticleParams(project, system)  }
+		)
+		addEventHandlersForSlider(forSystem=true, "accRadialMax", "Radial acceleration",
+			(project:Project, system:System, value:float) {  system.psRadialAccelerationMax = value ; updateParticleParams(project, system)  }
+		)
+		addToggleEventHandler(forSystem=true, "accRadialMin", "Radial acceleration",
+			onToggle = (project:Project, system:System, enabled:bool) {  system.psRadialAccelerationEnabled = enabled ; updateParticleParams(project, system)  },
+			finalize = (project:Project, system:System              ) {  guiState.refreshRecursively!("accRadialMax")  }
+		)
+		addToggleEventHandler(forSystem=true, "accRadialMax", "Radial acceleration",
+			onToggle = (project:Project, system:System, enabled:bool) {  system.psRadialAccelerationEnabled = enabled ; updateParticleParams(project, system)  },
+			finalize = (project:Project, system:System              ) {  guiState.refreshRecursively!("accRadialMin")  }
+		)
 	}
-	addEventHandlersForSlider(forSystem=true, "spinMax", "Spin",
-		(project:Project, system:System, value:float) {  system.psSpinMax = value ; updateParticleParams(project, system)  }
-	)
-	guiState.onRefresh.spinVariation = (slider:gui.Slider) {
-		local project, system = getCurrentProjectAndSystem()
-		slider.value          = system.psSpinVariation
+
+	do {
+		guiState.onRefresh.accTangentMin = (slider:gui.Slider) {
+			local project, system = getCurrentProjectAndSystem()
+			slider.enabled        = system.psTangentialAccelerationEnabled
+			slider.value          = system.psTangentialAccelerationMin
+		}
+		guiState.onRefresh.accTangentMax = (slider:gui.Slider) {
+			local project, system = getCurrentProjectAndSystem()
+			slider.enabled        = system.psTangentialAccelerationEnabled
+			slider.value          = system.psTangentialAccelerationMax
+		}
+		addEventHandlersForSlider(forSystem=true, "accTangentMin", "Tangential acceleration",
+			(project:Project, system:System, value:float) {  system.psTangentialAccelerationMin = value ; updateParticleParams(project, system)  }
+		)
+		addEventHandlersForSlider(forSystem=true, "accTangentMax", "Tangential acceleration",
+			(project:Project, system:System, value:float) {  system.psTangentialAccelerationMax = value ; updateParticleParams(project, system)  }
+		)
+		addToggleEventHandler(forSystem=true, "accTangentMin", "Tangential acceleration",
+			onToggle = (project:Project, system:System, enabled:bool) {  system.psTangentialAccelerationEnabled = enabled ; updateParticleParams(project, system)  },
+			finalize = (project:Project, system:System              ) {  guiState.refreshRecursively!("accTangentMax")  }
+		)
+		addToggleEventHandler(forSystem=true, "accTangentMax", "Tangential acceleration",
+			onToggle = (project:Project, system:System, enabled:bool) {  system.psTangentialAccelerationEnabled = enabled ; updateParticleParams(project, system)  },
+			finalize = (project:Project, system:System              ) {  guiState.refreshRecursively!("accTangentMin")  }
+		)
 	}
-	addEventHandlersForSlider(forSystem=true, "spinVariation", "Spin variation",
-		(project:Project, system:System, value:float) {  system.psSpinVariation = value ; updateParticleParams(project, system)  }
-	)
-	guiState.onRefresh.sizeVariation = (slider:gui.Slider) {
-		local project, system = getCurrentProjectAndSystem()
-		slider.value          = system.psSizeVariation
+
+	do {
+		guiState.onRefresh.linearDampingMin = (slider:gui.Slider) {
+			local project, system = getCurrentProjectAndSystem()
+			slider.enabled        = system.psLinearDampingEnabled
+			slider.value          = system.psLinearDampingMin
+		}
+		guiState.onRefresh.linearDampingMax = (slider:gui.Slider) {
+			local project, system = getCurrentProjectAndSystem()
+			slider.enabled        = system.psLinearDampingEnabled
+			slider.value          = system.psLinearDampingMax
+		}
+		addEventHandlersForSlider(forSystem=true, "linearDampingMin", "Linear damping",
+			(project:Project, system:System, value:float) {  system.psLinearDampingMin = value ; updateParticleParams(project, system)  }
+		)
+		addEventHandlersForSlider(forSystem=true, "linearDampingMax", "Linear damping",
+			(project:Project, system:System, value:float) {  system.psLinearDampingMax = value ; updateParticleParams(project, system)  }
+		)
+		addToggleEventHandler(forSystem=true, "linearDampingMin", "Linear damping",
+			onToggle = (project:Project, system:System, enabled:bool) {  system.psLinearDampingEnabled = enabled ; updateParticleParams(project, system)  },
+			finalize = (project:Project, system:System              ) {  guiState.refreshRecursively!("linearDampingMax")  }
+		)
+		addToggleEventHandler(forSystem=true, "linearDampingMax", "Linear damping",
+			onToggle = (project:Project, system:System, enabled:bool) {  system.psLinearDampingEnabled = enabled ; updateParticleParams(project, system)  },
+			finalize = (project:Project, system:System              ) {  guiState.refreshRecursively!("linearDampingMin")  }
+		)
+	}
+
+	do {
+		guiState.onRefresh.rotationMin = (direction:gui.Direction) {
+			local project, system = getCurrentProjectAndSystem()
+			direction.enabled     = system.psRotationEnabled
+			direction.angle       = system.psRotationMin
+		}
+		guiState.onRefresh.rotationMax = (direction:gui.Direction) {
+			local project, system = getCurrentProjectAndSystem()
+			direction.enabled     = system.psRotationEnabled
+			direction.angle       = system.psRotationMax
+		}
+		addEventHandlersForDirection(forSystem=true, "rotationMin", "Rotation",
+			(project:Project, system:System, value:float) {  system.psRotationMin = value ; updateParticleParams(project, system)  }
+		)
+		addEventHandlersForDirection(forSystem=true, "rotationMax", "Rotation",
+			(project:Project, system:System, value:float) {  system.psRotationMax = value ; updateParticleParams(project, system)  }
+		)
+		addToggleEventHandler(forSystem=true, "rotationMin", "Rotation",
+			onToggle = (project:Project, system:System, enabled:bool) {  system.psRotationEnabled = enabled ; updateParticleParams(project, system)  },
+			finalize = (project:Project, system:System              ) {  guiState.refreshRecursively!("rotationMax")  }
+		)
+		addToggleEventHandler(forSystem=true, "rotationMax", "Rotation",
+			onToggle = (project:Project, system:System, enabled:bool) {  system.psRotationEnabled = enabled ; updateParticleParams(project, system)  },
+			finalize = (project:Project, system:System              ) {  guiState.refreshRecursively!("rotationMin")  }
+		)
+
+		guiState.onRefresh.rotationRelative = (checkbox:gui.Checkbox) {
+			local project, system = getCurrentProjectAndSystem()
+			checkbox.checked      = system.psRelativeRotation
+		}
+		addEventHandlersForCheckbox("rotationRelative", "Relative rotation",
+			(project:Project, system:System, value:bool) {  system.psRelativeRotation = value ; updateParticleParams(project, system)  }
+		)
+	}
+
+	do {
+		guiState.onRefresh.spinMin = (slider:gui.Slider) {
+			local project, system = getCurrentProjectAndSystem()
+			slider.enabled        = system.psSpinMinEnabled
+			slider.value          = system.psSpinMin
+		}
+		guiState.onRefresh.spinMax = (slider:gui.Slider) {
+			local project, system = getCurrentProjectAndSystem()
+			slider.enabled        = system.psSpinMaxEnabled
+			slider.value          = system.psSpinMax
+		}
+		addEventHandlersForSlider(forSystem=true, "spinMin", "Spin at start",
+			(project:Project, system:System, value:float) {  system.psSpinMin = value ; updateParticleParams(project, system)  }
+		)
+		addEventHandlersForSlider(forSystem=true, "spinMax", "Spin at end",
+			(project:Project, system:System, value:float) {  system.psSpinMax = value ; updateParticleParams(project, system)  }
+		)
+		addToggleEventHandler(forSystem=true, "spinMin", "Spin at start",
+			onToggle = (project:Project, system:System, enabled:bool) {  system.psSpinMinEnabled = enabled ; updateParticleParams(project, system)  }
+		)
+		addToggleEventHandler(forSystem=true, "spinMax", "Spin at end",
+			onToggle = (project:Project, system:System, enabled:bool) {  system.psSpinMaxEnabled = enabled ; updateParticleParams(project, system)  }
+		)
+
+		guiState.onRefresh.spinVariation = (slider:gui.Slider) {
+			local project, system = getCurrentProjectAndSystem()
+			slider.enabled        = system.psSpinVariationEnabled
+			slider.value          = system.psSpinVariation
+		}
+		addEventHandlersForSlider(forSystem=true, "spinVariation", "Spin variation",
+			(project:Project, system:System, value:float) {  system.psSpinVariation = value ; updateParticleParams(project, system)  }
+		)
+		addToggleEventHandler(forSystem=true, "spinVariation", "Spin variation",
+			onToggle = (project:Project, system:System, enabled:bool) {  system.psSpinVariationEnabled = enabled ; updateParticleParams(project, system)  }
+		)
 	}
 
 	-- Sizes.
-	guiState.onRefresh.sizesSection = (section:gui.Section) {
-		local project, system = getCurrentProjectAndSystem()
-		for 1, 8  guiState.setActive!(format("sizeContainer%d", it), (system.psSizes[it] ~= NULL))
-	}
-	guiState.onAction.sizeAdd = (buttons:gui.Buttons, buttonIndex:int) {
-		local project, system = getCurrentProjectAndSystem()
-		local i               = cast(int) buttons.data
-
-		if system.psSizes[8] ~= NULL {
-			setErrorText("Max 8 sizes")
-			return
+	do {
+		guiState.onRefresh.sizesSection = (section:gui.Section) {
+			local project, system = getCurrentProjectAndSystem()
+			for 1, 8  guiState.setActive!(format("sizeContainer%d", it), (system.psSizes[it] ~= NULL))
 		}
+		guiState.onAction.sizeAdd = (buttons:gui.Buttons, buttonIndex:int) {
+			local project, system = getCurrentProjectAndSystem()
+			local i               = cast(int) buttons.data
 
-		recordChange("Add size",
-			[system, i] (project:Project) {  insert(system.psSizes, i, system.psSizes[i])  },
-			[system, i] (project:Project) {  remove(system.psSizes, i)  },
-			[system, i] (project:Project) {
-				updateParticleParams(project, system)
-				if isSystemCurrent(system)  for j = i, 8 {
-					local name   = format("sizeContainer%d", j)
-					local active = j <= #system.psSizes
-					guiState.setActive!(name, active)
-					if active  guiState.refreshRecursively!(name)
-				}
+			if system.psSizes[8] ~= NULL {
+				setErrorText("Max 8 sizes")
+				return
 			}
-		)
-	}
-	guiState.onAction.sizeRemove = (buttons:gui.Buttons, buttonIndex:int) {
-		local project, system = getCurrentProjectAndSystem()
-		local i               = cast(int) buttons.data
-		local valueOld        = system.psSizes[i]
-		local removingLast    = #system.psSizes == 1
 
-		if removingLast and valueOld == 1  return
-
-		if removingLast {
-			recordChange("Remove size",
-				[system          ] (project:Project) {  system.psSizes[1] = 1         },
-				[system, valueOld] (project:Project) {  system.psSizes[1] = valueOld  },
-				[system          ] (project:Project) {  updateParticleParams(project, system) ; guiState.refreshRecursively!("sizeContainer1")  }
-			)
-		} else {
-			recordChange("Remove size",
-				[system, i          ] (project:Project) {  remove(system.psSizes, i)  },
-				[system, i, valueOld] (project:Project) {  insert(system.psSizes, i, valueOld)  },
-				[system, i          ] (project:Project) {
+			recordChange("Add size",
+				[system, i] (project:Project) {  insert(system.psSizes, i, system.psSizes[i])  },
+				[system, i] (project:Project) {  remove(system.psSizes, i)  },
+				[system, i] (project:Project) {
 					updateParticleParams(project, system)
 					if isSystemCurrent(system)  for j = i, 8 {
 						local name   = format("sizeContainer%d", j)
@@ -1756,21 +1885,60 @@ export setupGuiCallbacks :: () {
 				}
 			)
 		}
-	}
-	for i = 1, 8 {
-		local name = format("size%d", i)
-		guiState.onRefresh[name] = [i] (slider:gui.Slider) {
+		guiState.onAction.sizeRemove = (buttons:gui.Buttons, buttonIndex:int) {
 			local project, system = getCurrentProjectAndSystem()
-			slider.value          = system.psSizes[i]
-			if slider.value == NULL  errorf("Size #%d", i)
+			local i               = cast(int) buttons.data
+			local valueOld        = system.psSizes[i]
+			local removingLast    = #system.psSizes == 1
+
+			if removingLast and valueOld == 1  return
+
+			if removingLast {
+				recordChange("Remove size",
+					[system          ] (project:Project) {  system.psSizes[1] = 1         },
+					[system, valueOld] (project:Project) {  system.psSizes[1] = valueOld  },
+					[system          ] (project:Project) {  updateParticleParams(project, system) ; guiState.refreshRecursively!("sizeContainer1")  }
+				)
+			} else {
+				recordChange("Remove size",
+					[system, i          ] (project:Project) {  remove(system.psSizes, i)  },
+					[system, i, valueOld] (project:Project) {  insert(system.psSizes, i, valueOld)  },
+					[system, i          ] (project:Project) {
+						updateParticleParams(project, system)
+						if isSystemCurrent(system)  for j = i, 8 {
+							local name   = format("sizeContainer%d", j)
+							local active = j <= #system.psSizes
+							guiState.setActive!(name, active)
+							if active  guiState.refreshRecursively!(name)
+						}
+					}
+				)
+			}
 		}
-		addEventHandlersForSlider(forSystem=true, name, "Size",
-			[i] (project:Project, system:System, value:float) {  system.psSizes[i] = value ; updateParticleParams(project, system)  }
+		for i = 1, 8 {
+			local name = format("size%d", i)
+			guiState.onRefresh[name] = [i] (slider:gui.Slider) {
+				local project, system = getCurrentProjectAndSystem()
+				slider.value          = system.psSizes[i]
+				if slider.value == NULL  errorf("Size #%d", i)
+			}
+			addEventHandlersForSlider(forSystem=true, name, "Size",
+				[i] (project:Project, system:System, value:float) {  system.psSizes[i] = value ; updateParticleParams(project, system)  }
+			)
+		}
+
+		guiState.onRefresh.sizeVariation = (slider:gui.Slider) {
+			local project, system = getCurrentProjectAndSystem()
+			slider.enabled        = system.psSizeVariationEnabled
+			slider.value          = system.psSizeVariation
+		}
+		addEventHandlersForSlider(forSystem=true, "sizeVariation", "Size variation",
+			(project:Project, system:System, value:float) {  system.psSizeVariation = value ; updateParticleParams(project, system)  }
+		)
+		addToggleEventHandler(forSystem=true, "sizeVariation", "Size variation",
+			onToggle = (project:Project, system:System, enabled:bool) {  system.psSizeVariationEnabled = enabled ; updateParticleParams(project, system)  }
 		)
 	}
-	addEventHandlersForSlider(forSystem=true, "sizeVariation", "Size variation",
-		(project:Project, system:System, value:float) {  system.psSizeVariation = value ; updateParticleParams(project, system)  }
-	)
 
 	-- Colors.
 	guiState.onRefresh.colors = (box:gui.Vbox) {

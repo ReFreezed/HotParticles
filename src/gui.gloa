@@ -75,6 +75,7 @@ local TAB_BOTTOM_LINE_WIDTH :: 2
 export TEXT_OPACITY                 :: .85
 local  HOVER_OUTLINE_OPACITY        :: .3
 local  HOVER_OUTLINE_OPACITY_STRONG :: .7
+local  DISABLED_OPACITY             :: .4
 
 local DRAG_RADIUS :: 8 -- Distance moved before dragging starts for real.
 
@@ -141,6 +142,7 @@ export State :: struct {
 	onDrag:         struct { !key:string, !value:any--[[ (widget:Widget, subid:int, mx,my:int) ]] },
 	onDragEnd:      struct { !key:string, !value:any--[[ (widget:Widget, subid:int) ]] },
 	onMouseEnter:   struct { !key:string, !value:any--[[ (widget:Widget, subid:int) ]] },
+	onToggle:       struct { !key:string, !value:any--[[ (widget:Widget, subid:int) ]] }, -- For disable/enable. (Not for checkboxes!)
 	onDraw:         struct { !key:string, !value:any--[[ (canvas:Canvas, cw,ch:int) ]] },
 
 	buttons      :: (state:State, el:Buttons)      -> type_of(el) { return cast(type_of(el)) register(state, el, type_of(el)) },
@@ -277,6 +279,7 @@ export Element :: struct {
 	maxWidth       = -1, -- Negative means no limit.
 	maxHeight      = -1, -- Negative means no limit.
 	style          = Style.NORMAL,
+	enabled        = true, -- Only for Widgets.  @Cleanup: Move to Widget (but we must add a way to know if an element is a Widget).
 	data:     any,
 	dataTemp: any,
 
@@ -295,6 +298,8 @@ export Element :: struct {
 
 export Widget :: struct {
 	using Element,
+
+	canDisable = false,
 }
 
 
@@ -571,7 +576,7 @@ export onKeyPressed :: (state:State, key:LK.KeyConstant, scancode:LK.Scancode, i
 			if (mod == .NONE or mod == .S or mod == .C) and (key == "left" or key == "right") {
 				local delta = math.TAU * ((mod == .S) ? 22.5/360 : (mod == .C) ? 1/360 : 5/360)
 
-				triggerBeginEvent(state, direction, "", 0)
+				triggerBeginEvent(state, direction, "", 0, alsoEnsureEnabled=true)
 				direction.angle = ((key == "left" ? direction.angle-delta : direction.angle+delta) + math.PI) % math.TAU - math.PI
 				triggerActionEvent(state, direction, "", 0, alsoEnd=true)
 
@@ -592,7 +597,7 @@ export onKeyPressed :: (state:State, key:LK.KeyConstant, scancode:LK.Scancode, i
 					)
 				)
 
-				triggerBeginEvent(state, slider, "", 0)
+				triggerBeginEvent(state, slider, "", 0, alsoEnsureEnabled=true)
 				slider.value = math.clamp(
 					slider.value + delta * (key == "left" ? -1 : 1),
 					applyLimitMultiplier(slider, slider.min),
@@ -615,7 +620,7 @@ export onKeyPressed :: (state:State, key:LK.KeyConstant, scancode:LK.Scancode, i
 					: ((mod == .S) ? 7.5 : (mod == .C) ? .5 : 2) / 100
 				)
 
-				triggerBeginEvent(state, colorEl, "", component)
+				triggerBeginEvent(state, colorEl, "", component, alsoEnsureEnabled=true)
 				colorEl.color[component] = math.clamp01(key == "left" ? colorEl.color[component]-delta : colorEl.color[component]+delta)
 				triggerActionEvent(state, colorEl, "", component, alsoEnd=true)
 
@@ -681,7 +686,7 @@ export onMousePressed :: (state:State, mx,my:int, mbutton:int, presses:int) -> (
 					handled = triggerDoublePressEvent(state, buttons, buttons.buttons[state.hoveredSubid].name, state.hoveredSubid)
 				}
 				if not handled {
-					triggerBeginEvent (state, buttons, buttons.buttons[state.hoveredSubid].name, state.hoveredSubid)
+					triggerBeginEvent (state, buttons, buttons.buttons[state.hoveredSubid].name, state.hoveredSubid, alsoEnsureEnabled=true)
 					triggerActionEvent(state, buttons, buttons.buttons[state.hoveredSubid].name, state.hoveredSubid, alsoEnd=true)
 				}
 
@@ -866,7 +871,7 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int, begin=false, end=fals
 				if slider.isInt  value = math.round(value)
 
 				-- Update stored value.
-				if begin  triggerBeginEvent(state, slider, "", 0)
+				if begin  triggerBeginEvent(state, slider, "", 0, alsoEnsureEnabled=true)
 				if value ~= slider.value {
 					slider.value = value
 					triggerActionEvent(state, slider, "", 0)
@@ -879,7 +884,7 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int, begin=false, end=fals
 						local other = cast(Slider) state.elementsByName[it]
 
 						if other ~= NULL and other ~= slider and other.type == Slider and isElementVisible(other) {
-							if begin  triggerBeginEvent(state, other, "", 0)
+							if begin  triggerBeginEvent(state, other, "", 0, alsoEnsureEnabled=true)
 							if other.value ~= value {
 								other.value = value
 								triggerActionEvent(state, other, "", 0)
@@ -902,7 +907,7 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int, begin=false, end=fals
 
 			value = math.clamp01(value)
 
-			if begin  triggerBeginEvent(state, colorEl, "", component)
+			if begin  triggerBeginEvent(state, colorEl, "", component, alsoEnsureEnabled=true)
 			if value ~= colorEl.color[component] {
 				colorEl.color[component] = value
 				triggerActionEvent(state, colorEl, "", component)
@@ -914,7 +919,7 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int, begin=false, end=fals
 					local other = cast(Color) state.elementsByName[it]
 
 					if other ~= NULL and other ~= colorEl and other.type == Color and isElementVisible(other) {
-						if begin  triggerBeginEvent(state, other, "", component)
+						if begin  triggerBeginEvent(state, other, "", component, alsoEnsureEnabled=true)
 						if other.color[component] ~= value {
 							other.color[component] = value
 							triggerActionEvent(state, other, "", component)
@@ -946,7 +951,7 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int, begin=false, end=fals
 				}
 			}
 
-			if begin  triggerBeginEvent(state, direction, "", 0)
+			if begin  triggerBeginEvent(state, direction, "", 0, alsoEnsureEnabled=true)
 			if angle ~= direction.angle {
 				direction.angle = angle
 				triggerActionEvent(state, direction, "", 0)
@@ -958,7 +963,7 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int, begin=false, end=fals
 					local other = cast(Direction) state.elementsByName[it]
 
 					if other ~= NULL and other ~= direction and other.type == Direction and isElementVisible(other) {
-						if begin  triggerBeginEvent(state, other, "", 0)
+						if begin  triggerBeginEvent(state, other, "", 0, alsoEnsureEnabled=true)
 						if other.angle ~= angle {
 							other.angle = angle
 							triggerActionEvent(state, other, "", 0)
@@ -1061,7 +1066,7 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int) {
 			case Buttons:
 				if state.hoveredId and not state.activeDragging {
 					local buttons = cast(Buttons) widget
-					triggerBeginEvent (state, buttons, buttons.buttons[state.activeSubid].name, state.activeSubid)
+					triggerBeginEvent (state, buttons, buttons.buttons[state.activeSubid].name, state.activeSubid, alsoEnsureEnabled=false)
 					triggerActionEvent(state, buttons, buttons.buttons[state.activeSubid].name, state.activeSubid, alsoEnd=true)
 				}
 
@@ -1072,7 +1077,7 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int) {
 					if triggerBeforeActionEvent(state, radio, radio.buttons[state.activeSubid].name, state.activeSubid) {
 						-- void
 					} elseif radio.index ~= state.hoveredSubid {
-						triggerBeginEvent (state, radio, radio.buttons[state.activeSubid].name, state.activeSubid)
+						triggerBeginEvent (state, radio, radio.buttons[state.activeSubid].name, state.activeSubid, alsoEnsureEnabled=false)
 						radio.index = state.hoveredSubid
 						triggerActionEvent(state, radio, radio.buttons[state.activeSubid].name, state.activeSubid, alsoEnd=true)
 					}
@@ -1085,10 +1090,10 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int) {
 					if triggerBeforeActionEvent(state, tabs, tabs.buttons[state.activeSubid].name, state.activeSubid) {
 						-- void
 					} elseif tabs.specialLastTab and state.hoveredSubid == #tabs.buttons {
-						triggerBeginEvent (state, tabs, tabs.buttons[state.activeSubid].name, state.activeSubid)
+						triggerBeginEvent (state, tabs, tabs.buttons[state.activeSubid].name, state.activeSubid, alsoEnsureEnabled=false)
 						triggerActionEvent(state, tabs, tabs.buttons[state.activeSubid].name, state.activeSubid, alsoEnd=true)
 					} elseif tabs.index ~= state.hoveredSubid {
-						triggerBeginEvent (state, tabs, tabs.buttons[state.activeSubid].name, state.activeSubid)
+						triggerBeginEvent (state, tabs, tabs.buttons[state.activeSubid].name, state.activeSubid, alsoEnsureEnabled=false)
 						tabs.index = state.hoveredSubid
 						triggerActionEvent(state, tabs, tabs.buttons[state.activeSubid].name, state.activeSubid, alsoEnd=true)
 					}
@@ -1098,7 +1103,7 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int) {
 				if state.hoveredId {
 					local checkbox = cast(Checkbox) widget
 
-					triggerBeginEvent(state, checkbox, "", 0)
+					triggerBeginEvent(state, checkbox, "", 0, alsoEnsureEnabled=false)
 					checkbox.checked = not checkbox.checked
 					triggerActionEvent(state, checkbox, "", 0, alsoEnd=true)
 				}
@@ -1152,49 +1157,81 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int) {
 			if widget.type == {
 				case Direction:
 					local direction = cast(Direction) widget
+					local items: []string
 
-					state.showContextMenuWithInput!(toString(direction.angle*360/math.TAU), {"Copy angle","Paste angle"},
-						[state,direction] (i:int) {
-							if i == {
-								case 1:
-									clipboardAngle    = direction.angle
-									hasClipboardAngle = true
+					if direction.canDisable  insert(items, (direction.enabled ? "Disable" : "Enable"))
+					local iToggle = direction.canDisable ? #items : -1
 
-								case 2:
-									if not hasClipboardAngle  return
+					insert(items, "Copy angle")
+					local iCopy = #items
 
-									triggerBeginEvent(state, direction, "", 0)
-									direction.angle = clipboardAngle
-									triggerActionEvent(state, direction, "", 0, alsoEnd=true)
+					insert(items, "Paste angle")
+					local iPaste = #items
+
+					state.showContextMenuWithInput!(toString(direction.angle*360/math.TAU), items,
+						[*] (i:int) {
+							if i == iToggle {
+								direction.enabled = not direction.enabled
+								triggerToggleEvent(state, direction, "", 0)
+
+							} elseif i == iCopy {
+								clipboardAngle    = direction.angle
+								hasClipboardAngle = true
+
+							} elseif i == iPaste {
+								if not hasClipboardAngle  return
+
+								triggerBeginEvent(state, direction, "", 0, alsoEnsureEnabled=true)
+								direction.angle = clipboardAngle
+								triggerActionEvent(state, direction, "", 0, alsoEnd=true)
 							}
 						},
-						[state,direction] (text:string) {
+						[*] (text:string) {
 							commitValueFromInput(state, direction, text)
 						}
 					)
 
 				case Slider:
 					local slider = cast(Slider) widget
+					local items: []string
 
-					state.showContextMenuWithInput!(toString(slider.value*slider.readoutMulti), {"Copy value","Paste value"--[[,"Reset value"@Incomplete]],"Reset min/max limits"},
-						[state,slider] (i:int) {
-							if i == {
-								case 1:
-									clipboardScalar    = slider.value
-									hasClipboardScalar = true
+					if slider.canDisable  insert(items, (slider.enabled ? "Disable" : "Enable"))
+					local iToggle = slider.canDisable ? #items : -1
 
-								case 2:
-									if not hasClipboardScalar  return
+					insert(items, "Copy value")
+					local iCopy = #items
 
-									triggerBeginEvent(state, slider, "", 0)
-									slider.value = clipboardScalar
-									triggerActionEvent(state, slider, "", 0, alsoEnd=true)
+					insert(items, "Paste value")
+					local iPaste = #items
 
-								case 3:
-									forgetLimitMultiplier(slider)
+					-- insert(items, "Reset value") -- @Incomplete
+					-- local iReset = #items
+
+					insert(items, "Reset min/max limits")
+					local iResetLimits = #items
+
+					state.showContextMenuWithInput!(toString(slider.value*slider.readoutMulti), items,
+						[*] (i:int) {
+							if i == iToggle {
+								slider.enabled = not slider.enabled
+								triggerToggleEvent(state, slider, "", 0)
+
+							} elseif i == iCopy {
+								clipboardScalar    = slider.value
+								hasClipboardScalar = true
+
+							} elseif i == iPaste {
+								if not hasClipboardScalar  return
+
+								triggerBeginEvent(state, slider, "", 0, alsoEnsureEnabled=true)
+								slider.value = clipboardScalar
+								triggerActionEvent(state, slider, "", 0, alsoEnd=true)
+
+							} elseif i == iResetLimits {
+								forgetLimitMultiplier(slider)
 							}
 						},
-						[state,slider] (text:string) {
+						[*] (text:string) {
 							commitValueFromInput(state, slider, text)
 						}
 					)
@@ -1211,11 +1248,12 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int) {
 					local component = state.hoveredSubid
 					local valueStr  = toString(colorEl.color[component] * (component == 1 ? 360 : 100))
 
+					-- @Incomplete: Handle canDisable.
 					local items = {
-						"Copy "..COMPONENT_TITLES[component],
-						"Copy color",
-						"Paste "..COMPONENT_TITLES[component],
-						"Paste color",
+						[1] = "Copy "..COMPONENT_TITLES[component],
+						[2] = "Copy color",
+						[3] = "Paste "..COMPONENT_TITLES[component],
+						[4] = "Paste color",
 					}
 
 					state.showContextMenuWithInput!(valueStr, items,
@@ -1232,7 +1270,7 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int) {
 								case 3:
 									if not hasClipboardScalar  return
 
-									triggerBeginEvent(state, colorEl, "", component)
+									triggerBeginEvent(state, colorEl, "", component, alsoEnsureEnabled=true)
 									colorEl.color[component] = clipboardScalar
 									triggerActionEvent(state, colorEl, "", component, alsoEnd=true)
 
@@ -1240,7 +1278,7 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int) {
 									if not hasClipboardColor  return
 
 									for 1, 4 {
-										triggerBeginEvent(state, colorEl, "", it)
+										triggerBeginEvent(state, colorEl, "", it, alsoEnsureEnabled=true)
 										colorEl.color[it] = clipboardColor[it]
 										triggerActionEvent(state, colorEl, "", it, alsoEnd=true)
 									}
@@ -1743,16 +1781,17 @@ local drawElement :: (state:State, el:Element) {
 	}
 
 	if el.labelLeft {
-		local textY: int = NULL
+		local opacity = (el.enabled ? 1 : DISABLED_OPACITY)
+		local textY: int
 
 		if el.labelLeftAlign == {
 			case .TOP:    textY = el.layoutY
-			case .BOTTOM: textY = el.layoutY + el.layoutHeight - fontSmall.getHeight!()
+			case .BOTTOM: textY = el.layoutY + (el.layoutHeight - fontSmall.getHeight!())
 			case:         textY = el.layoutY + (el.layoutHeight - fontSmall.getHeight!()) // 2
 		}
 
 		LG.setFont(fontSmall)
-		LG.setColor(1, 1, 1, TEXT_OPACITY)
+		LG.setColor(1, 1, 1, TEXT_OPACITY*opacity)
 		LG.print(el.labelLeft, el.layoutX-SPACING-fontSmall.getWidth!(el.labelLeft), textY)
 		LG.setFont(fontNormal)
 	}
@@ -2225,6 +2264,7 @@ local drawElement :: (state:State, el:Element) {
 			local handleX = x1 + math.round(value01 * w)
 			local y       = slider.layoutY + slider.layoutHeight // 2
 
+			local opacity   = slider.enabled ? 1 : DISABLED_OPACITY
 			local highlight = shouldHighlight(state, slider)
 
 			local showLimits = (
@@ -2234,11 +2274,11 @@ local drawElement :: (state:State, el:Element) {
 			)
 
 			-- Line/background.
-			LG.setColor(1, 1, 1, (highlight ? .2 : .1))
+			LG.setColor(1, 1, 1, (highlight ? .2 : .1)*opacity)
 			LG.rectangle(LG.DrawMode.FILL, x1, y-1, w, 2)
 
 			-- Guides.
-			LG.setColor(1, 1, 1, .12)
+			LG.setColor(1, 1, 1, .12*opacity)
 			LG.rectangle(LG.DrawMode.FILL, x1, y-3, +1, 6)
 			LG.rectangle(LG.DrawMode.FILL, x2, y-3, -1, 6)
 			if w >= 50 {
@@ -2255,7 +2295,7 @@ local drawElement :: (state:State, el:Element) {
 
 			-- Handle.
 			local grey = (highlight ? .8 : .65)
-			LG.setColor(grey, grey, grey)
+			LG.setColor(grey, grey, grey, opacity)
 			LG.rectangle(LG.DrawMode.FILL, handleX-1, y-SLIDER_MIN_WIDTH/2, 2, SLIDER_MIN_WIDTH)
 
 			-- Readout.
@@ -2270,16 +2310,16 @@ local drawElement :: (state:State, el:Element) {
 				local textY   = y  - fontSmall.getHeight!() // 2 - 1
 
 				LG.setFont(fontSmall)
-				LG.setColor(COLOR_SHADOW)
+				LG.setColor(COLOR_SHADOW[1], COLOR_SHADOW[2], COLOR_SHADOW[3], COLOR_SHADOW[4]*opacity)
 				LG.print(textMin, textX1+1, textY+1)
 				LG.print(textMax, textX2+1, textY+1)
-				LG.setColor(COLOR_TEXT)
+				LG.setColor(COLOR_TEXT[1], COLOR_TEXT[2], COLOR_TEXT[3], COLOR_TEXT[4]*opacity)
 				LG.print(textMin, textX1, textY)
 				LG.print(textMax, textX2, textY)
 				LG.setFont(fontNormal)
 
 			} elseif app.showPanelNumbers {
-				drawSliderReadout(x2, y-SLIDER_MIN_WIDTH//2, SLIDER_MIN_WIDTH, handleX, slider.value, slider.readoutMulti, slider.readout, slider.readoutZero, COLOR_TEXT, COLOR_SHADOW)
+				drawSliderReadout(x2, y-SLIDER_MIN_WIDTH//2, SLIDER_MIN_WIDTH, handleX, slider.value, slider.readoutMulti, slider.readout, slider.readoutZero, COLOR_TEXT, COLOR_SHADOW, opacity)
 			}
 
 		case Color:
@@ -2290,7 +2330,7 @@ local drawElement :: (state:State, el:Element) {
 				if app.showPanelNumbers {
 					local COLOR_TEXT:   love.Color: {1,1,1,1}
 					local COLOR_SHADOW: love.Color: {0,0,0,1}
-					drawSliderReadout(sliderX+sliderW, sliderY, sliderH, x, readout, 1, readoutFormat, "", COLOR_TEXT, COLOR_SHADOW)
+					drawSliderReadout(sliderX+sliderW, sliderY, sliderH, x, readout, 1, readoutFormat, "", COLOR_TEXT, COLOR_SHADOW, 1) -- @Incomplete: Opacity. asdf
 				}
 
 				LG.setColor(0, 0, 0, a)
@@ -2315,6 +2355,7 @@ local drawElement :: (state:State, el:Element) {
 			local value      = colorEl.color[3]
 			local a          = colorEl.color[4]
 
+			local opacity    = colorEl.enabled ? 1 : DISABLED_OPACITY
 			local highlight  = shouldHighlight(state, colorEl) ? math.max(state.activeSubid, state.hoveredSubid) : 0
 
 			local iw, ih     = imageRainbow.getDimensions!()
@@ -2402,18 +2443,19 @@ local drawElement :: (state:State, el:Element) {
 
 			local angle = direction.angle
 
+			local opacity   = direction.enabled ? 1 : DISABLED_OPACITY
 			local highlight = shouldHighlight(state, direction)
 
 			-- Background.
-			LG.setColor(0, 0, 0, .4)
+			LG.setColor(0, 0, 0, .4*opacity)
 			LG.circle(LG.DrawMode.FILL, x, y, r)
 
 			-- Spread.
 			if direction.linkSpread {
 				local other = cast(Slider) state.elementsByName[direction.linkSpread]
 
-				if other ~= NULL and other.type == Slider and other.value ~= 0 and isElementVisible(other) {
-					LG.setColor(1, 1, 1, .25)
+				if other ~= NULL and other.type == Slider and other.value ~= 0 and isElementVisible(other) and other.enabled {
+					LG.setColor(1, 1, 1, .25*opacity)
 					LG.arc(LG.DrawMode.FILL, x, y, .8*r, angle-other.value/2, angle+other.value/2, 32)
 				}
 
@@ -2421,13 +2463,13 @@ local drawElement :: (state:State, el:Element) {
 				local other = cast(Direction) state.elementsByName[direction.linkOther]
 
 				if other ~= NULL and other.type == Direction and other.angle ~= angle and isElementVisible(other) {
-					LG.setColor(1, 1, 1, .25)
+					LG.setColor(1, 1, 1, .25*opacity)
 					LG.arc(LG.DrawMode.FILL, x, y, .8*r, angle, other.angle, 32)
 				}
 			}
 
 			-- Guides.
-			LG.setColor(1, 1, 1, .08)
+			LG.setColor(1, 1, 1, .08*opacity)
 			LG.line(x-r+1, y, x+r-1, y)
 			LG.line(x, y-r+1, x, y+r-1)
 			LG.line(x-.3*r, y-.3*r, x+.3*r, y+.3*r)
@@ -2435,12 +2477,12 @@ local drawElement :: (state:State, el:Element) {
 
 			-- Outline.
 			if highlight {
-				LG.setColor(1, 1, 1, HOVER_OUTLINE_OPACITY)
+				LG.setColor(1, 1, 1, HOVER_OUTLINE_OPACITY*opacity)
 				LG.circle(LG.DrawMode.LINE, x, y, r+.5)
 			}
 
 			-- Value.
-			LG.setColor(1, 1, 1)
+			LG.setColor(1, 1, 1, opacity)
 			LG.line(x, y, x+r*math.cos(angle), y+r*math.sin(angle))
 
 			-- Readout.
@@ -2449,9 +2491,9 @@ local drawElement :: (state:State, el:Element) {
 				local textX = x - fontSmall.getWidth!(text) // 2
 				local textY = (angle % math.TAU < math.PI) ? direction.layoutY+5 : direction.layoutY+2*r-5-fontSmall.getHeight!()
 				LG.setFont(fontSmall)
-				LG.setColor(0, 0, 0, TEXT_OPACITY)
+				LG.setColor(0, 0, 0, TEXT_OPACITY*opacity)
 				LG.print(text, textX+1, textY+1)
-				LG.setColor(1, 1, 1, TEXT_OPACITY)
+				LG.setColor(1, 1, 1, TEXT_OPACITY*opacity)
 				LG.print(text, textX, textY)
 				LG.setFont(fontNormal)
 			}
@@ -2835,22 +2877,27 @@ local triggerSubmitEvent :: (state:State, el:Element) {
 }
 
 local triggerBeforeActionEvent :: (state:State, widget:Widget, name:string, subid:int) -> (ignore:bool) {
-	local cb = cast((widget:Widget, i:int) -> (ignore:bool)) state.onBeforeAction[name ?: widget.name]
+	local cb = cast((widget:Widget, subid:int) -> (ignore:bool)) state.onBeforeAction[name ?: widget.name]
 	if cb == NULL  return false
 
 	return cb(widget, subid)
 }
-local triggerBeginEvent :: (state:State, widget:Widget, name:string, subid:int) {
+local triggerBeginEvent :: (state:State, widget:Widget, name:string, subid:int, alsoEnsureEnabled=false) {
 	-- printf("GuiEvent: Begin  '%s'", (name ?: widget.name)) -- DEBUG
-	local cb = cast((widget:Widget, i:int)) state.onBegin[name ?: widget.name]
-	if cb == NULL  return
 
-	cb(widget, subid)
+	local cb = cast((widget:Widget, subid:int)) state.onBegin[name ?: widget.name]
+	if cb ~= NULL  cb(widget, subid)
+
+	-- @Robustness: Can we ensure enabled before onBegin without messing up undo history recording?
+	if alsoEnsureEnabled and not widget.enabled {
+		widget.enabled = true
+		triggerToggleEvent(state, widget, name, subid)
+	}
 }
 local triggerActionEvent :: (state:State, widget:Widget, name:string, subid:int, alsoEnd=false) {
 	-- printf("GuiEvent: Action '%s'", (name ?: widget.name)) -- DEBUG
 
-	local cb = cast((widget:Widget, i:int)) state.onAction[name ?: widget.name]
+	local cb = cast((widget:Widget, subid:int)) state.onAction[name ?: widget.name]
 	if cb ~= NULL  cb(widget, subid)
 
 	if alsoEnd {
@@ -2860,7 +2907,7 @@ local triggerActionEvent :: (state:State, widget:Widget, name:string, subid:int,
 }
 local triggerEndEvent :: (state:State, widget:Widget, name:string, subid:int) {
 	-- printf("GuiEvent: End    '%s'", (name ?: widget.name)) -- DEBUG
-	local cb = cast((widget:Widget, i:int)) state.onEnd[name ?: widget.name]
+	local cb = cast((widget:Widget, subid:int)) state.onEnd[name ?: widget.name]
 	if cb == NULL  return
 
 	cb(widget, subid)
@@ -2868,7 +2915,7 @@ local triggerEndEvent :: (state:State, widget:Widget, name:string, subid:int) {
 }
 
 local triggerDoublePressEvent :: (state:State, widget:Widget, name:string, subid:int) -> (handled:bool) {
-	local cb = cast((widget:Widget, i:int)) state.onDouble[name ?: widget.name]
+	local cb = cast((widget:Widget, subid:int)) state.onDouble[name ?: widget.name]
 	if cb == NULL  return false
 
 	cb(widget, subid)
@@ -2877,7 +2924,7 @@ local triggerDoublePressEvent :: (state:State, widget:Widget, name:string, subid
 }
 
 local triggerOptionEvent :: (state:State, widget:Widget, name:string, subid:int) -> (handled:bool) {
-	local cb = cast((widget:Widget, i:int)) state.onOption[name ?: widget.name]
+	local cb = cast((widget:Widget, subid:int)) state.onOption[name ?: widget.name]
 	if cb == NULL  return false
 
 	cb(widget, subid)
@@ -2885,7 +2932,7 @@ local triggerOptionEvent :: (state:State, widget:Widget, name:string, subid:int)
 }
 
 local triggerCloseEvent :: (state:State, widget:Widget, name:string, subid:int) {
-	local cb = cast((widget:Widget, i:int)) state.onClose[name ?: widget.name]
+	local cb = cast((widget:Widget, subid:int)) state.onClose[name ?: widget.name]
 	if cb == NULL  return
 
 	cb(widget, subid)
@@ -2893,29 +2940,37 @@ local triggerCloseEvent :: (state:State, widget:Widget, name:string, subid:int) 
 }
 
 local triggerDragBeginEvent :: (state:State, widget:Widget, name:string, subid:int) {
-	local cb = cast((widget:Widget, i:int)) state.onDragBegin[name ?: widget.name]
+	local cb = cast((widget:Widget, subid:int)) state.onDragBegin[name ?: widget.name]
 	if cb == NULL  return
 
 	cb(widget, subid)
 }
 local triggerDragEvent :: (state:State, widget:Widget, name:string, subid:int, mx,my:int) {
-	local cb = cast((widget:Widget, i:int, mx,my:int)) state.onDrag[name ?: widget.name]
+	local cb = cast((widget:Widget, subid:int, mx,my:int)) state.onDrag[name ?: widget.name]
 	if cb == NULL  return
 
 	cb(widget, subid, mx, my)
 }
 local triggerDragEndEvent :: (state:State, widget:Widget, name:string, subid:int) {
-	local cb = cast((widget:Widget, i:int)) state.onDragEnd[name ?: widget.name]
+	local cb = cast((widget:Widget, subid:int)) state.onDragEnd[name ?: widget.name]
 	if cb == NULL  return
 
 	cb(widget, subid)
 }
 
 local triggerMouseEnterEvent :: (state:State, widget:Widget, name:string, subid:int) {
-	local cb = cast((widget:Widget, i:int)) state.onMouseEnter[name ?: widget.name]
+	local cb = cast((widget:Widget, subid:int)) state.onMouseEnter[name ?: widget.name]
 	if cb == NULL  return
 
 	cb(widget, subid)
+}
+
+local triggerToggleEvent :: (state:State, widget:Widget, name:string, subid:int) {
+	local cb = cast((widget:Widget, subid:int)) state.onToggle[name ?: widget.name]
+	if cb == NULL  return
+
+	cb(widget, subid)
+	scheduleSaveWorkspace()
 }
 
 
@@ -3019,7 +3074,7 @@ export blurFocus :: (state:State, abort=false) {
 	} elseif abort {
 		input.field.setText!(input.value)
 	} else {
-		triggerBeginEvent(state, input, "", 0)
+		triggerBeginEvent(state, input, "", 0, alsoEnsureEnabled=false)
 		input.value = input.field.getText!()
 		triggerActionEvent(state, input, "", 0, alsoEnd=true)
 	}
@@ -3057,7 +3112,7 @@ export pressButton :: (state:State, buttonsElementName:string, i:int) {
 		return
 	}
 
-	triggerBeginEvent (state, buttons, button.name, i)
+	triggerBeginEvent (state, buttons, button.name, i, alsoEnsureEnabled=false)
 	triggerActionEvent(state, buttons, button.name, i, alsoEnd=true)
 }
 
@@ -3317,7 +3372,7 @@ local intersectScissor :: (x,y,w,h:int) {
 
 
 
-local drawSliderReadout :: (rightX:int, topY:int, height:int, handleX:int, value:float, valueMultiplierForFormat:float, formatString:string, formatStringIfZero:string, colorText,colorShadow:love.Color) {
+local drawSliderReadout :: (rightX:int, topY:int, height:int, handleX:int, value:float, valueMultiplierForFormat:float, formatString:string, formatStringIfZero:string, colorText,colorShadow:love.Color, opacity:float) {
 	if value == 0 and formatStringIfZero  formatString = formatStringIfZero
 
 	if not formatString  return
@@ -3331,9 +3386,9 @@ local drawSliderReadout :: (rightX:int, topY:int, height:int, handleX:int, value
 	if textX < handleX+MIN_DIST_TO_HANDLE  textX = handleX-MIN_DIST_TO_HANDLE - textW
 
 	LG.setFont(fontSmall)
-	LG.setColor(colorShadow)
+	LG.setColor(colorShadow[1], colorShadow[2], colorShadow[3], colorShadow[4]*opacity)
 	LG.print(text, textX+1, textY+1)
-	LG.setColor(colorText)
+	LG.setColor(colorText[1], colorText[2], colorText[3], colorText[4]*opacity)
 	LG.print(text, textX, textY)
 	LG.setFont(fontNormal)
 }
@@ -3399,7 +3454,7 @@ local commitValueFromInput :: (state:State, slider:Slider, text:string) {
 
 	if n == slider.value  return
 
-	triggerBeginEvent(state, slider, "", 0)
+	triggerBeginEvent(state, slider, "", 0, alsoEnsureEnabled=false)
 	slider.value = n
 	triggerActionEvent(state, slider, "", 0, alsoEnd=true)
 }
@@ -3412,7 +3467,7 @@ local commitValueFromInput :: (state:State, direction:Direction, text:string) {
 
 	if angle == direction.angle  return
 
-	triggerBeginEvent(state, direction, "", 0)
+	triggerBeginEvent(state, direction, "", 0, alsoEnsureEnabled=false)
 	direction.angle = angle
 	triggerActionEvent(state, direction, "", 0, alsoEnd=true)
 }
@@ -3426,7 +3481,7 @@ local commitValueFromInput :: (state:State, colorEl:Color, component:int, text:s
 
 	if value == colorEl.color[component]  return
 
-	triggerBeginEvent(state, colorEl, "", component)
+	triggerBeginEvent(state, colorEl, "", component, alsoEnsureEnabled=false)
 	colorEl.color[component] = value
 	triggerActionEvent(state, colorEl, "", component, alsoEnd=true)
 }
