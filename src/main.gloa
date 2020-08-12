@@ -414,12 +414,17 @@ export System :: struct {
 
 	shaderPath = "",
 
-	scaleTime  = 1.0,
-	scaleSpace = 1.0,
-	scaleSize  = 1.0,
+	scaleTimeEnabled  = true,
+	scaleTime         = 1.0,
+	scaleSpaceEnabled = true,
+	scaleSpace        = 1.0,
+	scaleSizeEnabled  = true,
+	scaleSize         = 1.0,
 
-	kickStartEmit  = 0,
-	kickStartSteps = 0,
+	kickStartEmitEnabled  = true,
+	kickStartEmit         = 0,
+	kickStartStepsEnabled = true,
+	kickStartSteps        = 0,
 
 	title      = "",
 	customData = "",
@@ -505,10 +510,15 @@ export System :: struct {
 			offsetX                         = source.offsetX,
 			offsetY                         = source.offsetY,
 			shaderPath                      = source.shaderPath,
+			scaleTimeEnabled                = source.scaleTimeEnabled,
 			scaleTime                       = source.scaleTime,
+			scaleSpaceEnabled               = source.scaleSpaceEnabled,
 			scaleSpace                      = source.scaleSpace,
+			scaleSizeEnabled                = source.scaleSizeEnabled,
 			scaleSize                       = source.scaleSize,
+			kickStartEmitEnabled            = source.kickStartEmitEnabled,
 			kickStartEmit                   = source.kickStartEmit,
+			kickStartStepsEnabled           = source.kickStartStepsEnabled,
 			kickStartSteps                  = source.kickStartSteps,
 			title                           = source.title,
 			customData                      = source.customData,
@@ -552,9 +562,9 @@ export updateParticles :: (project:Project, system:System) {
 export updateParticleParams :: (project:Project, s:System) {
 	local ps = s.particles
 
-	local time  = s.scaleTime  * project.scaleGlobalTime
-	local space = s.scaleSpace * project.scaleGlobalSpace
-	local size  = s.scaleSize  * project.scaleGlobalSize
+	local time  = (s.scaleTimeEnabled  ? s.scaleTime  : 1) * project.scaleGlobalTime
+	local space = (s.scaleSpaceEnabled ? s.scaleSpace : 1) * project.scaleGlobalSpace
+	local size  = (s.scaleSizeEnabled  ? s.scaleSize  : 1) * project.scaleGlobalSize
 	local time2 = time ^ 2
 
 	local sizes: []float
@@ -1612,12 +1622,12 @@ local onUpdate :: (dt:float) {
 
 				-- Note: Kick-starting may make things look a bit weird if the
 				-- emitter has a too short lifetime compared to the particles.
-				if system.kickStartSteps {
+				if system.kickStartStepsEnabled and system.kickStartSteps {
 					local kickStartDt = getKickStartDt(system)
 					for i = 1, system.kickStartSteps  system.particles.update!(kickStartDt)
 				}
 
-				system.particles.emit!(system.kickStartEmit)
+				system.particles.emit!(system.kickStartEmitEnabled ? system.kickStartEmit : 0)
 			}
 		}
 	}
@@ -2828,7 +2838,7 @@ export getOptimalBufferSize :: (system:System, moreExact=false) -> int {
 	local emitterLifetime  = ps.getEmitterLifetime!()            -- s
 	local rate             = ps.getEmissionRate!()               -- n/s
 	local relevantTime     = emitterLifetime < 0 ? particleLifetime : math.min(particleLifetime, emitterLifetime)
-	local bufferSize       = math.ceil(system.kickStartEmit + rate * relevantTime * (moreExact ? 1 : 1.05)) -- n/s * s  =  n
+	local bufferSize       = math.ceil((system.kickStartEmitEnabled ? system.kickStartEmit : 0) + rate * relevantTime * (moreExact ? 1 : 1.05)) -- n/s * s  =  n
 	return math.min(bufferSize, app.maxBufferSize)
 }
 
@@ -2850,7 +2860,7 @@ export getCurrentProjectAndSystem :: () -> Project, System {
 
 
 export getKickStartDt :: (system:System) -> float {
-	if not system.kickStartSteps  return 0
+	if not (system.kickStartStepsEnabled and system.kickStartSteps)  return 0
 
 	local ps = system.particles
 	return (
@@ -2927,7 +2937,7 @@ export undo :: () {
 	}
 
 	reverseArray(labels)
-	setActionText("Undo: "..concatinate(labels, ", "), clearMessage=false)
+	setActionText("Undo:  "..concatinate(labels, ", "), clearMessage=false)
 
 	markEdited(project)
 	guiState.refreshRecursively!("undoRedoText")
@@ -2959,7 +2969,7 @@ export redo :: () {
 
 	project.changeIndex += 1
 
-	setActionText("Redo: "..concatinate(labels, ", "), clearMessage=false)
+	setActionText("Redo:  "..concatinate(labels, ", "), clearMessage=false)
 
 	markEdited(project)
 	guiState.refreshRecursively!("undoRedoText")

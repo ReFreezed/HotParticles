@@ -133,9 +133,9 @@ export setupGuiFrames :: () {
 					guiState.separator!({ thick=true }),
 
 					guiState.section!({ name="scaleAllSection", label="ScaleAll", tooltip="Scale all parameters in this system", icon16="scale",
-						guiState.slider!({ name="scaleTime",  labelLeft="time",  min=0, max=4, exponential=true, limitName="scaleTime",  readoutMulti=100, readout="%d%%" }),
-						guiState.slider!({ name="scaleSpace", labelLeft="space", min=0, max=4, exponential=true, limitName="scaleSpace", readoutMulti=100, readout="%d%%", linkMultiDrag={"scaleSize"} }),
-						guiState.slider!({ name="scaleSize",  labelLeft="size",  min=0, max=4, exponential=true, limitName="scaleSize",  readoutMulti=100, readout="%d%%", linkMultiDrag={"scaleSpace"} }),
+						guiState.slider!({ name="scaleTime",  labelLeft="time",  canDisable=true, min=0, max=4, exponential=true, limitName="scaleTime",  readoutMulti=100, readout="%d%%" }),
+						guiState.slider!({ name="scaleSpace", labelLeft="space", canDisable=true, min=0, max=4, exponential=true, limitName="scaleSpace", readoutMulti=100, readout="%d%%", linkMultiDrag={"scaleSize"} }),
+						guiState.slider!({ name="scaleSize",  labelLeft="size",  canDisable=true, min=0, max=4, exponential=true, limitName="scaleSize",  readoutMulti=100, readout="%d%%", linkMultiDrag={"scaleSpace"} }),
 					}),
 
 					guiState.separator!({ thick=true }),
@@ -146,9 +146,9 @@ export setupGuiFrames :: () {
 							{value=LG.ParticleInsertMode.BOTTOM, label="back",   tooltip="Insert at bottom"},
 							{value=LG.ParticleInsertMode.RANDOM, label="random", tooltip="Insert randomly"},
 						}}),
-						guiState.slider!({ name="emissionRate",   labelLeft="rate",             min=0, max=512,  exponential=true,             limitName="emissionRate",   readout="%.1f / sec" }),
-						guiState.slider!({ name="kickStartEmit",  labelLeft="emit at start",    min=0, max=1024, exponential=true, isInt=true, limitName="kickStartEmit",  readout="%.0f" }),
-						guiState.slider!({ name="kickStartSteps", labelLeft="kick-start steps", min=0, max=128,  exponential=true, isInt=true, limitName="kickStartSteps", readout="%.0f", readoutZero="no kick-start" }),
+						guiState.slider!({ name="emissionRate",   labelLeft="rate",                              min=0, max=512,  exponential=true,             limitName="emissionRate",   readout="%.1f / sec" }),
+						guiState.slider!({ name="kickStartEmit",  labelLeft="emit at start",    canDisable=true, min=0, max=1024, exponential=true, isInt=true, limitName="kickStartEmit",  readout="%.0f" }),
+						guiState.slider!({ name="kickStartSteps", labelLeft="kick-start steps", canDisable=true, min=0, max=128,  exponential=true, isInt=true, limitName="kickStartSteps", readout="%.0f", readoutZero="no kick-start" }),
 					}),
 
 					guiState.separator!({ thick=true }),
@@ -1416,31 +1416,41 @@ export setupGuiCallbacks :: () {
 		(project:Project, system:System, value:float) {  system.offsetY = value ; updateParticleTextureOffset(system)  }
 	)
 
-	-- Scale all.
-	guiState.onRefresh.scaleTime = (slider:gui.Slider) {
-		local project, system = getCurrentProjectAndSystem()
-		slider.value          = system.scaleTime
+	do {
+		guiState.onRefresh.scaleTime = (slider:gui.Slider) {
+			local project, system = getCurrentProjectAndSystem()
+			slider.enabled        = system.scaleTimeEnabled
+			slider.value          = system.scaleTime
+		}
+		guiState.onRefresh.scaleSpace = (slider:gui.Slider) {
+			local project, system = getCurrentProjectAndSystem()
+			slider.enabled        = system.scaleSpaceEnabled
+			slider.value          = system.scaleSpace
+		}
+		guiState.onRefresh.scaleSize = (slider:gui.Slider) {
+			local project, system = getCurrentProjectAndSystem()
+			slider.enabled        = system.scaleSizeEnabled
+			slider.value          = system.scaleSize
+		}
+		addEventHandlersForSlider(forSystem=true, "scaleTime", "Time scale",
+			(project:Project, system:System, value:float) {  system.scaleTime = value ; updateParticleParams(project, system)  }
+		)
+		addEventHandlersForSlider(forSystem=true, "scaleSpace", "Space scale",
+			(project:Project, system:System, value:float) {  system.scaleSpace = value ; updateParticleParams(project, system)  }
+		)
+		addEventHandlersForSlider(forSystem=true, "scaleSize", "Size scale",
+			(project:Project, system:System, value:float) {  system.scaleSize = value ; updateParticleParams(project, system)  }
+		)
+		addToggleEventHandler(forSystem=true, "scaleTime", "Time scale",
+			onToggle = (project:Project, system:System, enabled:bool) {  system.scaleTimeEnabled = enabled ; updateParticleParams(project, system)  }
+		)
+		addToggleEventHandler(forSystem=true, "scaleSpace", "Space scale",
+			onToggle = (project:Project, system:System, enabled:bool) {  system.scaleSpaceEnabled = enabled ; updateParticleParams(project, system)  }
+		)
+		addToggleEventHandler(forSystem=true, "scaleSize", "Size scale",
+			onToggle = (project:Project, system:System, enabled:bool) {  system.scaleSizeEnabled = enabled ; updateParticleParams(project, system)  }
+		)
 	}
-	addEventHandlersForSlider(forSystem=true, "scaleTime", "Time scale",
-		(project:Project, system:System, value:float) {  system.scaleTime = value ; updateParticleParams(project, system)  }
-	)
-
-	guiState.onRefresh.scaleSpace = (slider:gui.Slider) {
-		local project, system = getCurrentProjectAndSystem()
-		slider.value          = system.scaleSpace
-	}
-	addEventHandlersForSlider(forSystem=true, "scaleSpace", "Space scale",
-		(project:Project, system:System, value:float) {  system.scaleSpace = value ; updateParticleParams(project, system)  }
-	)
-
-	guiState.onRefresh.scaleSize = (slider:gui.Slider) {
-		local project, system = getCurrentProjectAndSystem()
-		slider.value          = system.scaleSize
-	}
-	addEventHandlersForSlider(forSystem=true, "scaleSize", "Size scale",
-		(project:Project, system:System, value:float) {  system.scaleSize = value ; updateParticleParams(project, system)  }
-	)
-	--
 
 	guiState.onRefresh.insertMode = (radio:gui.Radio) {
 		local project, system = getCurrentProjectAndSystem()
@@ -1520,21 +1530,30 @@ export setupGuiCallbacks :: () {
 		(project:Project, system:System, value:float) {  system.psEmissionRate = value ; updateParticleParams(project, system)  }
 	)
 
-	guiState.onRefresh.kickStartEmit = (slider:gui.Slider) {
-		local project, system = getCurrentProjectAndSystem()
-		slider.value          = system.kickStartEmit
+	do {
+		guiState.onRefresh.kickStartEmit = (slider:gui.Slider) {
+			local project, system = getCurrentProjectAndSystem()
+			slider.enabled        = system.kickStartEmitEnabled
+			slider.value          = system.kickStartEmit
+		}
+		guiState.onRefresh.kickStartSteps = (slider:gui.Slider) {
+			local project, system = getCurrentProjectAndSystem()
+			slider.enabled        = system.kickStartStepsEnabled
+			slider.value          = system.kickStartSteps
+		}
+		addEventHandlersForSlider(forSystem=true, "kickStartEmit", "Emit at start",
+			(project:Project, system:System, value:float) {  system.kickStartEmit = math.round(value) ; updateParticleParams(project, system)  }
+		)
+		addEventHandlersForSlider(forSystem=true, "kickStartSteps", "Kick-start steps",
+			(project:Project, system:System, value:float) {  system.kickStartSteps = math.round(value) ; updateParticleParams(project, system)  }
+		)
+		addToggleEventHandler(forSystem=true, "kickStartEmit", "Emit at start",
+			onToggle = (project:Project, system:System, enabled:bool) {  system.kickStartEmitEnabled = enabled --[[; updateParticleParams(project, system)]]  }
+		)
+		addToggleEventHandler(forSystem=true, "kickStartSteps", "Kick-start steps",
+			onToggle = (project:Project, system:System, enabled:bool) {  system.kickStartStepsEnabled = enabled --[[; updateParticleParams(project, system)]]  }
+		)
 	}
-	addEventHandlersForSlider(forSystem=true, "kickStartEmit", "Emit at start",
-		(project:Project, system:System, value:float) {  system.kickStartEmit = math.round(value) ; updateParticleParams(project, system)  }
-	)
-
-	guiState.onRefresh.kickStartSteps = (slider:gui.Slider) {
-		local project, system = getCurrentProjectAndSystem()
-		slider.value          = system.kickStartSteps
-	}
-	addEventHandlersForSlider(forSystem=true, "kickStartSteps", "Kick-start steps",
-		(project:Project, system:System, value:float) {  system.kickStartSteps = math.round(value) ; updateParticleParams(project, system)  }
-	)
 
 	-- Area distribution.
 	do {
@@ -3028,11 +3047,11 @@ export setupGuiCallbacks :: () {
 			publicParticleSystem.customData       = system.customData
 			publicParticleSystem.direction        = ps.getDirection!()
 			publicParticleSystem.emissionRate     = ps.getEmissionRate!()
-			publicParticleSystem.emitAtStart      = system.kickStartEmit
+			publicParticleSystem.emitAtStart      = system.kickStartEmitEnabled ? system.kickStartEmit : 0
 			publicParticleSystem.emitterLifetime  = ps.getEmitterLifetime!()
 			publicParticleSystem.insertMode       = ps.getInsertMode!()
 			publicParticleSystem.kickStartDt      = getKickStartDt(system)
-			publicParticleSystem.kickStartSteps   = system.kickStartSteps
+			publicParticleSystem.kickStartSteps   = system.kickStartStepsEnabled ? system.kickStartSteps : 0
 			publicParticleSystem.relativeRotation = ps.hasRelativeRotation!()
 			publicParticleSystem.sizes            = cast([]float) { ps.getSizesAsVararg!() }
 			publicParticleSystem.sizeVariation    = ps.getSizeVariation!()

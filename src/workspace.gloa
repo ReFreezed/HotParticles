@@ -111,7 +111,9 @@ local writeProject :: (buffer:[]string, project:Project, isSavingWorkspace:bool)
 		insert(buffer, "emitterContinuous")             ; writeValue (buffer, eol=true, system.psEmitterContinuous)
 		insert(buffer, "emitterLifetime")               ; writeValue (buffer, eol=true, system.psEmitterLifetime)
 		insert(buffer, "insertMode")                    ; writeValue (buffer, eol=true, cast(string) system.psInsertMode)
+		insert(buffer, "kickStartEmitEnabled")          ; writeValue (buffer, eol=true, system.kickStartEmitEnabled)
 		insert(buffer, "kickStartEmit")                 ; writeValue (buffer, eol=true, system.kickStartEmit)
+		insert(buffer, "kickStartStepsEnabled")         ; writeValue (buffer, eol=true, system.kickStartStepsEnabled)
 		insert(buffer, "kickStartSteps")                ; writeValue (buffer, eol=true, system.kickStartSteps)
 		insert(buffer, "linearDampingEnabled")          ; writeValue (buffer, eol=true, system.psLinearDampingEnabled)
 		insert(buffer, "linearDamping")                 ; writeValues(buffer, eol=true, system.psLinearDampingMin, system.psLinearDampingMax)
@@ -122,8 +124,11 @@ local writeProject :: (buffer:[]string, project:Project, isSavingWorkspace:bool)
 		insert(buffer, "relativeRotation")              ; writeValue (buffer, eol=true, system.psRelativeRotation)
 		insert(buffer, "rotationEnabled")               ; writeValue (buffer, eol=true, system.psRotationEnabled)
 		insert(buffer, "rotation")                      ; writeValues(buffer, eol=true, system.psRotationMin, system.psRotationMax)
+		insert(buffer, "scaleSizeEnabled")              ; writeValue (buffer, eol=true, system.scaleSizeEnabled)
 		insert(buffer, "scaleSize")                     ; writeValue (buffer, eol=true, system.scaleSize)
+		insert(buffer, "scaleSpaceEnabled")             ; writeValue (buffer, eol=true, system.scaleSpaceEnabled)
 		insert(buffer, "scaleSpace")                    ; writeValue (buffer, eol=true, system.scaleSpace)
+		insert(buffer, "scaleTimeEnabled")              ; writeValue (buffer, eol=true, system.scaleTimeEnabled)
 		insert(buffer, "scaleTime")                     ; writeValue (buffer, eol=true, system.scaleTime)
 		insert(buffer, "shaderPath")                    ; writeValue (buffer, eol=true, system.shaderPath)
 		insert(buffer, "sizes")                         ; writeValue (buffer, eol=true, system.psSizes)
@@ -788,8 +793,7 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
 						system.psSizeVariationEnabled = enabled
 					case "sizeVariation":
-						local ^ok, ^ptr, variation = readFloat(version, line, cast(int)ptr)
-						if not ok                 return parsingError(path, ln, "Bad value format: %s", line)
+						local ^ok, ^ptr, variation = readFloat(version, line, cast(int)ptr) ; if not ok return parsingError(path, ln, "Bad value format: %s", line)
 						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
 						system.psSizeVariation = variation
 
@@ -798,53 +802,67 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
 						system.psSpreadEnabled = enabled
 					case "spread":
-						local ^ok, ^ptr, spread = readFloat(version, line, cast(int)ptr)
-						if not ok                 return parsingError(path, ln, "Bad value format: %s", line)
+						local ^ok, ^ptr, spread = readFloat(version, line, cast(int)ptr) ; if not ok return parsingError(path, ln, "Bad value format: %s", line)
 						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
 						system.psSpread = spread
 
+					case "scaleTimeEnabled":
+						local ^ok, ^ptr, enabled = readBool(version, line, cast(int)ptr) ; if not ok return parsingError(path, ln, "Bad value format: %s", line)
+						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
+						system.scaleTimeEnabled = enabled
 					case "scaleTime":
-						local ^ok, ^ptr, scale = readFloat(version, line, cast(int)ptr)
-						if not ok                 return parsingError(path, ln, "Bad value format: %s", line)
+						local ^ok, ^ptr, scale = readFloat(version, line, cast(int)ptr) ; if not ok return parsingError(path, ln, "Bad value format: %s", line)
 						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
 						system.scaleTime = scale
+
+					case "scaleSpaceEnabled":
+						local ^ok, ^ptr, enabled = readBool(version, line, cast(int)ptr) ; if not ok return parsingError(path, ln, "Bad value format: %s", line)
+						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
+						system.scaleSpaceEnabled = enabled
 					case "scaleSpace":
-						local ^ok, ^ptr, scale = readFloat(version, line, cast(int)ptr)
-						if not ok                 return parsingError(path, ln, "Bad value format: %s", line)
+						local ^ok, ^ptr, scale = readFloat(version, line, cast(int)ptr) ; if not ok return parsingError(path, ln, "Bad value format: %s", line)
 						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
 						system.scaleSpace = scale
+
+					case "scaleSizeEnabled":
+						local ^ok, ^ptr, enabled = readBool(version, line, cast(int)ptr) ; if not ok return parsingError(path, ln, "Bad value format: %s", line)
+						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
+						system.scaleSizeEnabled = enabled
 					case "scaleSize":
-						local ^ok, ^ptr, scale = readFloat(version, line, cast(int)ptr)
-						if not ok                 return parsingError(path, ln, "Bad value format: %s", line)
+						local ^ok, ^ptr, scale = readFloat(version, line, cast(int)ptr) ; if not ok return parsingError(path, ln, "Bad value format: %s", line)
 						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
 						system.scaleSize = scale
 
 					case "shaderPath":
-						local ^ok, ^ptr, shaderPath = readString(version, line, cast(int)ptr)
-						if not ok                 return parsingError(path, ln, "Bad value format: %s", line)
+						local ^ok, ^ptr, shaderPath = readString(version, line, cast(int)ptr) ; if not ok return parsingError(path, ln, "Bad value format: %s", line)
 						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
 						system.shaderPath = shaderPath
 
+					case "kickStartEmitEnabled":
+						local ^ok, ^ptr, enabled = readBool(version, line, cast(int)ptr) ; if not ok return parsingError(path, ln, "Bad value format: %s", line)
+						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
+						system.kickStartEmitEnabled = enabled
 					case "kickStartEmit":
-						local ^ok, ^ptr, count = readInt(version, line, cast(int)ptr)
-						if not ok                 return parsingError(path, ln, "Bad value format: %s", line)
+						local ^ok, ^ptr, count = readInt(version, line, cast(int)ptr) ; if not ok return parsingError(path, ln, "Bad value format: %s", line)
 						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
 						system.kickStartEmit = count
+
+					case "kickStartStepsEnabled":
+						local ^ok, ^ptr, enabled = readBool(version, line, cast(int)ptr) ; if not ok return parsingError(path, ln, "Bad value format: %s", line)
+						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
+						system.kickStartStepsEnabled = enabled
 					case "kickStartSteps":
-						local ^ok, ^ptr, steps = readInt(version, line, cast(int)ptr)
-						if not ok                 return parsingError(path, ln, "Bad value format: %s", line)
+						local ^ok, ^ptr, steps = readInt(version, line, cast(int)ptr) ; if not ok return parsingError(path, ln, "Bad value format: %s", line)
 						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
 						system.kickStartSteps = steps
 
 					case "title":
-						local ^ok, ^ptr, title = readString(version, line, cast(int)ptr)
-						if not ok                 return parsingError(path, ln, "Bad value format: %s", line)
+						local ^ok, ^ptr, title = readString(version, line, cast(int)ptr) ; if not ok return parsingError(path, ln, "Bad value format: %s", line)
 						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
 						system.title = title
 
 					case "customData":
-						local ^ok, ^ptr, data = readString(version, line, cast(int)ptr)
-						if not ok                 return parsingError(path, ln, "Bad value format: %s", line)
+						local ^ok, ^ptr, data = readString(version, line, cast(int)ptr) ; if not ok return parsingError(path, ln, "Bad value format: %s", line)
 						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
 						system.customData = data
 
