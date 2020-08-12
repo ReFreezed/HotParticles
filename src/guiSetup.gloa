@@ -86,8 +86,8 @@ export setupGuiFrames :: () {
 					}),
 					guiState.hbox!({
 						guiState.vbox!({ weight=1,
-							guiState.slider!({ name="emitterMovementSx", labelLeft="scale x", min=0, max=2, limitName="emitterMovementScale", readoutMulti=100, readout="%d%%", linkMultiDrag={"emitterMovementSy"} }),
-							guiState.slider!({ name="emitterMovementSy", labelLeft="scale y", min=0, max=2, limitName="emitterMovementScale", readoutMulti=100, readout="%d%%", linkMultiDrag={"emitterMovementSx"} }),
+							guiState.slider!({ name="emitterMovementSx", labelLeft="scale x", canDisable=true, min=0, max=2, limitName="emitterMovementScale", readoutMulti=100, readout="%d%%", linkMultiDrag={"emitterMovementSy"} }),
+							guiState.slider!({ name="emitterMovementSy", labelLeft="scale y", canDisable=true, min=0, max=2, limitName="emitterMovementScale", readoutMulti=100, readout="%d%%", linkMultiDrag={"emitterMovementSx"} }),
 						}),
 						guiState.slider!({ name="emitterMovementSpeed", labelLeft="speed", inset=40, min=-8, max=8, limitName="emitterMovementSpeed", readoutMulti=100, readout="%d%%", weight=1.5 }),
 					}),
@@ -96,9 +96,9 @@ export setupGuiFrames :: () {
 				guiState.separator!({ thick=false }),
 
 				guiState.section!({ name="scaleGlobalSection", label="GlobalScale", tooltip="Scale all parameters in all systems", icon16="scaleGlobal",
-					guiState.slider!({ name="scaleGlobalTime",  labelLeft="time",  min=0, max=4, exponential=true, limitName="scaleGlobalTime",  readoutMulti=100, readout="%d%%" }),
-					guiState.slider!({ name="scaleGlobalSpace", labelLeft="space", min=0, max=4, exponential=true, limitName="scaleGlobalSpace", readoutMulti=100, readout="%d%%", linkMultiDrag={"scaleGlobalSize"} }),
-					guiState.slider!({ name="scaleGlobalSize",  labelLeft="size",  min=0, max=4, exponential=true, limitName="scaleGlobalSize",  readoutMulti=100, readout="%d%%", linkMultiDrag={"scaleGlobalSpace"} }),
+					guiState.slider!({ name="scaleGlobalTime",  labelLeft="time",  canDisable=true, min=0, max=4, exponential=true, limitName="scaleGlobalTime",  readoutMulti=100, readout="%d%%" }),
+					guiState.slider!({ name="scaleGlobalSpace", labelLeft="space", canDisable=true, min=0, max=4, exponential=true, limitName="scaleGlobalSpace", readoutMulti=100, readout="%d%%", linkMultiDrag={"scaleGlobalSize"} }),
+					guiState.slider!({ name="scaleGlobalSize",  labelLeft="size",  canDisable=true, min=0, max=4, exponential=true, limitName="scaleGlobalSize",  readoutMulti=100, readout="%d%%", linkMultiDrag={"scaleGlobalSpace"} }),
 				}),
 
 				guiState.separator!({ thick=true }),
@@ -942,14 +942,14 @@ export setupGuiCallbacks :: () {
 		checkbox.checked = project.pixelateWorld
 	}
 	addEventHandlersForCheckbox("pixelateWorld", "Pixelate world",
-		(project:Project, system:System, value:bool) {  project.pixelateWorld = value ; limitZoomLevel(project) ; scheduleRecreateCanvases = true  }
+		(project:Project, __:System, value:bool) {  project.pixelateWorld = value ; limitZoomLevel(project) ; scheduleRecreateCanvases = true  }
 	)
 	guiState.onRefresh.pixelateTextures = (checkbox:gui.Checkbox) {
 		local project    = app.projects[app.currentProjectIndex]
 		checkbox.checked = project.pixelateTextures
 	}
 	addEventHandlersForCheckbox("pixelateTextures", "Pixelate textures",
-		(project:Project, system:System, value:bool) {
+		(project:Project, __:System, value:bool) {
 			project.pixelateTextures = value
 			updateImageFilters()
 		}
@@ -963,7 +963,7 @@ export setupGuiCallbacks :: () {
 		colorEl.color[3] = project.bgColor[3]
 	}
 	addEventHandlersForColor("bgColor", "Background color",
-		(project:Project, system:System, component:int, value:float) {  project.bgColor[component] = value  }
+		(project:Project, __:System, component:int, value:float) {  project.bgColor[component] = value  }
 	)
 
 	guiState.onRefresh.bgChecker = (slider:gui.Slider) {
@@ -971,7 +971,7 @@ export setupGuiCallbacks :: () {
 		slider.value  = project.bgChecker
 	}
 	addEventHandlersForSlider("bgChecker", "Background pattern",
-		(project:Project, system:System, value:float) {  project.bgChecker = value  }
+		(project:Project, __:System, value:float) {  project.bgChecker = value  }
 	)
 
 	guiState.onRefresh.bgSize = (slider:gui.Slider) {
@@ -979,7 +979,7 @@ export setupGuiCallbacks :: () {
 		slider.value  = project.bgSize
 	}
 	addEventHandlersForSlider("bgSize", "Background size",
-		(project:Project, system:System, value:float) {  project.bgSize = math.round(value)  }
+		(project:Project, __:System, value:float) {  project.bgSize = math.round(value)  }
 	)
 
 	guiState.onRefresh.bgPath = (input:gui.InputText) {
@@ -1074,7 +1074,7 @@ export setupGuiCallbacks :: () {
 		slider.value  = project.bgScale
 	}
 	addEventHandlersForSlider("bgScale", "Background scale",
-		(project:Project, system:System, value:float) {  project.bgScale = value  }
+		(project:Project, __:System, value:float) {  project.bgScale = value  }
 	)
 
 	guiState.onRefresh.bgRepeatX = (checkbox:gui.Checkbox) {
@@ -1086,43 +1086,55 @@ export setupGuiCallbacks :: () {
 		checkbox.checked = project.bgRepeatY
 	}
 	addEventHandlersForCheckbox("bgRepeatX", "Background repeat",
-		(project:Project, system:System, value:bool) {  project.bgRepeatX = value  }
+		(project:Project, __:System, value:bool) {  project.bgRepeatX = value  }
 	)
 	addEventHandlersForCheckbox("bgRepeatY", "Background repeat",
-		(project:Project, system:System, value:bool) {  project.bgRepeatY = value  }
+		(project:Project, __:System, value:bool) {  project.bgRepeatY = value  }
 	)
 
 	-- Emitter.
-	guiState.onRefresh.emitterMovement = (radio:gui.Radio) {
-		local project  = app.projects[app.currentProjectIndex]
-		local found, i = indexWith(radio.buttons, "value", project.movementPreset)
-		assert(found)
-		radio.index = i
+	do {
+		guiState.onRefresh.emitterMovement = (radio:gui.Radio) {
+			local project  = app.projects[app.currentProjectIndex]
+			local found, i = indexWith(radio.buttons, "value", project.movementPreset)
+			assert(found)
+			radio.index = i
+		}
+		addEventHandlersForRadio("emitterMovement", Movement, "Emitter movement",
+			(project:Project, __:System, value:Movement) {  project.movementPreset = value  }
+		)
+
+		guiState.onRefresh.emitterMovementSx = (slider:gui.Slider) {
+			local project  = app.projects[app.currentProjectIndex]
+			slider.enabled = project.movementScaleXEnabled
+			slider.value   = project.movementScaleX
+		}
+		guiState.onRefresh.emitterMovementSy = (slider:gui.Slider) {
+			local project  = app.projects[app.currentProjectIndex]
+			slider.enabled = project.movementScaleYEnabled
+			slider.value   = project.movementScaleY
+		}
+		addEventHandlersForSlider("emitterMovementSx", "Emitter movement scale X",
+			(project:Project, __:System, value:float) {  project.movementScaleX = value  }
+		)
+		addEventHandlersForSlider("emitterMovementSy", "Emitter movement scale Y",
+			(project:Project, __:System, value:float) {  project.movementScaleY = value  }
+		)
+		addToggleEventHandler("emitterMovementSx", "Emitter movement scale X",
+			onToggle = (project:Project, __:System, enabled:bool) {  project.movementScaleXEnabled = enabled  }
+		)
+		addToggleEventHandler("emitterMovementSy", "Emitter movement scale Y",
+			onToggle = (project:Project, __:System, enabled:bool) {  project.movementScaleYEnabled = enabled  }
+		)
+
+		guiState.onRefresh.emitterMovementSpeed = (slider:gui.Slider) {
+			local project = app.projects[app.currentProjectIndex]
+			slider.value  = project.movementSpeed
+		}
+		addEventHandlersForSlider("emitterMovementSpeed", "Emitter movement speed",
+			(project:Project, __:System, value:float) {  project.movementSpeed = value  }
+		)
 	}
-	addEventHandlersForRadio("emitterMovement", Movement, "Emitter movement",
-		(project:Project, system:System, value:Movement) {  project.movementPreset = value  }
-	)
-	guiState.onRefresh.emitterMovementSx = (slider:gui.Slider) {
-		local project = app.projects[app.currentProjectIndex]
-		slider.value  = project.movementScaleX
-	}
-	addEventHandlersForSlider("emitterMovementSx", "Emitter movement scale",
-		(project:Project, system:System, value:float) {  project.movementScaleX = value  }
-	)
-	guiState.onRefresh.emitterMovementSy = (slider:gui.Slider) {
-		local project = app.projects[app.currentProjectIndex]
-		slider.value  = project.movementScaleY
-	}
-	addEventHandlersForSlider("emitterMovementSy", "Emitter movement scale",
-		(project:Project, system:System, value:float) {  project.movementScaleY = value  }
-	)
-	guiState.onRefresh.emitterMovementSpeed = (slider:gui.Slider) {
-		local project = app.projects[app.currentProjectIndex]
-		slider.value  = project.movementSpeed
-	}
-	addEventHandlersForSlider("emitterMovementSpeed", "Emitter movement speed",
-		(project:Project, system:System, value:float) {  project.movementSpeed = value  }
-	)
 
 	-- Custom data.
 	guiState.onRefresh.customDataProject = (input:gui.InputText) {
@@ -1142,38 +1154,59 @@ export setupGuiCallbacks :: () {
 	}
 
 	-- Scale global.
-	guiState.onRefresh.scaleGlobalTime = (slider:gui.Slider) {
-		local project = app.projects[app.currentProjectIndex]
-		slider.value  = project.scaleGlobalTime
-	}
-	addEventHandlersForSlider("scaleGlobalTime", "Global time scale",
-		(project:Project, system:System, value:float) {
-			project.scaleGlobalTime = value
-			for project.systems  updateParticleParams(project, it)
+	do {
+		guiState.onRefresh.scaleGlobalTime = (slider:gui.Slider) {
+			local project  = app.projects[app.currentProjectIndex]
+			slider.enabled = project.scaleGlobalTimeEnabled
+			slider.value   = project.scaleGlobalTime
 		}
-	)
-
-	guiState.onRefresh.scaleGlobalSpace = (slider:gui.Slider) {
-		local project = app.projects[app.currentProjectIndex]
-		slider.value  = project.scaleGlobalSpace
-	}
-	addEventHandlersForSlider("scaleGlobalSpace", "Global space scale",
-		(project:Project, system:System, value:float) {
-			project.scaleGlobalSpace = value
-			for project.systems  updateParticleParams(project, it)
+		guiState.onRefresh.scaleGlobalSpace = (slider:gui.Slider) {
+			local project  = app.projects[app.currentProjectIndex]
+			slider.enabled = project.scaleGlobalSpaceEnabled
+			slider.value   = project.scaleGlobalSpace
 		}
-	)
-
-	guiState.onRefresh.scaleGlobalSize = (slider:gui.Slider) {
-		local project = app.projects[app.currentProjectIndex]
-		slider.value  = project.scaleGlobalSize
-	}
-	addEventHandlersForSlider("scaleGlobalSize", "Global size scale",
-		(project:Project, system:System, value:float) {
-			project.scaleGlobalSize = value
-			for project.systems  updateParticleParams(project, it)
+		guiState.onRefresh.scaleGlobalSize = (slider:gui.Slider) {
+			local project  = app.projects[app.currentProjectIndex]
+			slider.enabled = project.scaleGlobalSizeEnabled
+			slider.value   = project.scaleGlobalSize
 		}
-	)
+		addEventHandlersForSlider("scaleGlobalTime", "Global time scale",
+			(project:Project, __:System, value:float) {
+				project.scaleGlobalTime = value
+				for project.systems  updateParticleParams(project, it)
+			}
+		)
+		addEventHandlersForSlider("scaleGlobalSpace", "Global space scale",
+			(project:Project, __:System, value:float) {
+				project.scaleGlobalSpace = value
+				for project.systems  updateParticleParams(project, it)
+			}
+		)
+		addEventHandlersForSlider("scaleGlobalSize", "Global size scale",
+			(project:Project, __:System, value:float) {
+				project.scaleGlobalSize = value
+				for project.systems  updateParticleParams(project, it)
+			}
+		)
+		addToggleEventHandler("scaleGlobalTime", "Global time scale",
+			onToggle = (project:Project, __:System, enabled:bool) {
+				project.scaleGlobalTimeEnabled = enabled
+				for project.systems  updateParticleParams(project, it)
+			}
+		)
+		addToggleEventHandler("scaleGlobalSpace", "Global space scale",
+			onToggle = (project:Project, __:System, enabled:bool) {
+				project.scaleGlobalSpaceEnabled = enabled
+				for project.systems  updateParticleParams(project, it)
+			}
+		)
+		addToggleEventHandler("scaleGlobalSize", "Global size scale",
+			onToggle = (project:Project, __:System, enabled:bool) {
+				project.scaleGlobalSizeEnabled = enabled
+				for project.systems  updateParticleParams(project, it)
+			}
+		)
+	}
 
 	-- Systems.
 	guiState.onRefresh.systems = (tabs:gui.Tabs) {

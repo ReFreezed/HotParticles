@@ -238,10 +238,12 @@ export Project :: struct {
 
 	zoomLevel = 0,
 
-	movementPreset = Movement.NONE,
-	movementScaleX = 1.0,
-	movementScaleY = 1.0,
-	movementSpeed  = 1.0,
+	movementPreset        = Movement.NONE,
+	movementScaleXEnabled = true,
+	movementScaleX        = 1.0,
+	movementScaleYEnabled = true,
+	movementScaleY        = 1.0,
+	movementSpeed         = 1.0,
 
 	exportBaseDirectory      = "",
 	exportParticles          = true,
@@ -253,9 +255,12 @@ export Project :: struct {
 	exportTexturesDirectory  = "",
 	exportClipboardTemplate  = "defaultLuaClipboard",
 
-	scaleGlobalTime  = 1.0,
-	scaleGlobalSpace = 1.0,
-	scaleGlobalSize  = 1.0,
+	scaleGlobalTimeEnabled  = true,
+	scaleGlobalTime         = 1.0,
+	scaleGlobalSpaceEnabled = true,
+	scaleGlobalSpace        = 1.0,
+	scaleGlobalSizeEnabled  = true,
+	scaleGlobalSize         = 1.0,
 
 	customData = "",
 
@@ -321,7 +326,9 @@ export Project :: struct {
 			pixelateTextures         = source.pixelateTextures,
 			zoomLevel                = source.zoomLevel,
 			movementPreset           = source.movementPreset,
+			movementScaleXEnabled    = source.movementScaleXEnabled,
 			movementScaleX           = source.movementScaleX,
+			movementScaleYEnabled    = source.movementScaleYEnabled,
 			movementScaleY           = source.movementScaleY,
 			movementSpeed            = source.movementSpeed,
 			exportBaseDirectory      = source.exportBaseDirectory,
@@ -333,8 +340,11 @@ export Project :: struct {
 			exportTexturesOverwrite  = source.exportTexturesOverwrite,
 			exportTexturesDirectory  = source.exportTexturesDirectory,
 			exportClipboardTemplate  = source.exportClipboardTemplate,
+			scaleGlobalTimeEnabled   = source.scaleGlobalTimeEnabled,
 			scaleGlobalTime          = source.scaleGlobalTime,
+			scaleGlobalSpaceEnabled  = source.scaleGlobalSpaceEnabled,
 			scaleGlobalSpace         = source.scaleGlobalSpace,
+			scaleGlobalSizeEnabled   = source.scaleGlobalSizeEnabled,
 			scaleGlobalSize          = source.scaleGlobalSize,
 			customData               = source.customData,
 			guiLimits                = copyTable(source.guiLimits),
@@ -562,9 +572,9 @@ export updateParticles :: (project:Project, system:System) {
 export updateParticleParams :: (project:Project, s:System) {
 	local ps = s.particles
 
-	local time  = (s.scaleTimeEnabled  ? s.scaleTime  : 1) * project.scaleGlobalTime
-	local space = (s.scaleSpaceEnabled ? s.scaleSpace : 1) * project.scaleGlobalSpace
-	local size  = (s.scaleSizeEnabled  ? s.scaleSize  : 1) * project.scaleGlobalSize
+	local time  = (s.scaleTimeEnabled  ? s.scaleTime  : 1) * (project.scaleGlobalTimeEnabled  ? project.scaleGlobalTime  : 1)
+	local space = (s.scaleSpaceEnabled ? s.scaleSpace : 1) * (project.scaleGlobalSpaceEnabled ? project.scaleGlobalSpace : 1)
+	local size  = (s.scaleSizeEnabled  ? s.scaleSize  : 1) * (project.scaleGlobalSizeEnabled  ? project.scaleGlobalSize  : 1)
 	local time2 = time ^ 2
 
 	local sizes: []float
@@ -1656,15 +1666,15 @@ local onUpdate :: (dt:float) {
 			case CIRCLE:
 				local angle = project.movementPhase*math.TAU/5.00
 				moveEmittersTo(
-					MOVEMENT_BASE * project.movementScaleX * math.cos(angle),
-					MOVEMENT_BASE * project.movementScaleY * math.sin(angle)
+					MOVEMENT_BASE * (project.movementScaleXEnabled ? project.movementScaleX : 0) * math.cos(angle),
+					MOVEMENT_BASE * (project.movementScaleYEnabled ? project.movementScaleY : 0) * math.sin(angle)
 				)
 
 			case EIGHT:
 				local angle = project.movementPhase*math.TAU/5.00
 				moveEmittersTo(
-					MOVEMENT_BASE   * project.movementScaleX * math.cos(angle),
-					MOVEMENT_BASE/2 * project.movementScaleY * math.sin(angle*2)
+					MOVEMENT_BASE   * (project.movementScaleXEnabled ? project.movementScaleX : 0) * math.cos(angle),
+					MOVEMENT_BASE/2 * (project.movementScaleYEnabled ? project.movementScaleY : 0) * math.sin(angle*2)
 				)
 
 			case IRREGULAR:
@@ -1699,12 +1709,12 @@ local onUpdate :: (dt:float) {
 				local phaseMid = 1 - math.cos01(phase * math.TAU/2)
 
 				moveEmittersTo(
-					project.movementScaleX * math.lerp(
+					(project.movementScaleXEnabled ? project.movementScaleX : 0) * math.lerp(
 						math.lerp(project.movementPoint1X, project.movementPoint2X, phaseOld),
 						math.lerp(project.movementPoint3X, project.movementPoint4X, phaseNew),
 						phaseMid
 					),
-					project.movementScaleY * math.lerp(
+					(project.movementScaleYEnabled ? project.movementScaleY : 0) * math.lerp(
 						math.lerp(project.movementPoint1Y, project.movementPoint2Y, phaseOld),
 						math.lerp(project.movementPoint3Y, project.movementPoint4Y, phaseNew),
 						phaseMid
