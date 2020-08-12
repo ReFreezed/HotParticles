@@ -2856,7 +2856,7 @@ export getOptimalBufferSize :: (system:System, moreExact=false) -> int {
 
 export updateWindowTitle :: () {
 	local project = app.projects[app.currentProjectIndex]
-	LW.setTitle(format("%s%s - %s", (project.path ?: project.displayedName), (project.edited ? " •" : ""), WINDOW_TITLE))
+	LW.setTitle(format("%s - %s%s", WINDOW_TITLE, (project.path ?: project.displayedName), (project.edited ? " •" : "")))
 }
 
 
