@@ -215,6 +215,8 @@ export App :: struct {
 	maxRecentFiles   = 15,
 	maxRecentFolders = 4,
 	maxChanges       = 200,
+
+	preferRelativePaths = false, -- For file browser.
 }
 
 
@@ -2817,6 +2819,37 @@ export setBackgroundPath :: (project:Project, pathNew:string) {
 
 
 
+export toggleRelativePath :: (project:Project, path:string, fullPathGetter:()->(success:bool,path:string)) -> (success:bool, path:string) {
+	if not path  return false, ""
+
+	if not project.path {
+		setErrorText("Relative paths require the project to be saved")
+		return false, ""
+	}
+
+	local pathObj = Path(path)
+
+	if pathObj.isAbsolute {
+		local _, dir              = Path(project.path).getDirectory!()
+		local ok, pathRelativeObj = pathObj.getRelativeTo!(dir)
+		if not ok {
+			setErrorText("Could not get relative path to '%s'", path)
+			return false, ""
+		}
+		return true, pathRelativeObj.toString!()
+
+	} else {
+		local ok, pathFull = fullPathGetter()
+		if not ok {
+			setErrorText("Could not get full path to '%s'", path)
+			return false, ""
+		}
+		return true, pathFull
+	}
+}
+
+
+
 export markEdited :: (project:Project) {
 	if project.edited  return
 
@@ -3095,7 +3128,7 @@ export showSaveProjectAsDialog :: () {
 	projectBeingSaved = project -- Needed as we load previews even in the save dialog, which means app.currentProjectIndex may change.
 
 	showFileDialog(isSave=true, "Save project", dir, filename, filenamePattern="%.hotparticles$",
-		onHighlight = (pathObj:Path) {
+		onHighlight = (pathObj:Path, pathAbsoluteObj:Path) {
 			loadPreview(pathObj.toString!())
 
 			local ok, filename = pathObj.getFilename!()
@@ -3106,7 +3139,7 @@ export showSaveProjectAsDialog :: () {
 				input.field.setSelection!(0, utf8.getLength(basename))
 			}
 		},
-		onChoose = (pathObj:Path) {
+		onChoose = (pathObj:Path, pathAbsoluteObj:Path) {
 			local _, filename = pathObj.getFilename!()
 
 			if not findPattern(filename, "%.hotparticles$") {
@@ -3154,11 +3187,11 @@ export showOpenProjectDialog :: () {
 	if not ok  dir = getSaveDirectory().."/projects"
 
 	showFileDialog("Open project", dir, "", filenamePattern="%.hotparticles$",
-		onHighlight = (pathObj:Path) {
-			loadPreview(pathObj.toString!())
+		onHighlight = (pathObj:Path, pathAbsoluteObj:Path) {
+			loadPreview(pathAbsoluteObj.toString!())
 		},
-		onChoose = (pathObj:Path) {
-			local path        = pathObj.toString!()
+		onChoose = (pathObj:Path, pathAbsoluteObj:Path) {
+			local path        = pathAbsoluteObj.toString!()
 			local ok, project = openProject(path)
 			if not ok {
 				local input = guiState.getElement!("fileDialog_filename", gui.InputText)
@@ -3169,7 +3202,7 @@ export showOpenProjectDialog :: () {
 			project.preview = false -- In case the project was already opened as a preview (which it probably always is).
 			popPanel()
 
-			local _, dir = pathObj.getDirectory!()
+			local _, dir = pathAbsoluteObj.getDirectory!()
 			addRecent(app.recentFolders, dir,  app.maxRecentFolders)
 			addRecent(app.recentFiles,   path, app.maxRecentFiles)
 
