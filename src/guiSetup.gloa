@@ -3687,7 +3687,7 @@ export setupGuiCallbacks :: () {
 		guiState.onRefresh.animation_frames = (vbox:gui.Vbox) {
 			local project, system = getCurrentProjectAndSystem()
 
-			for < vbox  guiState.delete!(it)
+			for < vbox  guiState.delete!(it, updateInteractions=false)
 
 			for system.frames {
 				local inputValue = format("%s %s %s %s", it.x, it.y, it.w, it.h)

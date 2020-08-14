@@ -249,8 +249,8 @@ local register :: (state:State, el:Element, T:Type) -> Element {
 	return el
 }
 
-local unregisterTree :: (state:State, el:Element) {
-	do {
+local unregisterTree :: (state:State, el:Element, updateInteractions:bool) {
+	if updateInteractions { -- @Hack!
 		if state.focusId  == el.id  state.blurFocus!(abort=false)
 		if state.activeId == el.id  state.cancelMouseActions!()
 
@@ -269,7 +269,7 @@ local unregisterTree :: (state:State, el:Element) {
 		remove(state.scrollables, i)
 	}
 
-	for el  unregisterTree(state, it)
+	for el  unregisterTree(state, it, updateInteractions)
 }
 
 
@@ -3383,7 +3383,7 @@ export hideContextMenu :: (state:State, mayDeactivateSubmenu=false) -> (success:
 
 
 
-export delete :: (state:State, el:Element) {
+export delete :: (state:State, el:Element, updateInteractions=true) {
 	updateLayoutIfNeeded(state) -- Needed for parents. @Speed
 
 	if el.type == Frame {
@@ -3391,14 +3391,14 @@ export delete :: (state:State, el:Element) {
 		local found, i = indexOf(state.frames, frame)
 		if not found  return
 
-		unregisterTree(state, frame)
+		unregisterTree(state, frame, updateInteractions)
 		remove(state.frames, i)
 
 	} else {
 		local found, i = indexOf(el.parent, el)
 		if not found  return
 
-		unregisterTree(state, el)
+		unregisterTree(state, el, updateInteractions)
 		remove(el.parent, i)
 	}
 }
