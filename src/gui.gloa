@@ -24,6 +24,7 @@
 	Slider, Color, ColorPreview
 	Text
 
+	cancelMouseActions
 	delete
 	draw
 	drawChecker, drawCheckerBox
@@ -165,6 +166,7 @@ export State :: struct {
 
 	-- @Cleanup: Use !self here istead of _*, maybe.  (@Compiler: We get redeclaration error becase !self.getElement etc. isn't a simple identifier.)
 	blurFocus :: _blurFocus,
+	cancelMouseActions :: _cancelMouseActions,
 	delete :: _delete,
 	draw :: _draw,
 	findParent :: _findParent,
@@ -199,6 +201,7 @@ export State :: struct {
 }
 
 local _blurFocus :: blurFocus
+local _cancelMouseActions :: cancelMouseActions
 local _delete :: delete
 local _draw :: draw
 local _findParent :: findParent
@@ -248,25 +251,12 @@ local register :: (state:State, el:Element, T:Type) -> Element {
 
 local unregisterTree :: (state:State, el:Element) {
 	do {
-		-- @Robustness: This all is not very safe, probably...
-
-		if state.activeId == el.id {
-			-- @Robustness: Do we need to release more buttons?
-			-- (Note that we don't want to open any context menu or anything. Maybe we need a standard way of canceling mouse stuff.)
-			local mx, my = LM.getPosition()
-			state.onMouseReleased!(mx, my, 1, 0)
-
-			state.activeId    = 0
-			state.activeSubid = 0
-		}
+		if state.focusId  == el.id  state.blurFocus!(abort=false)
+		if state.activeId == el.id  state.cancelMouseActions!()
 
 		if state.hoveredId == el.id {
 			state.hoveredId    = 0
 			state.hoveredSubid = 0
-		}
-
-		if state.focusId == el.id {
-			state.blurFocus!(abort=false)
 		}
 	}
 
@@ -1076,14 +1066,14 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int, begin=false, end=fals
 	updateMouseCursor(state)
 }
 
-export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int) {
+export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int, cancel=false) {
 	if state.focusId {
 		local input = cast(InputText) state.elementsById[state.focusId]
 		if input.field.mousereleased!(mx, my, mbutton)  state.onMouseMoved!(mx, my, 0, 0)
 	}
 
 	-- LMB.
-	if mbutton == 1 and state.activeId {
+	if mbutton == 1 and state.activeId and not cancel {
 		local widget = cast(Widget) state.elementsById[state.activeId]
 
 		if widget ~= NULL  if widget.type == {
@@ -1153,7 +1143,7 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int) {
 	}
 
 	-- MMB.
-	if mbutton == 3 and not state.activeId and state.hoveredId {
+	if mbutton == 3 and not state.activeId and state.hoveredId and not cancel {
 		local widget = cast(Widget) state.elementsById[state.hoveredId]
 
 		if widget ~= NULL  if widget.type == {
@@ -1167,7 +1157,7 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int) {
 	}
 
 	-- RMB.
-	if mbutton == 2 and not state.activeId and state.hoveredId {
+	if mbutton == 2 and not state.activeId and state.hoveredId and not cancel {
 		local widget = cast(Widget) state.elementsById[state.hoveredId]
 		local name   = ""
 
@@ -1346,7 +1336,7 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int) {
 	}
 
 	-- Release active ID.
-	if state.activeId and mbutton == 1 {
+	if state.activeId and (mbutton == 1 or cancel) {
 		if state.elementsById[state.activeId] ~= NULL  state.onMouseMoved!(mx, my, 0, 0, end=true)
 
 		if state.activeDragging {
@@ -1376,6 +1366,16 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int) {
 		LK.setKeyRepeat(true)
 
 		state.onMouseMoved!(mx, my, 0, 0)
+	}
+}
+
+export cancelMouseActions :: (state:State) {
+	if state.activeId {
+		local mx, my = LM.getPosition()
+		state.onMouseReleased!(mx, my, 1, 0, cancel=true)
+
+		state.activeId    = 0
+		state.activeSubid = 0
 	}
 }
 
