@@ -84,6 +84,7 @@ export InputField :: !foreign struct {
 	setFilter              :: (self:InputField, filter:CharacterFilter)     !foreign method "setFilter",
 	setFilter              :: (self:InputField)                             !foreign method "setFilter",
 	clearHistory           :: (self:InputField) !foreign method "clearHistory",
+	release                :: (self:InputField) !foreign method "release",
 	mousepressed           :: (self:InputField, mx,my:int, mbutton:int)              -> (wasHandled:bool) !foreign method "mousepressed",
 	mousepressed           :: (self:InputField, mx,my:int, mbutton:int, presses:int) -> (wasHandled:bool) !foreign method "mousepressed",
 	mousemoved             :: (self:InputField, mx,my:int) -> (wasHandled:bool) !foreign method "mousemoved",

@@ -1,6 +1,6 @@
 --[[============================================================
 --=
---=  InputField class v1.1 (for LÖVE 0.10.2+) [EDITED]
+--=  InputField class v1.1 (for LÖVE 0.10.2+) [EDITED 2020-08-14]
 --=  - Written by Marcus 'ReFreezed' Thunström
 --=  - MIT License (See the bottom of this file)
 --=
@@ -25,6 +25,7 @@
 	isEditable, setEditable
 	isFontFilteringActive, setFontFilteringActive
 	isPasswordActive, setPasswordActive
+	release
 
 ----------------------------------------------------------------
 
@@ -691,6 +692,15 @@ function InputField:mousereleased(x, y, buttonN)
 	self._mouseTextSelectionStart = nil
 	self._mouseScrollX = nil
 	return true
+end
+
+
+
+function InputField:release()
+	if self._mouseTextSelectionStart then
+		self._mouseTextSelectionStart = nil
+		self._mouseScrollX            = nil
+	end
 end
 
 

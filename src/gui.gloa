@@ -247,17 +247,27 @@ local register :: (state:State, el:Element, T:Type) -> Element {
 }
 
 local unregisterTree :: (state:State, el:Element) {
-	-- @Robustness: Is it ok to reset state.*Id here like this?
-	if state.focusId == el.id {
-		state.blurFocus!(abort=false)
-	}
-	if state.activeId == el.id {
-		state.activeId    = 0
-		state.activeSubid = 0
-	}
-	if state.hoveredId == el.id {
-		state.hoveredId    = 0
-		state.hoveredSubid = 0
+	do {
+		-- @Robustness: This all is not very safe, probably...
+
+		if state.activeId == el.id {
+			-- @Robustness: Do we need to release more buttons?
+			-- (Note that we don't want to open any context menu or anything. Maybe we need a standard way of canceling mouse stuff.)
+			local mx, my = LM.getPosition()
+			state.onMouseReleased!(mx, my, 1, 0)
+
+			state.activeId    = 0
+			state.activeSubid = 0
+		}
+
+		if state.hoveredId == el.id {
+			state.hoveredId    = 0
+			state.hoveredSubid = 0
+		}
+
+		if state.focusId == el.id {
+			state.blurFocus!(abort=false)
+		}
 	}
 
 	state.elementsById[el.id] = NULL
@@ -3112,13 +3122,16 @@ export blurFocus :: (state:State, abort=false) {
 	if not state.focusId  return
 
 	local input = cast(InputText) state.elementsById[state.focusId]
-	if input.field.getText!() == input.value {
+	local field = input.field
+	field.release!()
+
+	if field.getText!() == input.value {
 		-- void
 	} elseif abort {
-		input.field.setText!(input.value)
+		field.setText!(input.value)
 	} else {
 		triggerBeginEvent(state, input, "", 0, alsoEnsureEnabled=false)
-		input.value = input.field.getText!()
+		input.value = field.getText!()
 		triggerActionEvent(state, input, "", 0, alsoEnd=true)
 	}
 
