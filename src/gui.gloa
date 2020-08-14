@@ -247,21 +247,21 @@ local register :: (state:State, el:Element, T:Type) -> Element {
 }
 
 local unregisterTree :: (state:State, el:Element) {
-	state.elementsById[el.id] = NULL
-	if el.name  state.elementsByName[el.name] = NULL
-
 	-- @Robustness: Is it ok to reset state.*Id here like this?
-	if state.hoveredId == el.id {
-		state.hoveredId    = 0
-		state.hoveredSubid = 0
+	if state.focusId == el.id {
+		state.blurFocus!(abort=false)
 	}
 	if state.activeId == el.id {
 		state.activeId    = 0
 		state.activeSubid = 0
 	}
-	if state.focusId == el.id {
-		state.focusId = 0
+	if state.hoveredId == el.id {
+		state.hoveredId    = 0
+		state.hoveredSubid = 0
 	}
+
+	state.elementsById[el.id] = NULL
+	if el.name  state.elementsByName[el.name] = NULL
 
 	if el.type == Scrollable {
 		local found, i = indexOf(state.scrollables, cast(Scrollable) el)
