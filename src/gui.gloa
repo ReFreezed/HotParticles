@@ -241,9 +241,7 @@ local register :: (state:State, el:Element, T:Type) -> Element {
 	state.elementsById[el.id] = el
 	if el.name  state.elementsByName[el.name] = el
 
-	if T == {
-		case Scrollable: insert(state.scrollables, cast(Scrollable) el)
-	}
+	if T == Scrollable  insert(state.scrollables, cast(Scrollable)el)
 
 	return el
 }
@@ -252,8 +250,23 @@ local unregisterTree :: (state:State, el:Element) {
 	state.elementsById[el.id] = NULL
 	if el.name  state.elementsByName[el.name] = NULL
 
-	if el.type == {
-		case Scrollable: local found, i = indexOf(state.scrollables, cast(Scrollable) el) ; assert(found) ; remove(state.scrollables, i)
+	-- @Robustness: Is it ok to reset state.*Id here like this?
+	if state.hoveredId == el.id {
+		state.hoveredId    = 0
+		state.hoveredSubid = 0
+	}
+	if state.activeId == el.id {
+		state.activeId    = 0
+		state.activeSubid = 0
+	}
+	if state.focusId == el.id {
+		state.focusId = 0
+	}
+
+	if el.type == Scrollable {
+		local found, i = indexOf(state.scrollables, cast(Scrollable) el)
+		assert(found)
+		remove(state.scrollables, i)
 	}
 
 	for el  unregisterTree(state, it)
