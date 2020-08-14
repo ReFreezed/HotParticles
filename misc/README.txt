@@ -210,6 +210,9 @@ Animation dialog
 
 Remove all frames: Disable any existing animation.
 
+ParticleLifetime: The lifetime of each individual particle. (This affects the
+    speed of animations.)
+
 Sequence: Tool used for quickly generating quads based on a rectangular area
     in the texture.
 - Area x/y: The top left corner of the area.
