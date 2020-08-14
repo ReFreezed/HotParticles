@@ -444,7 +444,8 @@ export Slider :: struct {
 	using Widget,
 
 	-- Settings:
-	value = 0.0,
+	value        = 0.0,
+	defaultValue = 0.0,
 
 	min = 0.0,
 	max = 1.0,
@@ -1172,8 +1173,8 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int) {
 					local direction = cast(Direction) widget
 					local items: []string
 
-					if direction.canDisable  insert(items, (direction.enabled ? "Disable" : "Enable"))
-					local iToggle = direction.canDisable ? #items : -1
+					insert(items, "Reset angle")
+					local iReset = #items
 
 					insert(items, "Copy angle")
 					local iCopy = #items
@@ -1181,17 +1182,25 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int) {
 					insert(items, "Paste angle")
 					local iPaste = #items
 
+					if direction.canDisable  insert(items, (direction.enabled ? "Disable" : "Enable"))
+					local iToggle = direction.canDisable ? #items : -1
+
 					state.showContextMenuWithInput!(toString(direction.angle*360/math.TAU), items,
-						[*] (i:int) {
-							if i == iToggle {
+						[*] (choice:int) {
+							if choice == iReset {
+								triggerBeginEvent(state, direction, "", 0, alsoEnsureEnabled=true)
+								direction.angle = 0
+								triggerActionEvent(state, direction, "", 0, alsoEnd=true)
+
+							} elseif choice == iToggle {
 								direction.enabled = not direction.enabled
 								triggerToggleEvent(state, direction, "", 0)
 
-							} elseif i == iCopy {
+							} elseif choice == iCopy {
 								clipboardAngle    = direction.angle
 								hasClipboardAngle = true
 
-							} elseif i == iPaste {
+							} elseif choice == iPaste {
 								if not hasClipboardAngle  return
 
 								triggerBeginEvent(state, direction, "", 0, alsoEnsureEnabled=true)
@@ -1208,8 +1217,8 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int) {
 					local slider = cast(Slider) widget
 					local items: []string
 
-					if slider.canDisable  insert(items, (slider.enabled ? "Disable" : "Enable"))
-					local iToggle = slider.canDisable ? #items : -1
+					insert(items, "Reset value")
+					local iReset = #items
 
 					insert(items, "Copy value")
 					local iCopy = #items
@@ -1217,30 +1226,35 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int) {
 					insert(items, "Paste value")
 					local iPaste = #items
 
-					-- insert(items, "Reset value") -- @Incomplete
-					-- local iReset = #items
-
 					insert(items, "Reset min/max limits")
 					local iResetLimits = #items
 
+					if slider.canDisable  insert(items, (slider.enabled ? "Disable" : "Enable"))
+					local iToggle = slider.canDisable ? #items : -1
+
 					state.showContextMenuWithInput!(toString(slider.value*slider.readoutMulti), items,
-						[*] (i:int) {
-							if i == iToggle {
+						[*] (choice:int) {
+							if choice == iReset {
+								triggerBeginEvent(state, slider, "", 0, alsoEnsureEnabled=true)
+								slider.value = slider.defaultValue
+								triggerActionEvent(state, slider, "", 0, alsoEnd=true)
+
+							} elseif choice == iToggle {
 								slider.enabled = not slider.enabled
 								triggerToggleEvent(state, slider, "", 0)
 
-							} elseif i == iCopy {
+							} elseif choice == iCopy {
 								clipboardScalar    = slider.value
 								hasClipboardScalar = true
 
-							} elseif i == iPaste {
+							} elseif choice == iPaste {
 								if not hasClipboardScalar  return
 
 								triggerBeginEvent(state, slider, "", 0, alsoEnsureEnabled=true)
 								slider.value = clipboardScalar
 								triggerActionEvent(state, slider, "", 0, alsoEnd=true)
 
-							} elseif i == iResetLimits {
+							} elseif choice == iResetLimits {
 								forgetLimitMultiplier(slider)
 							}
 						},
@@ -1262,42 +1276,58 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int) {
 					local valueStr  = toString(colorEl.color[component] * (component == 1 ? 360 : 100))
 
 					-- @Incomplete: Handle canDisable.
-					local items = {
-						[1] = "Copy "..COMPONENT_TITLES[component],
-						[2] = "Copy color",
-						[3] = "Paste "..COMPONENT_TITLES[component],
-						[4] = "Paste color",
-					}
+					local items: []string
+
+					insert(items, "Reset color")
+					local iResetColor = #items
+
+					insert(items, "Copy "..COMPONENT_TITLES[component])
+					local iCopyComponent = #items
+
+					insert(items, "Copy color")
+					local iCopyColor = #items
+
+					insert(items, "Paste "..COMPONENT_TITLES[component])
+					local iPasteComponent = #items
+
+					insert(items, "Paste color")
+					local iPasteColor = #items
 
 					state.showContextMenuWithInput!(valueStr, items,
-						[state,colorEl,component] (i:int) {
-							if i == {
-								case 1:
-									clipboardScalar    = colorEl.color[component]
-									hasClipboardScalar = true
+						[*] (choice:int) {
+							if choice == iResetColor {
+								for 1, 4 {
+									triggerBeginEvent(state, colorEl, "", it, alsoEnsureEnabled=true)
+									colorEl.color[it] = (it <= 2) ? 0 : 1
+									triggerActionEvent(state, colorEl, "", it, alsoEnd=true)
+								}
 
-								case 2:
-									for 1, 4  clipboardColor[it] = colorEl.color[it]
-									hasClipboardColor = true
+							} elseif choice == iCopyComponent {
+								clipboardScalar    = colorEl.color[component]
+								hasClipboardScalar = true
 
-								case 3:
-									if not hasClipboardScalar  return
+							} elseif choice == iCopyColor {
+								for 1, 4  clipboardColor[it] = colorEl.color[it]
+								hasClipboardColor = true
 
-									triggerBeginEvent(state, colorEl, "", component, alsoEnsureEnabled=true)
-									colorEl.color[component] = clipboardScalar
-									triggerActionEvent(state, colorEl, "", component, alsoEnd=true)
+							} elseif choice == iPasteComponent {
+								if not hasClipboardScalar  return
 
-								case 4:
-									if not hasClipboardColor  return
+								triggerBeginEvent(state, colorEl, "", component, alsoEnsureEnabled=true)
+								colorEl.color[component] = clipboardScalar
+								triggerActionEvent(state, colorEl, "", component, alsoEnd=true)
 
-									for 1, 4 {
-										triggerBeginEvent(state, colorEl, "", it, alsoEnsureEnabled=true)
-										colorEl.color[it] = clipboardColor[it]
-										triggerActionEvent(state, colorEl, "", it, alsoEnd=true)
-									}
+							} elseif choice == iPasteColor {
+								if not hasClipboardColor  return
+
+								for 1, 4 {
+									triggerBeginEvent(state, colorEl, "", it, alsoEnsureEnabled=true)
+									colorEl.color[it] = clipboardColor[it]
+									triggerActionEvent(state, colorEl, "", it, alsoEnd=true)
+								}
 							}
 						},
-						[state,colorEl,component] (text:string) {
+						[*] (text:string) {
 							commitValueFromInput(state, colorEl, component, text)
 						}
 					)

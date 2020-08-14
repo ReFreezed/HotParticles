@@ -228,7 +228,7 @@ export Project :: struct {
 	systems: []System,
 
 	bgColor: []float = {0,0,.15}, -- HSV
-	bgChecker = 0.0,
+	bgChecker = 0.0, -- -1..+1
 	bgSize    = 8,
 	bgPath    = "",
 	bgScale   = 1.0,
