@@ -128,7 +128,7 @@ export setupGuiFrames :: () {
 						guiState.hbox!({
 							guiState.slider!({ name="textureOffsetX", defaultValue=.5, min=0, max=1, limitName="textureOffset", limitCenter=.5, readoutMulti=100, readout="%d%%", weight=1, labelLeft="offset x/y" }),
 							guiState.slider!({ name="textureOffsetY", defaultValue=.5, min=0, max=1, limitName="textureOffset", limitCenter=.5, readoutMulti=100, readout="%d%%", weight=1 }),
-							guiState.buttons!({ name="util_pushPanel", data="animation", buttons={{label="Animation",tooltip="Create/edit particle animation"}} }),
+							guiState.buttons!({ name="animationButton", buttons={{label="Animation",tooltip="Create/edit particle animation (Right-click for options)"}} }),
 						}),
 					}),
 
@@ -1479,6 +1479,65 @@ export setupGuiCallbacks :: () {
 	addEventHandlersForSlider(forSystem=true, "textureOffsetY", "Texture offset",
 		(project:Project, system:System, value:float) {  system.offsetY = value ; updateParticleTextureOffset(system)  }
 	)
+
+	do {
+		static clipboardAnimation: []AnimationFrame = NULL
+		static clipboardLifetimeMin: float          = NULL
+		static clipboardLifetimeMax: float          = NULL
+		static hasClipboardAnimation                = false
+
+		guiState.onAction.animationButton = (buttons:gui.Buttons, buttonIndex:int) {
+			pushPanel("animation")
+		}
+		guiState.onOption.animationButton = (buttons:gui.Buttons, buttonIndex:int) {
+			local ITEMS :: {"Clear animation","Copy animation","Paste animation"}
+
+			guiState.showContextMenu!(ITEMS, (choice:int) {
+				local project, system = getCurrentProjectAndSystem()
+
+				if choice == {
+					case 1:
+						if not system.frames  return
+
+						local framesOld = system.frames
+						local framesNew: []AnimationFrame
+
+						recordChange("Clear animation",
+							[system, framesNew] (project:Project) {  system.frames = framesNew ; updateParticleAnimation(system)  },
+							[system, framesOld] (project:Project) {  system.frames = framesOld ; updateParticleAnimation(system)  }
+						)
+
+					case 2:
+						hasClipboardAnimation = true
+						clipboardAnimation    = copyFrames(system.frames)
+						clipboardLifetimeMin  = system.psParticleLifetimeMin
+						clipboardLifetimeMax  = system.psParticleLifetimeMax
+
+					case 3:
+						if not hasClipboardAnimation  return
+
+						local framesOld,      framesNew      = system.frames,                copyFrames(clipboardAnimation)
+						local lifetimeMinOld, lifetimeMinNew = system.psParticleLifetimeMin, clipboardLifetimeMin
+						local lifetimeMaxOld, lifetimeMaxNew = system.psParticleLifetimeMax, clipboardLifetimeMax
+
+						recordChange("Paste animation",
+							[system, framesNew, lifetimeMinNew, lifetimeMaxNew] (project:Project) {
+								system.frames, system.psParticleLifetimeMin, system.psParticleLifetimeMax = framesNew, lifetimeMinNew, lifetimeMaxNew
+							},
+							[system, framesOld, lifetimeMinOld, lifetimeMaxOld] (project:Project) {
+								system.frames, system.psParticleLifetimeMin, system.psParticleLifetimeMax = framesOld, lifetimeMinOld, lifetimeMaxOld
+							},
+							[system] (project:Project) {
+								updateParticleAnimation(system)
+								updateParticleParams(project, system)
+								guiState.refreshRecursively!("particleLifetimeMin")
+								guiState.refreshRecursively!("particleLifetimeMax")
+							}
+						)
+				}
+			})
+		}
+	}
 
 	do {
 		guiState.onRefresh.scaleTime = (slider:gui.Slider) {

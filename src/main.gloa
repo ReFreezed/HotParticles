@@ -540,9 +540,7 @@ export System :: struct {
 			currentImage = source.currentImage,
 		}
 
-		for source.frames {
-			system.frames[itIndex] = {x=it.x, y=it.y, w=it.w, h=it.h}
-		}
+		copyFramesTo(source.frames, system.frames)
 
 		system.particles.stop!()
 		return system
@@ -3242,6 +3240,22 @@ export showRecentFilesContextMenu :: (title:string, recentPaths:[]string, onChoo
 			onChoose(items[choice])
 		}
 	})
+}
+
+
+
+export copyFrames :: (frames:[]AnimationFrame) -> []AnimationFrame {
+	local copy: []AnimationFrame
+	for frames {
+		copy[itIndex] = {x=it.x, y=it.y, w=it.w, h=it.h}
+	}
+	return copy
+}
+
+export copyFramesTo :: (from:[]AnimationFrame, to:[]AnimationFrame) {
+	for from {
+		to[itIndex] = {x=it.x, y=it.y, w=it.w, h=it.h}
+	}
 }
 
 
