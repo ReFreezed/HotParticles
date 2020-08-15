@@ -1274,17 +1274,53 @@ export setupGuiCallbacks :: () {
 		local system  = project.systems[systemIndex]
 
 		local items = {
-			"Delete\t"..ctrlText.."+Delete",
-			"Duplicate\t"..ctrlText.."+D",
-			(system.visible ? "Hide\tH" : "Show\tH"),
+			[1] = "Delete\t"..ctrlText.."+Delete",
+			[2] = "Duplicate\t"..ctrlText.."+D",
+			[3] = "Copy",
+			[4] = "Paste new",
+			[5] = (system.visible ? "Hide\tH" : "Show\tH"),
 		}
+
+		static clipboardSystem: System = NULL
+		static hasClipboardSystem      = false
 
 		guiState.showContextMenuWithInput!(system.title, inputTooltip="Particle system title", items,
 			[system, systemIndex] (choice:int) {
 				if choice == {
-					case 1: confirmDeleteSystem(systemIndex)
-					case 2: duplicateSystem(systemIndex)
-					case 3: system.visible = not system.visible
+					case 1:
+						confirmDeleteSystem(systemIndex)
+
+					case 2:
+						duplicateSystem(systemIndex)
+
+					case 3:
+						hasClipboardSystem = true
+						clipboardSystem    = system.clone!()
+
+					case 4:
+						if not hasClipboardSystem  return
+
+						local project      = app.projects[app.currentProjectIndex]
+						local systemPasted = clipboardSystem.clone!()
+
+						-- Should we do this in the recordChange() callback since we might have saved
+						-- an unsaved project inbetween doing, undoing and redoing? Also, the texture
+						-- file may be modified. @UX
+						updateParticleTexture(project, systemPasted)
+
+						recordChange("Paste particle system",
+							[system, systemIndex, systemPasted] (project:Project) {
+								insert(project.systems, systemIndex, systemPasted)
+								setCurrentSystem(systemIndex, force=true)
+							},
+							[system, systemIndex] (project:Project) {
+								remove(project.systems, systemIndex)
+								setCurrentSystem(math.clamp(project.systemIndex, 1, #project.systems), force=true)
+							}
+						)
+
+					case 5:
+						system.visible = not system.visible
 				}
 			},
 			[system] (valueNew:string) {
