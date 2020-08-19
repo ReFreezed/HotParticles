@@ -1498,6 +1498,13 @@ local onMousePressed :: (mx,my:int, mbutton:int, isTouch:bool, presses:int) {
 		LM.setGrabbed(true)
 		LK.setKeyRepeat(false)
 		onMouseMoved(mx,my, 0,0, false)
+
+	} elseif mbutton == 2 {
+		guiState.showContextMenu!({"Reset emitter position"}, (choice:int) {
+			if choice == {
+				case 1: moveEmittersTo(0, 0)
+			}
+		})
 	}
 }
 
