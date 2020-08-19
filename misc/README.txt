@@ -89,6 +89,7 @@ Ctrl+Shift+S    Save new project
 Ctrl+O          Open project
 Ctrl+Shift+O    Open folder containing current project
 Ctrl+E          Export project
+Ctrl+Shift+E    Quick export project files
 
 Ctrl+N          New project
 Ctrl+W          Close project
