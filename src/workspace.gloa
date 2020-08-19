@@ -14,7 +14,7 @@
 
 --============================================================]]
 
-local LAST_FILE_VERSION :: 6
+local LAST_FILE_VERSION :: 7
 
 
 
@@ -436,7 +436,7 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 		local ok, ^version = stringToInt(cast(string) line1)
 		if not ok                       return parsingError(path, ln, "Invalid version line format.")
 		if version < 1                  return parsingError(path, ln, "Invalid version number '%d'.", version)
-		if version > LAST_FILE_VERSION  return parsingError(path, ln, "Unsupported version number '%d'.", version)
+		if version > LAST_FILE_VERSION  parsingError(path, ln, "Unsupported version number '%d'. Trying to load anyway.", version)
 	}
 
 	do {
@@ -628,8 +628,9 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 					case "zoom":
 						local ^ok, ^ptr, zoomLevel = readInt(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
+						if version < 7  zoomLevel *= 2
 						project.zoomLevel  = zoomLevel
-						project.zoom       = 2^zoomLevel
+						project.zoom       = 2 ^ (zoomLevel/2)
 						project.zoomSource = project.zoom
 						project.zoomTarget = project.zoom
 

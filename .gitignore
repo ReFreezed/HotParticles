@@ -8,6 +8,9 @@ local/
 /output/
 /temp/
 
+/exportTemplates/*
+!/exportTemplates/default*.lua
+
 /gfx/appIcon*.*
 !/gfx/appIcon.psd
 !/gfx/appIcon16.png

@@ -3020,13 +3020,13 @@ export redo :: () {
 
 
 export clampZoomLevel :: (project:Project, zoomLevel:int) -> (zoomLevel:int) {
-	return math.clamp(zoomLevel, (project.pixelateWorld ? -1 : -4), 6)
+	return math.clamp(zoomLevel, (project.pixelateWorld ? -2 : -8), 12)
 }
 
 export limitZoomLevel :: (project:Project) {
 	project.zoomLevel  = clampZoomLevel(project, project.zoomLevel)
 	project.zoomSource = project.zoom
-	project.zoomTarget = 2 ^ project.zoomLevel
+	project.zoomTarget = 2 ^ (project.zoomLevel/2)
 }
 
 
