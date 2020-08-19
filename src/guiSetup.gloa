@@ -2657,9 +2657,9 @@ export setupGuiCallbacks :: () {
 
 		-- Choice.
 		guiState.onDouble.fileDialog_items    = (buttons:gui.Buttons, buttonIndex:int) { if not (cast(Item) buttons.buttons[buttonIndex].value).isDir  choosePath() }
-		guiState.onSubmit.fileDialog_filename = (input:gui.InputText)                  { choosePath() }
-		guiState.onAction.fileDialog_choose   = (buttons:gui.Buttons, buttonIndex:int) { choosePath() }
-		local choosePath :: () {
+		guiState.onSubmit.fileDialog_filename = (input:gui.InputText)                  { choosePath(testNavigation=true) }
+		guiState.onAction.fileDialog_choose   = (buttons:gui.Buttons, buttonIndex:int) { choosePath(testNavigation=true) }
+		local choosePath :: (testNavigation=false) {
 			local input   = guiState.getElement!("fileDialog_filename", gui.InputText)
 			input.value   = trim(input.value)
 			local pathObj = Path(input.value)
@@ -2671,6 +2671,24 @@ export setupGuiCallbacks :: () {
 			}
 
 			pathObj.prepend!(dirCurrent) -- Fails if pathObj is absolute.
+
+			if testNavigation {
+				local path = pathObj.toString!()
+
+				if connectToRemoteDirectory(path) {
+					disconnectFromRemoteDirectory()
+
+					dirCurrent  = path
+					input.value = fileDialog_filename
+
+					guiState.refreshRecursively!("fileDialog_items")
+					guiState.setFocus!(input)
+
+					local basename, ext = splitBasenameAndExtension(fileDialog_filename)
+					input.field.setSelection!(0, utf8.getLength(basename))
+					return
+				}
+			}
 
 			if fileDialog_isSave {
 				local ok, filename = pathObj.getFilename!()
