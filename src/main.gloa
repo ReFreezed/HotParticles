@@ -264,6 +264,10 @@ export Project :: struct {
 	scaleGlobalSizeEnabled  = true,
 	scaleGlobalSize         = 1.0,
 
+	regionEnabled = true,
+	regionWidth   = 0,
+	regionHeight  = 0,
+
 	customData = "",
 
 	guiLimits: struct { !key:string, !value:float },
@@ -348,6 +352,9 @@ export Project :: struct {
 			scaleGlobalSpace         = source.scaleGlobalSpace,
 			scaleGlobalSizeEnabled   = source.scaleGlobalSizeEnabled,
 			scaleGlobalSize          = source.scaleGlobalSize,
+			regionEnabled            = source.regionEnabled,
+			regionWidth              = source.regionWidth,
+			regionHeight             = source.regionHeight,
 			customData               = source.customData,
 			guiLimits                = copyTable(source.guiLimits),
 			edited                   = true,
@@ -1803,6 +1810,9 @@ local onDraw :: () {
 
 	local showWorld, showTextureOffset, showAreaDistribution, showAnimationFrames, showTexturePreview, showEmitterPosition = getVisibilityFlags()
 
+	local bgR, bgG, bgB      = hsvToRgb(project.bgColor)
+	local _, _, bgBrightness = rgbToHsp(bgR, bgG, bgB)
+
 	LG.reset()
 
 	-- World.
@@ -1812,8 +1822,7 @@ local onDraw :: () {
 
 		LG.setCanvas(canvasWorld)
 
-		local r, g, b = hsvToRgb(project.bgColor)
-		LG.clear(r, g, b, 1)
+		LG.clear(bgR, bgG, bgB, 1)
 
 		-- Background pattern.
 		if math.abs(project.bgChecker) > .9/255 {
@@ -2029,6 +2038,19 @@ local onDraw :: () {
 				}
 			}
 
+			if project.regionEnabled and project.regionWidth and project.regionHeight {
+				local lw :: 2
+
+				if bgBrightness < .5
+					LG.setColor(1, 1, 1, .7)
+				else
+					LG.setColor(0, 0, 0, .7)
+
+				LG.setLineWidth(lw)
+				LG.rectangle(LG.DrawMode.LINE, -(project.regionWidth+lw)/2, -(project.regionHeight+lw)/2, project.regionWidth+lw, project.regionHeight+lw)
+				LG.setLineWidth(1)
+			}
+
 			--[[ DEBUG
 			LG.setColor(1, 1, 1, .15)
 			LG.line(project.movementPoint1X, project.movementPoint1Y, project.movementPoint2X, project.movementPoint2Y)
@@ -2184,9 +2206,7 @@ local onDraw :: () {
 			local x = MAIN_PANEL_WIDTH+5
 			local y = 5
 
-			local r, g, b          = hsvToRgb(project.bgColor)
-			local _, _, brightness = rgbToHsp(r, g, b)
-			if brightness < .5
+			if bgBrightness < .5
 				LG.setColor(1, 1, 1, .7)
 			else
 				LG.setColor(0, 0, 0, .7)

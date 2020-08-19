@@ -55,17 +55,15 @@ local writeProject :: (buffer:[]string, project:Project, isSavingWorkspace:bool)
 		if project.edited { insert(buffer, "edited\n") }
 	}
 
-	insert(buffer, "bgColor")              ; writeValue (buffer, eol=true, {project.bgColor[1], project.bgColor[2], project.bgColor[3]})
-	insert(buffer, "bgChecker")            ; writeValue (buffer, eol=true, project.bgChecker)
-	insert(buffer, "bgSize")               ; writeValue (buffer, eol=true, project.bgSize)
-	insert(buffer, "bgPath")               ; writeValue (buffer, eol=true, project.bgPath)
-	insert(buffer, "bgScale")              ; writeValue (buffer, eol=true, project.bgScale)
-	insert(buffer, "bgRepeat")             ; writeValues(buffer, eol=true, project.bgRepeatX, project.bgRepeatY)
-	insert(buffer, "pixelateWorld")        ; writeValue (buffer, eol=true, project.pixelateWorld)
-	insert(buffer, "pixelateTextures")     ; writeValue (buffer, eol=true, project.pixelateTextures)
-	insert(buffer, "zoom")                 ; writeValue (buffer, eol=true, project.zoomLevel)
-	insert(buffer, "customData")           ; writeValue (buffer, eol=true, project.customData)
-	insert(buffer, "movementScaleEnabled") ; writeValues(buffer, eol=true, project.movementScaleXEnabled, project.movementScaleYEnabled)
+	insert(buffer, "bgColor")   ; writeValue (buffer, eol=true, {project.bgColor[1], project.bgColor[2], project.bgColor[3]})
+	insert(buffer, "bgChecker") ; writeValue (buffer, eol=true, project.bgChecker)
+	insert(buffer, "bgSize")    ; writeValue (buffer, eol=true, project.bgSize)
+	insert(buffer, "bgPath")    ; writeValue (buffer, eol=true, project.bgPath)
+	insert(buffer, "bgScale")   ; writeValue (buffer, eol=true, project.bgScale)
+	insert(buffer, "bgRepeat")  ; writeValues(buffer, eol=true, project.bgRepeatX, project.bgRepeatY)
+
+	insert(buffer, "pixelateWorld")    ; writeValue (buffer, eol=true, project.pixelateWorld)
+	insert(buffer, "pixelateTextures") ; writeValue (buffer, eol=true, project.pixelateTextures)
 
 	insert(buffer, "exportBaseDirectory")      ; writeValue(buffer, eol=true, project.exportBaseDirectory)
 	insert(buffer, "exportParticles")          ; writeValue(buffer, eol=true, project.exportParticles)
@@ -84,11 +82,21 @@ local writeProject :: (buffer:[]string, project:Project, isSavingWorkspace:bool)
 	insert(buffer, "scaleGlobalSizeEnabled")  ; writeValue(buffer, eol=true, project.scaleGlobalSizeEnabled)
 	insert(buffer, "scaleGlobalSize")         ; writeValue(buffer, eol=true, project.scaleGlobalSize)
 
+	insert(buffer, "zoom")       ; writeValue (buffer, eol=true, project.zoomLevel)
+	insert(buffer, "customData") ; writeValue (buffer, eol=true, project.customData)
+
+	insert(buffer, "movementScaleEnabled") ; writeValues(buffer, eol=true, project.movementScaleXEnabled, project.movementScaleYEnabled)
 	insert(buffer, "movement")
 	writeValue(buffer, cast(int) project.movementPreset)
 	writeValue(buffer, project.movementScaleX)
 	writeValue(buffer, project.movementScaleY)
 	writeValue(buffer, project.movementSpeed)
+	insert(buffer, "\n")
+
+	insert(buffer, "region")
+	writeValue(buffer, project.regionEnabled)
+	writeValue(buffer, project.regionWidth)
+	writeValue(buffer, project.regionHeight)
 	insert(buffer, "\n")
 
 	do {
@@ -734,6 +742,15 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 						local ^ok, ^ptr, limit = readFloat (version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
 						project.guiLimits[name] = limit
+
+					case "region":
+						local ^ok, ^ptr, enabled = readBool(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
+						local ^ok, ^ptr, w       = readInt (version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
+						local ^ok, ^ptr, h       = readInt (version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
+						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
+						project.regionEnabled = enabled
+						project.regionWidth   = w
+						project.regionHeight  = h
 
 					case:
 						parsingError(path, ln, "Unknown project parameter '%s'.", param)

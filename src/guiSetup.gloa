@@ -96,6 +96,15 @@ export setupGuiFrames :: () {
 
 				guiState.separator!({ thick=false }),
 
+				guiState.section!({ name="regionSection", label="Region", tooltip="Visual region guide",
+					guiState.hbox!({
+						guiState.slider!({ name="regionWidth",  labelLeft="width",  canDisable=true, defaultValue=0, min=0, max=1024, exponential=true, isInt=true, limitName="region", readout="%d", linkMultiDrag={"regionHeight"}, weight=1 }),
+						guiState.slider!({ name="regionHeight", labelLeft="height", canDisable=true, defaultValue=0, min=0, max=1024, exponential=true, isInt=true, limitName="region", readout="%d", linkMultiDrag={"regionWidth"},  weight=1, inset=40 }),
+					}),
+				}),
+
+				guiState.separator!({ thick=false }),
+
 				guiState.section!({ name="scaleGlobalSection", label="GlobalScale", tooltip="Scale all parameters in all systems", icon16="scaleGlobal",
 					guiState.slider!({ name="scaleGlobalTime",  labelLeft="time",  canDisable=true, defaultValue=1, min=0, max=4, exponential=true, limitName="scaleGlobalTime",  readoutMulti=100, readout="%d%%" }),
 					guiState.slider!({ name="scaleGlobalSpace", labelLeft="space", canDisable=true, defaultValue=1, min=0, max=4, exponential=true, limitName="scaleGlobalSpace", readoutMulti=100, readout="%d%%", linkMultiDrag={"scaleGlobalSize"} }),
@@ -1172,6 +1181,38 @@ export setupGuiCallbacks :: () {
 			[dataNew] (project:Project) {  project.customData = dataNew  },
 			[dataOld] (project:Project) {  project.customData = dataOld  },
 			--[[   ]] (project:Project) {  guiState.refreshRecursively!("customDataProject")  }
+		)
+	}
+
+	-- Region.
+	do {
+		guiState.onRefresh.regionWidth = (slider:gui.Slider) {
+			local project  = app.projects[app.currentProjectIndex]
+			slider.enabled = project.regionEnabled
+			slider.value   = project.regionWidth
+		}
+		guiState.onRefresh.regionHeight = (slider:gui.Slider) {
+			local project  = app.projects[app.currentProjectIndex]
+			slider.enabled = project.regionEnabled
+			slider.value   = project.regionHeight
+		}
+		addEventHandlersForSlider("regionWidth", "Region",
+			(project:Project, __:System, value:float) {  project.regionWidth = math.round(value)  }
+		)
+		addEventHandlersForSlider("regionHeight", "Region",
+			(project:Project, __:System, value:float) {  project.regionHeight = math.round(value)  }
+		)
+		addToggleEventHandler("regionWidth", "Region",
+			onToggle = (project:Project, __:System, enabled:bool) {
+				project.regionEnabled = enabled
+				guiState.refreshRecursively!("regionHeight")
+			}
+		)
+		addToggleEventHandler("regionHeight", "Region",
+			onToggle = (project:Project, __:System, enabled:bool) {
+				project.regionEnabled = enabled
+				guiState.refreshRecursively!("regionWidth")
+			}
 		)
 	}
 
@@ -2436,6 +2477,20 @@ export setupGuiCallbacks :: () {
 
 			local basename, ext = splitBasenameAndExtension(fileDialog_filename)
 			filenameInput.field.setSelection!(0, utf8.getLength(basename))
+
+			if fileDialog_filename {
+				local itemsButtons = guiState.getElement!("fileDialog_items", gui.Buttons)
+
+				for button: itemsButtons.buttons {
+					local item = cast(Item) button.value
+					if item.name ~= fileDialog_filename  continue
+
+					local x, y, w, h      = guiState.getButtonLayout!(itemsButtons, itIndex)
+					local itemsScrollable = guiState.getElement!("fileDialog_itemsSrollable", gui.Scrollable)
+					guiState.scrollTo!(itemsScrollable, -math.round(y-itemsScrollable.layoutY-(itemsScrollable.layoutHeight-h)/2), limit=true)
+					break
+				}
+			}
 		}
 
 		guiState.onInactive.fileDialog = (frame:gui.Frame) {

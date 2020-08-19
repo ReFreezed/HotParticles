@@ -40,6 +40,7 @@
 	setFocus, blurFocus
 	showMenu, showContextMenu, showContextMenuWithInput, hideContextMenu
 	update
+	updateLayout
 
 --============================================================]]
 
@@ -170,6 +171,7 @@ export State :: struct {
 	delete :: _delete,
 	draw :: _draw,
 	findParent :: _findParent,
+	getButtonLayout :: _getButtonLayout,
 	getElement :: _getElement,
 	getElementAt :: _getElementAt,
 	getScrollOffset :: _getScrollOffset,
@@ -198,6 +200,7 @@ export State :: struct {
 	showContextMenuWithInput :: _showContextMenuWithInput,
 	showMenu :: _showMenu,
 	update :: _update,
+	updateLayout :: _updateLayout,
 }
 
 local _blurFocus :: blurFocus
@@ -205,6 +208,7 @@ local _cancelMouseActions :: cancelMouseActions
 local _delete :: delete
 local _draw :: draw
 local _findParent :: findParent
+local _getButtonLayout :: getButtonLayout
 local _getElement :: getElement
 local _getElementAt :: getElementAt
 local _getScrollOffset :: getScrollOffset
@@ -233,6 +237,7 @@ local _showContextMenu :: showContextMenu
 local _showContextMenuWithInput :: showContextMenuWithInput
 local _showMenu :: showMenu
 local _update :: update
+local _updateLayout :: updateLayout
 
 
 
@@ -1760,6 +1765,8 @@ local positionAndFit :: (state:State, el:Element, x,y,w,h:int) {
 			if input.field ~= NULL  input.field.setWidth!(w - 2*SPACING)
 	}
 }
+
+export updateLayout :: updateLayoutIfNeeded
 
 local updateLayoutIfNeeded :: (state:State) {
 	if not state.layoutNeedsUpdate  return
@@ -3544,14 +3551,32 @@ local commitValueFromInput :: (state:State, colorEl:Color, component:int, text:s
 
 
 
-export scrollTo :: (scrollable:Scrollable, scroll:int) {
+export scrollTo :: (scrollable:Scrollable, scroll:int, limit=false) {
 	scrollable.scroll       = scroll
 	scrollable.scrollSource = scroll
 	scrollable.scrollTarget = scroll
+
+	if limit  limitScroll(scrollable)
 }
 
-export scrollTo :: (state:State, scrollable:Scrollable, scroll:int) {
-	scrollTo(scrollable, scroll)
+export scrollTo :: (state:State, scrollable:Scrollable, scroll:int, limit=false) {
+	scrollTo(scrollable, scroll, limit)
+}
+
+
+
+export getButtonLayout :: (state:State, buttons:Buttons, i:int) -> (x,y,w,h:int) {
+	updateLayoutIfNeeded(state)
+
+	if buttons.vertical {
+		local y1 = math.round(buttons.buttonHeight*(i-1))
+		local h  = math.round(buttons.buttonHeight*(i  )) - y1
+		return buttons.layoutX, buttons.layoutY+y1, buttons.layoutWidth, h
+	} else {
+		local x1 = math.round(buttons.buttonWidth*(i-1))
+		local w  = math.round(buttons.buttonWidth*(i  )) - x1
+		return buttons.layoutX+x1, buttons.layoutY, w, buttons.layoutHeight
+	}
 }
 
 
