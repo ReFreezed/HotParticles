@@ -1023,11 +1023,13 @@ export pushQuitEvent :: () {
 
 
 export connectToRemoteDirectory :: (dir:string) -> (success:bool) {
-	if not physfs.setWriteDirectory(dir)  return false
+	if not physfs.mountReadDirectory(dir)  return false
 
 	for physfs.getSearchPaths()  assert(physfs.unmountReadDirectory(it))
 
-	assert(physfs.mountReadDirectory(dir)) -- If we can write then we should be able to read too.
+	assert(physfs.mountReadDirectory(dir))
+	assert(physfs.setWriteDirectory(dir))
+
 	return true
 }
 
@@ -2819,6 +2821,18 @@ export setBackgroundPath :: (project:Project, pathNew:string) {
 		[         saveRecent] (project:Project) {  updateBackgroundTexture(project, NULL, saveRecent) ; saveRecent = false ; guiState.refreshRecursively!("bgPath")  }
 	)
 }
+export setCustomParticlesTemplatePath :: (project:Project, pathNew:string) {
+	if pathNew == project.exportParticlesTemplatePath  return
+	project.exportParticlesTemplatePath = pathNew
+	markEdited(project)
+	-- @Incomplete: Save recent template paths.
+}
+export setCustomClipboardTemplatePath :: (project:Project, pathNew:string) {
+	if pathNew == project.exportClipboardTemplatePath  return
+	project.exportClipboardTemplatePath = pathNew
+	markEdited(project)
+	-- @Incomplete: Save recent template paths.
+}
 
 
 
@@ -3505,7 +3519,7 @@ export tryExportFiles :: (quick=false) {
 	-- Check existing files.
 	local filesToConfirmOverwrite: []string
 
-	if not (quick and project.fileIsSaved) { -- Should we always confirm overwrites?
+	do {
 		static info: LF.FileInfo
 
 		if project.exportParticles and not project.exportParticlesOverwrite {

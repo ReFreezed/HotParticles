@@ -9,6 +9,8 @@
 --=
 --============================================================]]
 
+local PRIVATE_RELEASE :: 1==0
+
 export !import "basic"
 export !import "string"
 !import "compiler"
@@ -220,6 +222,8 @@ local doRelease :: () {
 			copyFile("misc/README.txt", outputDir.."/_README.txt")
 		}
 	}
+
+	if PRIVATE_RELEASE  return
 
 	-- macOS.
 	do {

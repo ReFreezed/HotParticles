@@ -3304,11 +3304,11 @@ export showContextMenu :: (state:State, x,y:int, items:[]string, cb:(choice:int)
 	}
 }
 
-export showContextMenuWithInput :: (state:State, value:string, items:[]string, cb:(choice:int), cbInput:(text:string)=NULL, cbSubmit:(text:string)=NULL, inputTooltip="") {
+export showContextMenuWithInput :: (state:State, value:string, items:[]string, cb:(choice:int), cbInput:(text:string)=NULL, cbSubmit:(text:string)=NULL, inputTooltip="", minWidth=0) {
 	local mx, my = LM.getPosition()
-	state.showContextMenuWithInput!(mx, my, value, items, cb, cbInput, cbSubmit, inputTooltip)
+	state.showContextMenuWithInput!(mx, my, value, items, cb, cbInput, cbSubmit, inputTooltip, minWidth)
 }
-export showContextMenuWithInput :: (state:State, x,y:int, value:string, items:[]string, cb:(choice:int), cbInput:(text:string)=NULL, cbSubmit:(text:string)=NULL, inputTooltip="") {
+export showContextMenuWithInput :: (state:State, x,y:int, value:string, items:[]string, cb:(choice:int), cbInput:(text:string)=NULL, cbSubmit:(text:string)=NULL, inputTooltip="", minWidth=0) {
 	state.hideContextMenu!()
 
 	local buttonList: []Button
@@ -3322,7 +3322,7 @@ export showContextMenuWithInput :: (state:State, x,y:int, value:string, items:[]
 
 	local input = state.inputText!({ name="__contextMenuInput", value=value, style=.CONTEXT_MENU, tooltip=inputTooltip })
 
-	local contextMenu = state.frame!({ data=cb, x=x, y=y, minWidth=CONTEXT_MENU_MIN_WIDTH, layout=.FLOATING, style=.CONTEXT_MENU,
+	local contextMenu = state.frame!({ data=cb, x=x, y=y, minWidth=math.max(minWidth, CONTEXT_MENU_MIN_WIDTH), layout=.FLOATING, style=.CONTEXT_MENU,
 		input,
 		state.buttons!({ name="__contextMenuButtons", vertical=true, align=.LEFT, style=.CONTEXT_MENU, buttonMinHeight=16,
 			buttons = {unpack(buttonList)},

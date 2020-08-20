@@ -12,7 +12,7 @@
 export MAIN_PANEL_WIDTH    :: 450
 export DIALOG_WIDTH        :: 400
 export DIALOG_WIDTH_LOG    :: 700
-export DIALOG_WIDTH_EXPORT :: 550
+export DIALOG_WIDTH_EXPORT :: 650
 
 local BIG_BUTTON_HEIGHT    :: 40
 local MEDIUM_BUTTON_HEIGHT :: 16
@@ -426,8 +426,14 @@ export setupGuiFrames :: () {
 					guiState.text!({ name="exportProject_particles_pathResult", weight=1 }),
 					guiState.buttons!({ name="exportProject_particles_pathResultInfo", buttons={{image="iconEye"}} }),
 				}),
-				guiState.buttons!({ name="exportProject_particles_template", labelLeft="template", vertical=true, align=.LEFT, buttonMinHeight=MEDIUM_BUTTON_HEIGHT,
-					buttons={{image="iconDown",label="defaultLuaModule"}},
+				guiState.hbox!({
+					guiState.buttons!({ name="exportProject_particles_template", labelLeft="template", align=.LEFT, buttonMinHeight=MEDIUM_BUTTON_HEIGHT, weight=1,
+						buttons={{image="iconDown",label="defaultLuaModule"}},
+					}),
+					guiState.buttons!({ buttons={
+						{name="exportProject_particles_templateChoose",   image="iconFolder",            tooltip="Browse files"},
+						{name="exportProject_particles_templateRelative", image="iconRelativeDirectory", tooltip="Toggle relative path"},
+					}}),
 				}),
 			}),
 
@@ -449,8 +455,14 @@ export setupGuiFrames :: () {
 			guiState.separator!({ thick=true }),
 			guiState.section!({ name="exportProject_clipboardSection", label="Clipboard", icon16="clipboard",
 				guiState.buttons!({ align=.LEFT, buttonMinHeight=MEDIUM_BUTTON_HEIGHT, buttons={{name="exportProject_clipboard_export",label="Export to clipboard"}}}),
-				guiState.buttons!({ name="exportProject_clipboard_template", labelLeft="template", align=.LEFT, buttonMinHeight=MEDIUM_BUTTON_HEIGHT,
-					buttons={{image="iconDown",label="defaultLuaClipboard"}},
+				guiState.hbox!({
+					guiState.buttons!({ name="exportProject_clipboard_template", labelLeft="template", align=.LEFT, buttonMinHeight=MEDIUM_BUTTON_HEIGHT, weight=1,
+						buttons={{image="iconDown",label="defaultLuaClipboard"}},
+					}),
+					guiState.buttons!({ buttons={
+						{name="exportProject_clipboard_templateChoose",   image="iconFolder",            tooltip="Browse files"},
+						{name="exportProject_clipboard_templateRelative", image="iconRelativeDirectory", tooltip="Toggle relative path"},
+					}}),
 				}),
 			}),
 
@@ -620,14 +632,15 @@ local fileDialog_isSave          = false
 local fileDialog_dir             = ""
 local fileDialog_filename        = ""
 local fileDialog_filenamePattern = ""
-local fileDialog_onHighlight:    = cast((pathObj:Path, pathAbsoluteObj:Path)) NULL
-local fileDialog_onChoose:       = cast((pathObj:Path, pathAbsoluteObj:Path)) NULL
-local fileDialog_onClose:        = cast(()) NULL
+
+local fileDialog_onHighlight: (pathObj:Path, pathAbsoluteObj:Path) = NULL
+local fileDialog_onChoose:    (pathObj:Path, pathAbsoluteObj:Path) = NULL
+local fileDialog_onClose:     ()                                   = NULL
 
 export showFileDialog :: (title:string, dir,filename:string,
-	onHighlight: (pathObj:Path, pathAbsoluteObj:Path),
-	onChoose:    (pathObj:Path, pathAbsoluteObj:Path),
-	onClose:     (),
+	onHighlight: type_of(fileDialog_onHighlight) = NULL,
+	onChoose:    type_of(fileDialog_onChoose)    = NULL,
+	onClose:     type_of(fileDialog_onClose)     = NULL,
 	filenamePattern="", isSave=false, floating=false
 ) {
 	fileDialog_isSave          = isSave
@@ -2387,9 +2400,9 @@ export setupGuiCallbacks :: () {
 			if not ok  filename = ""
 
 			showFileDialog("Choose shader", dir, filename,
-				onHighlight = (pathObj:Path, pathAbsoluteObj:Path) {
-					-- @UX: Preview shader.
-				},
+				-- onHighlight = (pathObj:Path, pathAbsoluteObj:Path) {
+				-- 	-- @UX: Preview shader.
+				-- },
 				onChoose = (pathObj:Path, pathAbsoluteObj:Path) {
 					local ok, dir, filename = pathAbsoluteObj.getDirectoryAndFilename!()
 					if not ok  return -- @UX: Show error message.
@@ -2411,8 +2424,7 @@ export setupGuiCallbacks :: () {
 					local project, system = getCurrentProjectAndSystem()
 					setShaderPath(project, system, pathObj.toString!())
 					popPanel()
-				},
-				onClose = () {}
+				}
 			)
 		}
 
@@ -2492,7 +2504,7 @@ export setupGuiCallbacks :: () {
 		}
 
 		guiState.onInactive.fileDialog = (frame:gui.Frame) {
-			fileDialog_onClose()
+			if fileDialog_onClose ~= NULL  fileDialog_onClose()
 		}
 
 		-- Bookmarks.
@@ -2637,9 +2649,11 @@ export setupGuiCallbacks :: () {
 				local input = guiState.getElement!("fileDialog_filename", gui.InputText)
 				input.value = item.name
 
-				local pathObj = Path(dirCurrent)
-				insert(pathObj.path, item.name)
-				fileDialog_onHighlight(makeRelativeOrClone(pathObj), pathObj)
+				if fileDialog_onHighlight ~= NULL {
+					local pathObj = Path(dirCurrent)
+					insert(pathObj.path, item.name)
+					fileDialog_onHighlight(makeRelativeOrClone(pathObj), pathObj)
+				}
 
 			} elseif item.name == ".." {
 				local dirObj = Path(dirCurrent)
@@ -2675,7 +2689,7 @@ export setupGuiCallbacks :: () {
 			if testNavigation {
 				local path = pathObj.toString!()
 
-				if connectToRemoteDirectory(path) {
+				if connectToRemoteDirectory(path) { -- Succeeds if the path is a folder, and that it exists.
 					disconnectFromRemoteDirectory()
 
 					dirCurrent  = path
@@ -2698,7 +2712,9 @@ export setupGuiCallbacks :: () {
 				}
 			}
 
-			fileDialog_onChoose(makeRelativeOrClone(pathObj), pathObj)
+			if fileDialog_onChoose ~= NULL {
+				fileDialog_onChoose(makeRelativeOrClone(pathObj), pathObj)
+			}
 		}
 	}
 
@@ -2800,21 +2816,6 @@ export setupGuiCallbacks :: () {
 		buttons.tooltip = guiState.getElement!("exportProject_particles_pathResult", gui.Text).text
 	}
 
-	guiState.onRefresh.exportProject_particles_template = (buttons:gui.Buttons) {
-		local project            = app.projects[app.currentProjectIndex]
-		buttons.buttons[1].label = project.exportParticlesTemplate ?: project.exportParticlesTemplatePath
-	}
-	guiState.onAction.exportProject_particles_template = (buttons:gui.Buttons, buttonIndex:int) {
-		showTemplateDropdownMenu(buttons, app.projects[app.currentProjectIndex].exportParticlesTemplatePath, (templateName:string, templatePath:string) {
-			local project = app.projects[app.currentProjectIndex]
-
-			project.exportParticlesTemplate = templateName
-			if not templateName  project.exportParticlesTemplatePath = Path(templatePath).toString!()
-
-			markEdited(project)
-			guiState.refreshRecursively!("exportProject_particles_template")
-		})
-	}
 	local showTemplateDropdownMenu :: (buttons:gui.Buttons, customPath:string, cb:(templateName:string, templatePath:string)) {
 		local templateNames: []string
 
@@ -2830,7 +2831,7 @@ export setupGuiCallbacks :: () {
 		local x = buttons.layoutX
 		local y = buttons.layoutY + buttons.layoutHeight + guiState.getScrollOffset!(buttons)
 
-		guiState.showContextMenuWithInput!(x, y, customPath, inputTooltip="Path to a template in a custom location", templateNames,
+		guiState.showContextMenuWithInput!(x, y, minWidth=buttons.layoutWidth, customPath, inputTooltip="Path to a template in a custom location", templateNames,
 			cb = [templateNames,cb] (choice:int) {
 				if choice > 0  cb(templateNames[choice], "")
 			},
@@ -2838,6 +2839,79 @@ export setupGuiCallbacks :: () {
 				cb("", value)
 			}
 		)
+	}
+
+	do {
+		guiState.onRefresh.exportProject_particles_template = (buttons:gui.Buttons) {
+			local project            = app.projects[app.currentProjectIndex]
+			buttons.buttons[1].label = project.exportParticlesTemplate ?: project.exportParticlesTemplatePath
+		}
+		guiState.onAction.exportProject_particles_template = (buttons:gui.Buttons, buttonIndex:int) {
+			showTemplateDropdownMenu(buttons, app.projects[app.currentProjectIndex].exportParticlesTemplatePath, (templateName:string, templatePath:string) {
+				local project = app.projects[app.currentProjectIndex]
+
+				project.exportParticlesTemplate = templateName
+				if not templateName  setCustomParticlesTemplatePath(project, Path(templatePath).toString!())
+
+				markEdited(project)
+				guiState.refreshRecursively!("exportProject_particles_template")
+			})
+		}
+
+		guiState.onAction.exportProject_particles_templateChoose = (buttons:gui.Buttons, buttonIndex:int) {
+			local project = app.projects[app.currentProjectIndex]
+			local pathObj = Path(project.exportParticlesTemplatePath)
+			local ok, dir = pathObj.getDirectory!()
+
+			if not ok {
+				dir = getSaveDirectory().."/projects"
+
+			} else {
+				local dirObj = Path(dir)
+
+				if not dirObj.isAbsolute {
+					ok, dir = Path(project.path).getDirectory!()
+					dirObj.prepend!(ok ? dir : getSaveDirectory().."/projects")
+					dir = dirObj.toString!()
+				}
+			}
+
+			local ^ok, filename = pathObj.getFilename!()
+			if not ok  filename = ""
+
+			showFileDialog(floating=true, "Choose template", dir, filename,
+				onChoose = (pathObj:Path, pathAbsoluteObj:Path) {
+					local ok, dir = pathAbsoluteObj.getDirectory!()
+					if not ok  return -- @UX: Show error message.
+
+					addRecent(app.recentFolders, dir, app.maxRecentFolders)
+
+					local project = app.projects[app.currentProjectIndex]
+
+					if project.exportParticlesTemplate {
+						project.exportParticlesTemplate = ""
+						markEdited(project)
+					}
+					setCustomParticlesTemplatePath(project, pathObj.toString!())
+					guiState.refreshRecursively!("exportProject_particles_template")
+					popPanel()
+				}
+			)
+		}
+
+		guiState.onAction.exportProject_particles_templateRelative = (buttons:gui.Buttons, buttonIndex:int) {
+			local project = app.projects[app.currentProjectIndex]
+			if project.exportParticlesTemplate  return
+
+			local ok, path = toggleRelativePath(project, project.exportParticlesTemplatePath, [*] () -> (success:bool, path:string) {
+				local ok, path = getFullPathToCustomParticlesTemplate(project)
+				return ok, path
+			})
+			if not ok  return
+
+			setCustomParticlesTemplatePath(project, path)
+			guiState.refreshRecursively!("exportProject_particles_template")
+		}
 	}
 
 	-- Texture files.
@@ -2911,41 +2985,98 @@ export setupGuiCallbacks :: () {
 	}
 
 	-- Clipboard.
-	guiState.onRefresh.exportProject_clipboard_template = (buttons:gui.Buttons) {
-		local project            = app.projects[app.currentProjectIndex]
-		buttons.buttons[1].label = project.exportClipboardTemplate ?: project.exportClipboardTemplatePath
-	}
-	guiState.onAction.exportProject_clipboard_template = (buttons:gui.Buttons, buttonIndex:int) {
-		showTemplateDropdownMenu(buttons, app.projects[app.currentProjectIndex].exportClipboardTemplatePath, (templateName:string, templatePath:string) {
-			local project = app.projects[app.currentProjectIndex]
+	do {
+		guiState.onRefresh.exportProject_clipboard_template = (buttons:gui.Buttons) {
+			local project            = app.projects[app.currentProjectIndex]
+			buttons.buttons[1].label = project.exportClipboardTemplate ?: project.exportClipboardTemplatePath
+		}
+		guiState.onAction.exportProject_clipboard_template = (buttons:gui.Buttons, buttonIndex:int) {
+			showTemplateDropdownMenu(buttons, app.projects[app.currentProjectIndex].exportClipboardTemplatePath, (templateName:string, templatePath:string) {
+				local project = app.projects[app.currentProjectIndex]
 
-			project.exportClipboardTemplate = templateName
-			if not templateName  project.exportClipboardTemplatePath = Path(templatePath).toString!()
+				project.exportClipboardTemplate = templateName
+				if not templateName  setCustomClipboardTemplatePath(project, Path(templatePath).toString!())
 
-			markEdited(project)
-			guiState.refreshRecursively!("exportProject_clipboard_template")
-		})
-	}
-
-	guiState.onAction.exportProject_clipboard_export = (buttons:gui.Buttons, buttonIndex:int) {
-		local project      = app.projects[app.currentProjectIndex]
-		local data: string = NULL
-
-		if project.exportClipboardTemplate {
-			local ok, ^data = generateDataToExportFromTemplate(project.exportClipboardTemplate, "")
-			if not ok  return -- Error already reported.
-		} else {
-			local ok, fullPath = getFullPathToCustomClipboardTemplate(project)
-			if not ok {
-				setErrorText("Possibly invalid template path")
-				return
-			}
-			ok, data = generateDataToExportFromTemplate("", fullPath)
-			if not ok  return -- Error already reported.
+				markEdited(project)
+				guiState.refreshRecursively!("exportProject_clipboard_template")
+			})
 		}
 
-		love.system.setClipboardText(data)
-		setMessageText("Exported to clipboard")
+		guiState.onAction.exportProject_clipboard_templateChoose = (buttons:gui.Buttons, buttonIndex:int) {
+			local project = app.projects[app.currentProjectIndex]
+			local pathObj = Path(project.exportClipboardTemplatePath)
+			local ok, dir = pathObj.getDirectory!()
+
+			if not ok {
+				dir = getSaveDirectory().."/projects"
+
+			} else {
+				local dirObj = Path(dir)
+
+				if not dirObj.isAbsolute {
+					ok, dir = Path(project.path).getDirectory!()
+					dirObj.prepend!(ok ? dir : getSaveDirectory().."/projects")
+					dir = dirObj.toString!()
+				}
+			}
+
+			local ^ok, filename = pathObj.getFilename!()
+			if not ok  filename = ""
+
+			showFileDialog(floating=true, "Choose template", dir, filename,
+				onChoose = (pathObj:Path, pathAbsoluteObj:Path) {
+					local ok, dir = pathAbsoluteObj.getDirectory!()
+					if not ok  return -- @UX: Show error message.
+
+					addRecent(app.recentFolders, dir, app.maxRecentFolders)
+
+					local project = app.projects[app.currentProjectIndex]
+
+					if project.exportClipboardTemplate {
+						project.exportClipboardTemplate = ""
+						markEdited(project)
+					}
+					setCustomClipboardTemplatePath(project, pathObj.toString!())
+					guiState.refreshRecursively!("exportProject_clipboard_template")
+					popPanel()
+				}
+			)
+		}
+
+		guiState.onAction.exportProject_clipboard_templateRelative = (buttons:gui.Buttons, buttonIndex:int) {
+			local project = app.projects[app.currentProjectIndex]
+			if project.exportClipboardTemplate  return
+
+			local ok, path = toggleRelativePath(project, project.exportClipboardTemplatePath, [*] () -> (success:bool, path:string) {
+				local ok, path = getFullPathToCustomClipboardTemplate(project)
+				return ok, path
+			})
+			if not ok  return
+
+			setCustomClipboardTemplatePath(project, path)
+			guiState.refreshRecursively!("exportProject_clipboard_template")
+		}
+
+		guiState.onAction.exportProject_clipboard_export = (buttons:gui.Buttons, buttonIndex:int) {
+			local project      = app.projects[app.currentProjectIndex]
+			local data: string = NULL
+
+			if project.exportClipboardTemplate {
+				local ok, ^data = generateDataToExportFromTemplate(project.exportClipboardTemplate, "")
+				if not ok  return -- Error already reported.
+			} else {
+				local ok, fullPath = getFullPathToCustomClipboardTemplate(project)
+				if not ok {
+					setErrorText("Possibly invalid template path")
+					return
+				}
+				ok, data = generateDataToExportFromTemplate("", fullPath)
+				if not ok  return -- Error already reported.
+			}
+
+			love.system.setClipboardText(data)
+			setMessageText("Exported to clipboard")
+		}
 	}
 
 	--==============================================================
