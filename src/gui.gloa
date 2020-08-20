@@ -3304,11 +3304,11 @@ export showContextMenu :: (state:State, x,y:int, items:[]string, cb:(choice:int)
 	}
 }
 
-export showContextMenuWithInput :: (state:State, value:string, items:[]string, cb:(choice:int), cbInput:(text:string), inputTooltip="") {
+export showContextMenuWithInput :: (state:State, value:string, items:[]string, cb:(choice:int), cbInput:(text:string)=NULL, cbSubmit:(text:string)=NULL, inputTooltip="") {
 	local mx, my = LM.getPosition()
-	state.showContextMenuWithInput!(mx, my, value, items, cb, cbInput, inputTooltip)
+	state.showContextMenuWithInput!(mx, my, value, items, cb, cbInput, cbSubmit, inputTooltip)
 }
-export showContextMenuWithInput :: (state:State, x,y:int, value:string, items:[]string, cb:(choice:int), cbInput:(text:string), inputTooltip="") {
+export showContextMenuWithInput :: (state:State, x,y:int, value:string, items:[]string, cb:(choice:int), cbInput:(text:string)=NULL, cbSubmit:(text:string)=NULL, inputTooltip="") {
 	state.hideContextMenu!()
 
 	local buttonList: []Button
@@ -3335,13 +3335,16 @@ export showContextMenuWithInput :: (state:State, x,y:int, value:string, items:[]
 	state.layoutNeedsUpdate = true
 	limitMenuPosition(state, contextMenu)
 
-	state.onAction.__contextMenuInput = [cbInput] (input:InputText) {
-		cbInput(input.value)
-		scheduleSaveWorkspace()
+	if cbInput ~= NULL {
+		state.onAction.__contextMenuInput = [cbInput] (input:InputText) {
+			cbInput(input.value)
+			scheduleSaveWorkspace()
+		}
 	}
-	state.onSubmit.__contextMenuInput = [state,cb] (input:InputText) {
+	state.onSubmit.__contextMenuInput = [state,cb,cbSubmit] (input:InputText) {
 		state.contextMenus[1].data = NULL -- So hideContextMenu() doesn't call the callback too!
 		state.hideContextMenu!()
+		if cbSubmit ~= NULL  cbSubmit(input.value)
 		cb(0)
 		scheduleSaveWorkspace()
 	}
@@ -3381,6 +3384,8 @@ export hideContextMenu :: (state:State, mayDeactivateSubmenu=false) -> (success:
 
 	state.onAction    .__contextMenuButtons = nil
 	state.onMouseEnter.__contextMenuButtons = nil
+	state.onAction    .__contextMenuInput   = nil
+	state.onSubmit    .__contextMenuInput   = nil
 
 	local cb = cast((choice:int)) contextMenus[1].data
 	if cb ~= NULL  cb(0)

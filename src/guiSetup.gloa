@@ -1087,7 +1087,7 @@ export setupGuiCallbacks :: () {
 	guiState.onAction.bgRelative = (buttons:gui.Buttons, buttonIndex:int) {
 		local project  = app.projects[app.currentProjectIndex]
 		local ok, path = toggleRelativePath(project, project.bgPath, [*] () -> (success:bool, path:string) {
-			local ok, path = getBackgroundFullPath(project)
+			local ok, path = getFullPathToBackground(project)
 			return ok, path
 		})
 		if ok  setBackgroundPath(project, path)
@@ -1528,7 +1528,7 @@ export setupGuiCallbacks :: () {
 	guiState.onAction.textureRelative = (buttons:gui.Buttons, buttonIndex:int) {
 		local project, system = getCurrentProjectAndSystem()
 		local ok, path = toggleRelativePath(project, system.texturePath, [*] () -> (success:bool, path:string) {
-			local ok, path = getTextureFullPath(project, system)
+			local ok, path = getFullPathToTexture(project, system)
 			return ok, path
 		})
 		if ok  setTexturePath(project, system, path)
@@ -2419,7 +2419,7 @@ export setupGuiCallbacks :: () {
 		guiState.onAction.shaderRelative = (buttons:gui.Buttons, buttonIndex:int) {
 			local project, system = getCurrentProjectAndSystem()
 			local ok, path = toggleRelativePath(project, system.shaderPath, [*] () -> (success:bool, path:string) {
-				local ok, path = getShaderFullPath(project, system)
+				local ok, path = getFullPathToShader(project, system)
 				return ok, path
 			})
 			if ok  setShaderPath(project, system, path)
@@ -2802,17 +2802,20 @@ export setupGuiCallbacks :: () {
 
 	guiState.onRefresh.exportProject_particles_template = (buttons:gui.Buttons) {
 		local project            = app.projects[app.currentProjectIndex]
-		buttons.buttons[1].label = project.exportParticlesTemplate
+		buttons.buttons[1].label = project.exportParticlesTemplate ?: project.exportParticlesTemplatePath
 	}
 	guiState.onAction.exportProject_particles_template = (buttons:gui.Buttons, buttonIndex:int) {
-		showTemplateDropdownMenu(buttons, (templateName:string) {
-			local project                   = app.projects[app.currentProjectIndex]
+		showTemplateDropdownMenu(buttons, app.projects[app.currentProjectIndex].exportParticlesTemplatePath, (templateName:string, templatePath:string) {
+			local project = app.projects[app.currentProjectIndex]
+
 			project.exportParticlesTemplate = templateName
+			if not templateName  project.exportParticlesTemplatePath = Path(templatePath).toString!()
+
 			markEdited(project)
 			guiState.refreshRecursively!("exportProject_particles_template")
 		})
 	}
-	local showTemplateDropdownMenu :: (buttons:gui.Buttons, cb:(templateName:string)) {
+	local showTemplateDropdownMenu :: (buttons:gui.Buttons, customPath:string, cb:(templateName:string, templatePath:string)) {
 		local templateNames: []string
 
 		for LF.getDirectoryItems(EXPORT_TEMPLATES_DIRECTORY) {
@@ -2827,9 +2830,14 @@ export setupGuiCallbacks :: () {
 		local x = buttons.layoutX
 		local y = buttons.layoutY + buttons.layoutHeight + guiState.getScrollOffset!(buttons)
 
-		guiState.showContextMenu!(x, y, templateNames, [templateNames,cb] (choice:int) {
-			if choice > 0  cb(templateNames[choice])
-		})
+		guiState.showContextMenuWithInput!(x, y, customPath, inputTooltip="Path to a template in a custom location", templateNames,
+			cb = [templateNames,cb] (choice:int) {
+				if choice > 0  cb(templateNames[choice], "")
+			},
+			cbSubmit = [cb] (value:string) {
+				cb("", value)
+			}
+		)
 	}
 
 	-- Texture files.
@@ -2905,21 +2913,36 @@ export setupGuiCallbacks :: () {
 	-- Clipboard.
 	guiState.onRefresh.exportProject_clipboard_template = (buttons:gui.Buttons) {
 		local project            = app.projects[app.currentProjectIndex]
-		buttons.buttons[1].label = project.exportClipboardTemplate
+		buttons.buttons[1].label = project.exportClipboardTemplate ?: project.exportClipboardTemplatePath
 	}
 	guiState.onAction.exportProject_clipboard_template = (buttons:gui.Buttons, buttonIndex:int) {
-		showTemplateDropdownMenu(buttons, (templateName:string) {
-			local project                   = app.projects[app.currentProjectIndex]
+		showTemplateDropdownMenu(buttons, app.projects[app.currentProjectIndex].exportClipboardTemplatePath, (templateName:string, templatePath:string) {
+			local project = app.projects[app.currentProjectIndex]
+
 			project.exportClipboardTemplate = templateName
+			if not templateName  project.exportClipboardTemplatePath = Path(templatePath).toString!()
+
 			markEdited(project)
 			guiState.refreshRecursively!("exportProject_clipboard_template")
 		})
 	}
 
 	guiState.onAction.exportProject_clipboard_export = (buttons:gui.Buttons, buttonIndex:int) {
-		local project  = app.projects[app.currentProjectIndex]
-		local ok, data = generateDataToExportFromTemplate(project.exportClipboardTemplate)
-		if not ok  return
+		local project      = app.projects[app.currentProjectIndex]
+		local data: string = NULL
+
+		if project.exportClipboardTemplate {
+			local ok, ^data = generateDataToExportFromTemplate(project.exportClipboardTemplate, "")
+			if not ok  return -- Error already reported.
+		} else {
+			local ok, fullPath = getFullPathToCustomClipboardTemplate(project)
+			if not ok {
+				setErrorText("Possibly invalid template path")
+				return
+			}
+			ok, data = generateDataToExportFromTemplate("", fullPath)
+			if not ok  return -- Error already reported.
+		}
 
 		love.system.setClipboardText(data)
 		setMessageText("Exported to clipboard")

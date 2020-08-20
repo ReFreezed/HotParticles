@@ -249,15 +249,17 @@ export Project :: struct {
 	movementScaleY        = 1.0,
 	movementSpeed         = 1.0,
 
-	exportBaseDirectory      = "",
-	exportParticles          = true,
-	exportParticlesOverwrite = false,
-	exportParticlesPath      = "",
-	exportParticlesTemplate  = "defaultLuaModule",
-	exportTextures           = false,
-	exportTexturesOverwrite  = false,
-	exportTexturesDirectory  = "",
-	exportClipboardTemplate  = "defaultLuaClipboard",
+	exportBaseDirectory         = "",
+	exportParticles             = true,
+	exportParticlesOverwrite    = false,
+	exportParticlesPath         = "",
+	exportParticlesTemplate     = "defaultLuaModule",
+	exportParticlesTemplatePath = "",
+	exportTextures              = false,
+	exportTexturesOverwrite     = false,
+	exportTexturesDirectory     = "",
+	exportClipboardTemplate     = "defaultLuaClipboard",
+	exportClipboardTemplatePath = "",
 
 	scaleGlobalTimeEnabled  = true,
 	scaleGlobalTime         = 1.0,
@@ -323,43 +325,45 @@ export Project :: struct {
 
 	clone :: (source:Project) -> Project {
 		local project: Project = {
-			bgColor                  = {source.bgColor[1], source.bgColor[2], source.bgColor[3]},
-			bgChecker                = source.bgChecker,
-			bgSize                   = source.bgSize,
-			bgPath                   = source.bgPath,
-			bgScale                  = source.bgScale,
-			bgRepeatX                = source.bgRepeatX,
-			bgRepeatY                = source.bgRepeatY,
-			pixelateWorld            = source.pixelateWorld,
-			pixelateTextures         = source.pixelateTextures,
-			zoomLevel                = source.zoomLevel,
-			movementPreset           = source.movementPreset,
-			movementScaleXEnabled    = source.movementScaleXEnabled,
-			movementScaleX           = source.movementScaleX,
-			movementScaleYEnabled    = source.movementScaleYEnabled,
-			movementScaleY           = source.movementScaleY,
-			movementSpeed            = source.movementSpeed,
-			exportBaseDirectory      = source.exportBaseDirectory,
-			exportParticles          = source.exportParticles,
-			exportParticlesOverwrite = source.exportParticlesOverwrite,
-			exportParticlesPath      = source.exportParticlesPath,
-			exportParticlesTemplate  = source.exportParticlesTemplate,
-			exportTextures           = source.exportTextures,
-			exportTexturesOverwrite  = source.exportTexturesOverwrite,
-			exportTexturesDirectory  = source.exportTexturesDirectory,
-			exportClipboardTemplate  = source.exportClipboardTemplate,
-			scaleGlobalTimeEnabled   = source.scaleGlobalTimeEnabled,
-			scaleGlobalTime          = source.scaleGlobalTime,
-			scaleGlobalSpaceEnabled  = source.scaleGlobalSpaceEnabled,
-			scaleGlobalSpace         = source.scaleGlobalSpace,
-			scaleGlobalSizeEnabled   = source.scaleGlobalSizeEnabled,
-			scaleGlobalSize          = source.scaleGlobalSize,
-			regionEnabled            = source.regionEnabled,
-			regionWidth              = source.regionWidth,
-			regionHeight             = source.regionHeight,
-			customData               = source.customData,
-			guiLimits                = copyTable(source.guiLimits),
-			edited                   = true,
+			bgColor                     = {source.bgColor[1], source.bgColor[2], source.bgColor[3]},
+			bgChecker                   = source.bgChecker,
+			bgSize                      = source.bgSize,
+			bgPath                      = source.bgPath,
+			bgScale                     = source.bgScale,
+			bgRepeatX                   = source.bgRepeatX,
+			bgRepeatY                   = source.bgRepeatY,
+			pixelateWorld               = source.pixelateWorld,
+			pixelateTextures            = source.pixelateTextures,
+			zoomLevel                   = source.zoomLevel,
+			movementPreset              = source.movementPreset,
+			movementScaleXEnabled       = source.movementScaleXEnabled,
+			movementScaleX              = source.movementScaleX,
+			movementScaleYEnabled       = source.movementScaleYEnabled,
+			movementScaleY              = source.movementScaleY,
+			movementSpeed               = source.movementSpeed,
+			exportBaseDirectory         = source.exportBaseDirectory,
+			exportParticles             = source.exportParticles,
+			exportParticlesOverwrite    = source.exportParticlesOverwrite,
+			exportParticlesPath         = source.exportParticlesPath,
+			exportParticlesTemplate     = source.exportParticlesTemplate,
+			exportParticlesTemplatePath = source.exportParticlesTemplatePath,
+			exportTextures              = source.exportTextures,
+			exportTexturesOverwrite     = source.exportTexturesOverwrite,
+			exportTexturesDirectory     = source.exportTexturesDirectory,
+			exportClipboardTemplate     = source.exportClipboardTemplate,
+			exportClipboardTemplatePath = source.exportClipboardTemplatePath,
+			scaleGlobalTimeEnabled      = source.scaleGlobalTimeEnabled,
+			scaleGlobalTime             = source.scaleGlobalTime,
+			scaleGlobalSpaceEnabled     = source.scaleGlobalSpaceEnabled,
+			scaleGlobalSpace            = source.scaleGlobalSpace,
+			scaleGlobalSizeEnabled      = source.scaleGlobalSizeEnabled,
+			scaleGlobalSize             = source.scaleGlobalSize,
+			regionEnabled               = source.regionEnabled,
+			regionWidth                 = source.regionWidth,
+			regionHeight                = source.regionHeight,
+			customData                  = source.customData,
+			guiLimits                   = copyTable(source.guiLimits),
+			edited                      = true,
 
 			zoom       = source.zoom,
 			zoomTarget = source.zoomTarget,
@@ -712,7 +716,7 @@ export updateParticleTextureOffset :: (system:System) {
 
 export updateBackgroundTexture :: (project:Project, dummy:System=NULL, saveRecent=false) -> (dummy:bool) {
 	local loadBackgroundTexture :: (project:Project, saveRecent:bool) -> ImageAndInfo {
-		local ok, path, isDangling = getBackgroundFullPath(project)
+		local ok, path, isDangling = getFullPathToBackground(project)
 		if not ok {
 			if isDangling
 				setErrorText("Relative paths require the project to be saved: %s", path)
@@ -777,7 +781,7 @@ export updateBackgroundTexture :: (project:Project, dummy:System=NULL, saveRecen
 
 export updateParticleTexture :: (project:Project, system:System, saveRecent=false) -> (loadedCustomTexture:bool) {
 	local loadParticleTexture :: (project:Project, system:System, saveRecent:bool) -> ImageAndInfo {
-		local ok, path, isDangling = getTextureFullPath(project, system)
+		local ok, path, isDangling = getFullPathToTexture(project, system)
 		if not ok {
 			if isDangling
 				setErrorText("Relative paths require the project to be saved: %s", path)
@@ -848,7 +852,7 @@ export updateParticleTexture :: (project:Project, system:System, saveRecent=fals
 
 export updateParticleShader :: (project:Project, system:System, saveRecent=false) -> (dummy:bool) {
 	local loadParticleShader :: (project:Project, system:System, saveRecent:bool) -> ShaderAndInfo {
-		local ok, path, isDangling = getShaderFullPath(project, system)
+		local ok, path, isDangling = getFullPathToShader(project, system)
 		if not ok {
 			if isDangling
 				setErrorText("Relative paths require the project to be saved: %s", path)
@@ -2739,25 +2743,44 @@ export getAnimationPreviewQuad :: (ps:LG.ParticleSystem, quads:[]LG.Quad) -> (qu
 
 
 
-export getTextureFullPath :: (project:Project, system:System) -> (success:bool, path:string, isDanglingRelativePath:bool) {
-	local path = system.texturePath
+local getFullPathToProjectResource :: (project:Project, path:string) -> (success:bool, path:string, isDanglingRelativePath:bool) {
+	if not path  return false, "", false
 
-	if not path {
-		return true, particleImages[system.textureName].fullPath, false
+	local pathObj0 = Path(path)
 
-	} elseif Path(path).isAbsolute {
-		if not Path(path).getFilename!()  return false, "", false
+	if pathObj0.isAbsolute {
+		if not pathObj0.getFilename!()  return false, "", false
 		return true, path, false
 
 	} elseif project.fileIsSaved {
 		local pathObj = Path(project.path)
-		pathObj.pop!() -- @Robustness: Should we check if the path empty after this?
-		pathObj.append!(path)
+		pathObj.pop!() -- @Robustness: Should we check if the path is empty after this?
+		pathObj.append!(pathObj0)
 		return true, pathObj.toString!(), false
 
 	} else {
 		return false, path, true
 	}
+}
+
+
+
+export getFullPathToTexture :: (project:Project, system:System) -> (success:bool, path:string, isDanglingRelativePath:bool) {
+	local path = system.texturePath
+	if not path  return true, particleImages[system.textureName].fullPath, false
+	return getFullPathToProjectResource(project, path)
+}
+export getFullPathToShader :: (project:Project, system:System) -> (success:bool, path:string, isDanglingRelativePath:bool) {
+	return getFullPathToProjectResource(project, system.shaderPath)
+}
+export getFullPathToBackground :: (project:Project) -> (success:bool, path:string, isDanglingRelativePath:bool) {
+	return getFullPathToProjectResource(project, project.bgPath)
+}
+export getFullPathToCustomParticlesTemplate :: (project:Project) -> (success:bool, path:string, isDanglingRelativePath:bool) {
+	return getFullPathToProjectResource(project, project.exportParticlesTemplatePath)
+}
+export getFullPathToCustomClipboardTemplate :: (project:Project) -> (success:bool, path:string, isDanglingRelativePath:bool) {
+	return getFullPathToProjectResource(project, project.exportClipboardTemplatePath)
 }
 
 export setTexturePath :: (project:Project, system:System, pathNew:string) {
@@ -2772,30 +2795,6 @@ export setTexturePath :: (project:Project, system:System, pathNew:string) {
 		[system,          saveRecent] (project:Project) {  updateParticleTexture(project, system, saveRecent) ; saveRecent = false ; guiState.refreshRecursively!("texturePath")  }
 	)
 }
-
-
-
-export getShaderFullPath :: (project:Project, system:System) -> (success:bool, path:string, isDanglingRelativePath:bool) {
-	local path = system.shaderPath
-
-	if not path {
-		return false, "", false
-
-	} elseif Path(path).isAbsolute {
-		if not Path(path).getFilename!()  return false, "", false
-		return true, path, false
-
-	} elseif project.fileIsSaved {
-		local pathObj = Path(project.path)
-		pathObj.pop!() -- @Robustness: Should we check if the path empty after this?
-		pathObj.append!(path)
-		return true, pathObj.toString!(), false
-
-	} else {
-		return false, path, true
-	}
-}
-
 export setShaderPath :: (project:Project, system:System, pathNew:string) {
 	local pathOld = system.shaderPath
 	if pathNew == pathOld  return
@@ -2808,30 +2807,6 @@ export setShaderPath :: (project:Project, system:System, pathNew:string) {
 		[system,          saveRecent] (project:Project) {  updateParticleShader(project, system, saveRecent) ; saveRecent = false ; guiState.refreshRecursively!("shaderPath")  }
 	)
 }
-
-
-
-export getBackgroundFullPath :: (project:Project) -> (success:bool, path:string, isDanglingRelativePath:bool) {
-	local path = project.bgPath
-
-	if not path {
-		return false, "", false
-
-	} elseif Path(path).isAbsolute {
-		if not Path(path).getFilename!()  return false, "", false
-		return true, path, false
-
-	} elseif project.fileIsSaved {
-		local pathObj = Path(project.path)
-		pathObj.pop!() -- @Robustness: Should we check if the path empty after this?
-		pathObj.append!(path)
-		return true, pathObj.toString!(), false
-
-	} else {
-		return false, path, true
-	}
-}
-
 export setBackgroundPath :: (project:Project, pathNew:string) {
 	local pathOld = project.bgPath
 	if pathNew == pathOld  return
@@ -3376,7 +3351,7 @@ export resolveTextureOuputPath :: (project:Project, system:System) -> (success:b
 		if not pathObj.isAbsolute  return false, NULL, NULL
 	}
 
-	local ok, inputPath = getTextureFullPath(project, system) -- @Cleanup: Can we just use system.currentImage.fullPath here?
+	local ok, inputPath = getFullPathToTexture(project, system) -- @Cleanup: Can we just use system.currentImage.fullPath here?
 	if not ok  inputPath = ""
 
 	local path = pathObj.toString!()
@@ -3492,10 +3467,20 @@ export tryExportFiles :: (quick=false) {
 	local particlesPath = ""
 
 	if project.exportParticles {
-		local ok, ^particlesData = generateDataToExportFromTemplate(project.exportParticlesTemplate)
-		if not ok  return -- Error already reported.
+		if project.exportParticlesTemplate {
+			local ok, ^particlesData = generateDataToExportFromTemplate(project.exportParticlesTemplate, "")
+			if not ok  return -- Error already reported.
+		} else {
+			local ok, fullPath = getFullPathToCustomParticlesTemplate(project)
+			if not ok {
+				setErrorText("Possibly invalid template path")
+				return
+			}
+			ok, particlesData = generateDataToExportFromTemplate("", fullPath)
+			if not ok  return -- Error already reported.
+		}
 
-		ok, particlesPath = resolveParticlesOuputPath(project)
+		local ok, ^particlesPath = resolveParticlesOuputPath(project)
 		if not ok {
 			setErrorText("No particle system output path")
 			return
@@ -3632,16 +3617,28 @@ export tryExportFiles :: (quick=false) {
 	}
 }
 
-export generateDataToExportFromTemplate :: (templateName:string) -> (success:bool, data:string) {
+export generateDataToExportFromTemplate :: (templateName:string, templateFullPath:string) -> (success:bool, data:string) {
 	local lua            :: !import "lua"
 	local setEnvironment :: (f:(), env:table)              !foreign lua "setfenv"
 	local pcall          :: (callback:any) -> bool, string !foreign lua "pcall"
 
-	local path               = format("%s/%s.lua", EXPORT_TEMPLATES_DIRECTORY, templateName)
-	local luaCode, sizeOrErr = LF.read(path)
-	if luaCode == NULL {
-		setErrorText("Could not load template: %s", cast(string)sizeOrErr)
-		return false, ""
+	local path:    string = NULL
+	local luaCode: string = NULL
+
+	if templateName {
+		path                    = format("%s/%s.lua", EXPORT_TEMPLATES_DIRECTORY, templateName)
+		local ok, ^luaCode, err = readEntireFileLocal(path)
+		if not ok {
+			setErrorText("Could not load template: %s", err)
+			return false, ""
+		}
+	} else {
+		path                    = templateFullPath
+		local ok, ^luaCode, err = readEntireFileAnywhere(path)
+		if not ok {
+			setErrorText("Could not load template: %s", err)
+			return false, ""
+		}
 	}
 
 	local ok, chunk, err = lua.loadString(cast(string)luaCode, (), "@"..path)
@@ -3683,7 +3680,7 @@ export generateDataToExportFromTemplate :: (templateName:string) -> (success:boo
 			local shaderPath     = ""
 			local shaderFilename = ""
 
-			local ^ok, shaderPathFull = getShaderFullPath(project, system)
+			local ^ok, shaderPathFull = getFullPathToShader(project, system)
 			if ok {
 				ok, shaderFilename = Path(system.shaderPath).getFilename!()
 				if not ok  shaderFilename = ""
