@@ -506,7 +506,8 @@ export Direction :: struct {
 export InputText :: struct {
 	using Widget,
 
-	value = "",
+	value       = "",
+	placeholder = "",
 
 	field: InputField = NULL,
 }
@@ -2296,9 +2297,14 @@ local drawElement :: (state:State, el:Element) {
 
 			-- Value.
 			local textOffset = focused ? field.getTextOffset!() : 0
-			local text       = focused ? field.getText!() : input.value
-			LG.setColor(1, 1, 1, TEXT_OPACITY)
-			LG.print(text, valueX+textOffset, y+SPACING)
+			local text       = focused ? field.getText!()       : input.value
+			if text {
+				LG.setColor(1, 1, 1, TEXT_OPACITY)
+			} else {
+				LG.setColor(1, 1, 1, TEXT_OPACITY*.5)
+				text = input.placeholder
+			}
+			if text  LG.print(text, valueX+textOffset, y+SPACING)
 
 			-- Cursor.
 			if focused {
@@ -2624,6 +2630,44 @@ export draw :: (state:State) {
 			LG.rectangle(LG.DrawMode.FILL, x, y, w, h, 2)
 			LG.setColor(0, 0, 0, a)
 			LG.print(state.currentTooltip, x+SPACING, y+BUTTON_PADDING_Y)
+		}
+	}
+
+	!if DEV  if LK.isScancodeDown"`" {
+		local mx, my    = LM.getPosition()
+		local found, el = state.getElementAt!(mx, my)
+
+		local name = found ? el.name : ""
+
+		if found and (el.type == Buttons or el.type == Radio or el.type == Tabs) {
+			local buttons = cast(Buttons) el
+			local hoveredSubid: int
+
+			if buttons.vertical
+				hoveredSubid = math.clamp(math.floor(1 + (my-buttons.layoutY-getScrollOffset(buttons)) / buttons.buttonHeight), 1, #buttons.buttons)
+			else
+				hoveredSubid = math.clamp(math.floor(1 + (mx-buttons.layoutX                         ) / buttons.buttonWidth ), 1, #buttons.buttons)
+
+			if not buttons.buttons[hoveredSubid].name {
+				-- void
+			} elseif name {
+				name = name.."."..buttons.buttons[hoveredSubid].name
+			} else {
+				name = buttons.buttons[hoveredSubid].name
+			}
+		}
+
+		if name {
+			local x = mx + 8
+			local y = my + 20
+
+			LG.setColor(0, 0, 0)
+			LG.rectangle(LG.DrawMode.FILL, x, y, fontSmall.getWidth!(name), fontSmall.getHeight!())
+
+			LG.setFont(fontSmall)
+			LG.setColor(1, 1, 1)
+			LG.print(name, x, y)
+			LG.setFont(fontNormal)
 		}
 	}
 }

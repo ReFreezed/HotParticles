@@ -12,7 +12,7 @@
 export MAIN_PANEL_WIDTH    :: 450
 export DIALOG_WIDTH        :: 400
 export DIALOG_WIDTH_LOG    :: 700
-export DIALOG_WIDTH_EXPORT :: 650
+export DIALOG_WIDTH_EXPORT :: 700
 
 local BIG_BUTTON_HEIGHT    :: 40
 local MEDIUM_BUTTON_HEIGHT :: 16
@@ -421,7 +421,7 @@ export setupGuiFrames :: () {
 					guiState.checkbox!({ name="exportProject_particles_writeFile", label="export particle systems" }),
 					guiState.checkbox!({ name="exportProject_particles_overwrite", label="overwrite existing", tooltip="Overwrite existing files without confirmation" }),
 				}),
-				guiState.inputText!({ name="exportProject_particles_path", labelLeft="output filename", tooltip="Absolute path, or relative to base folder" }),
+				guiState.inputText!({ name="exportProject_particles_path", labelLeft="output filename", placeholder="?.lua", tooltip="Absolute path, or relative to base folder" }),
 				guiState.hbox!({ labelLeft="resulting path",
 					guiState.text!({ name="exportProject_particles_pathResult", weight=1 }),
 					guiState.buttons!({ name="exportProject_particles_pathResultInfo", buttons={{image="iconEye"}} }),
@@ -2786,6 +2786,7 @@ export setupGuiCallbacks :: () {
 	guiState.onRefresh.exportProject_particles_path = (input:gui.InputText) {
 		local project = app.projects[app.currentProjectIndex]
 		input.value   = project.exportParticlesPath
+		-- input.placeholder = getExportedParticlesDefaultFilename(project)
 	}
 	guiState.onAction.exportProject_particles_path = (input:gui.InputText, _:int) {
 		local project               = app.projects[app.currentProjectIndex]

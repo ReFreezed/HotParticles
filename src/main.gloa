@@ -3311,16 +3311,8 @@ export resolveParticlesOuputPath :: (project:Project) -> (success:bool, path:str
 	local ok, filename = pathObj.getFilename!()
 
 	if not ok {
-		if project.path {
-			_, filename = Path(project.path).getFilename!()
-			filename    = replacePatternWithPattern(filename, "(.)%.[^.]+", "%1") ?: "untitled"
-			filename    = filename..".lua"
-		} else {
-			filename    = "untitled.lua"
-		}
-
+		filename = getExportedParticlesDefaultFilename(project)
 		pathObj.setFilename!(filename)
-
 	} elseif filename == "." or filename == ".." {
 		return false, NULL
 	}
@@ -3863,6 +3855,17 @@ export generateDataToExportFromTemplate :: (templateName:string, templateFullPat
 	}
 
 	return true, concatinate(buffer)
+}
+
+
+
+export getExportedParticlesDefaultFilename :: (project:Project) -> string {
+	if not project.path  return "untitled.lua"
+
+	local _, filename = Path(project.path).getFilename!()
+	filename          = replacePatternWithPattern(filename, "(.)%.[^.]+", "%1") ?: "untitled"
+	filename          = filename..".lua"
+	return filename
 }
 
 
