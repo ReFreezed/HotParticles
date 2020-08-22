@@ -197,10 +197,11 @@ export App :: struct {
 	showProjectSettings = false,
 	showPanelNumbers    = true,
 
-	recentFiles:    []string, -- Projects, specifically. @Cleanup
-	recentFolders:  []string,
-	recentTextures: []string,
-	recentShaders:  []string,
+	recentProjects:  []string,
+	recentFolders:   []string,
+	recentTextures:  []string,
+	recentShaders:   []string,
+	recentTemplates: []string,
 
 	bookmarkedFolders: []string,
 
@@ -2543,19 +2544,19 @@ export openProject :: (fullPath:string, asPreview=false) -> (success:bool, proje
 
 	local ok, dir, filename = pathObj.getDirectoryAndFilename!()
 	if not ok {
-		removeRecent(app.recentFiles, fullPath)
+		removeRecent(app.recentProjects, fullPath)
 		if not asPreview  setErrorText("Bad project path '%s'", fullPath)
 		return false, NULL, NULL
 	}
 
 	for app.projects  if it.path == fullPath {
 		setCurrentProject(itIndex)
-		if not asPreview  addRecent(app.recentFiles, fullPath, app.maxRecentFiles)
+		if not asPreview  addRecent(app.recentProjects, fullPath, app.maxRecentFiles)
 		return true, it, false
 	}
 
 	if not connectToRemoteDirectory(dir) {
-		removeRecent(app.recentFiles, fullPath)
+		removeRecent(app.recentProjects, fullPath)
 		if not asPreview  setErrorText("Could not access folder '%s'", dir)
 		return false, NULL, NULL
 	}
@@ -2565,7 +2566,7 @@ export openProject :: (fullPath:string, asPreview=false) -> (success:bool, proje
 
 	local ^ok, gotError, _app = loadWorkspace(filename)
 	if not ok {
-		removeRecent(app.recentFiles, fullPath)
+		removeRecent(app.recentProjects, fullPath)
 		if not asPreview  setErrorText("Could not load '%s'", filename)
 		return false, NULL, NULL
 	}
@@ -2576,7 +2577,7 @@ export openProject :: (fullPath:string, asPreview=false) -> (success:bool, proje
 		return false, NULL, NULL
 	}
 
-	if not asPreview  addRecent(app.recentFiles, fullPath, app.maxRecentFiles)
+	if not asPreview  addRecent(app.recentProjects, fullPath, app.maxRecentFiles)
 
 	project.path          = fullPath
 	project.displayedName = filename
@@ -2600,7 +2601,7 @@ export openProject :: (fullPath:string, asPreview=false) -> (success:bool, proje
 }
 
 export openRecentProject :: () {
-	for app.recentFiles  if not indexWith(app.projects, "path", it) {
+	for app.recentProjects  if not indexWith(app.projects, "path", it) {
 		openProject(it)
 		break
 	}
@@ -2611,7 +2612,7 @@ export confirmCloseProject :: (projectIndex:int) {
 		local isCurrent  = (projectIndex == app.currentProjectIndex)
 		local _, project = remove(app.projects, projectIndex)
 
-		if project.path  addRecent(app.recentFiles, project.path, app.maxRecentFiles)
+		if project.path  addRecent(app.recentProjects, project.path, app.maxRecentFiles)
 
 		if app.projects[1] == NULL
 			addNewProject()
@@ -2820,17 +2821,19 @@ export setBackgroundPath :: (project:Project, pathNew:string) {
 		[         saveRecent] (project:Project) {  updateBackgroundTexture(project, NULL, saveRecent) ; saveRecent = false ; guiState.refreshRecursively!("bgPath")  }
 	)
 }
-export setCustomParticlesTemplatePath :: (project:Project, pathNew:string) {
+export setCustomParticlesTemplatePath :: (project:Project, pathNew:string, saveRecent=false) {
 	if pathNew == project.exportParticlesTemplatePath  return
 	project.exportParticlesTemplatePath = pathNew
 	markEdited(project)
-	-- @Incomplete: Save recent template paths.
+	if saveRecent and pathNew  addRecent(app.recentTemplates, pathNew, app.maxRecentFiles)
+	scheduleSaveWorkspace()
 }
-export setCustomClipboardTemplatePath :: (project:Project, pathNew:string) {
+export setCustomClipboardTemplatePath :: (project:Project, pathNew:string, saveRecent=false) {
 	if pathNew == project.exportClipboardTemplatePath  return
 	project.exportClipboardTemplatePath = pathNew
 	markEdited(project)
-	-- @Incomplete: Save recent template paths.
+	if saveRecent and pathNew  addRecent(app.recentTemplates, pathNew, app.maxRecentFiles)
+	scheduleSaveWorkspace()
 }
 
 
@@ -3056,8 +3059,8 @@ export showMainMenu :: () {
 	insert(recentItems, cast(gui.MenuItem) {name="openLast",label="Reopen closed file",shortcut=ctrlText.."+Shift+T"})
 	insert(recentItems, cast(gui.MenuItem) {label="-"})
 
-	if app.recentFiles {
-		for app.recentFiles  insert(recentItems, cast(gui.MenuItem) {name="openRecent",data=it,label=it})
+	if app.recentProjects {
+		for app.recentProjects  insert(recentItems, cast(gui.MenuItem) {name="openRecent",data=it,label=it})
 	} else {
 		insert(recentItems, cast(gui.MenuItem) {label="(no recent files)"})
 	}
@@ -3091,7 +3094,7 @@ export showMainMenu :: () {
 			case "open":        showOpenProjectDialog()
 			case "openLast":    openRecentProject()
 			case "openRecent":  openProject(cast(string)data)
-			case "clearRecent": app.recentFiles = {}
+			case "clearRecent": app.recentProjects = {}
 			case "save":        if project.fileIsSaved  saveProject(project, project.path, overwrite=true)  else  showSaveProjectAsDialog()
 			case "saveAs":      showSaveProjectAsDialog()
 			case "export":      pushPanel("exportProject")
@@ -3223,8 +3226,8 @@ export showOpenProjectDialog :: () {
 			popPanel()
 
 			local _, dir = fullPathObj.getDirectory!()
-			addRecent(app.recentFolders, dir,      app.maxRecentFolders)
-			addRecent(app.recentFiles,   fullPath, app.maxRecentFiles)
+			addRecent(app.recentFolders,  dir,      app.maxRecentFolders)
+			addRecent(app.recentProjects, fullPath, app.maxRecentFiles)
 
 			-- Make sure the loaded project replaces any single empty project.
 			if #app.projects == 2 and isProjectEmpty(app.projects[1]) {
@@ -3253,7 +3256,7 @@ export showRecentFilesContextMenu :: (title:string, recentPaths:[]string, onChoo
 		insert(items, "(no recent files)")
 	}
 
-	guiState.showContextMenu!(items, [items, recentPaths, onChoose] (choice:int) {
+	guiState.showContextMenu!(items, [*] (choice:int) {
 		if choice <= 1 or not recentPaths {
 			-- void
 		} elseif choice == #items {

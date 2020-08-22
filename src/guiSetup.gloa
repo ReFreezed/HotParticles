@@ -2989,7 +2989,12 @@ export setupGuiCallbacks :: () {
 			},
 			cbSubmit = [cb] (value:string) {
 				cb("", value)
-			}
+			}--[[,
+			cbOption = [cb] () {
+				showRecentFilesContextMenu("Recent templates", app.recentTemplates, keepExistingMenus=true, [cb] (path:string) {
+					cb("", path)
+				})
+			}]]
 		)
 	}
 
@@ -3003,9 +3008,22 @@ export setupGuiCallbacks :: () {
 				local project = app.projects[app.currentProjectIndex]
 
 				project.exportParticlesTemplate = templateName
-				if not templateName  setCustomParticlesTemplatePath(project, Path(templatePath).toString!())
+				if not templateName  setCustomParticlesTemplatePath(project, Path(templatePath).toString!(), saveRecent=true)
 
 				markEdited(project)
+				guiState.refreshRecursively!("exportProject_particles_template")
+			})
+		}
+		guiState.onOption.exportProject_particles_template = (buttons:gui.Buttons, buttonIndex:int) {
+			showRecentFilesContextMenu("Recent templates", app.recentTemplates, (templatePath:string) {
+				local project = app.projects[app.currentProjectIndex]
+
+				if project.exportParticlesTemplate {
+					project.exportParticlesTemplate = ""
+					markEdited(project)
+				}
+				setCustomParticlesTemplatePath(project, templatePath, saveRecent=true)
+
 				guiState.refreshRecursively!("exportProject_particles_template")
 			})
 		}
@@ -3044,7 +3062,7 @@ export setupGuiCallbacks :: () {
 						project.exportParticlesTemplate = ""
 						markEdited(project)
 					}
-					setCustomParticlesTemplatePath(project, pathObj.toString!())
+					setCustomParticlesTemplatePath(project, pathObj.toString!(), saveRecent=true)
 					guiState.refreshRecursively!("exportProject_particles_template")
 					popPanel()
 				}
@@ -3205,9 +3223,22 @@ export setupGuiCallbacks :: () {
 				local project = app.projects[app.currentProjectIndex]
 
 				project.exportClipboardTemplate = templateName
-				if not templateName  setCustomClipboardTemplatePath(project, Path(templatePath).toString!())
+				if not templateName  setCustomClipboardTemplatePath(project, Path(templatePath).toString!(), saveRecent=true)
 
 				markEdited(project)
+				guiState.refreshRecursively!("exportProject_clipboard_template")
+			})
+		}
+		guiState.onOption.exportProject_clipboard_template = (buttons:gui.Buttons, buttonIndex:int) {
+			showRecentFilesContextMenu("Recent templates", app.recentTemplates, (templatePath:string) {
+				local project = app.projects[app.currentProjectIndex]
+
+				if project.exportClipboardTemplate {
+					project.exportClipboardTemplate = ""
+					markEdited(project)
+				}
+				setCustomClipboardTemplatePath(project, templatePath, saveRecent=true)
+
 				guiState.refreshRecursively!("exportProject_clipboard_template")
 			})
 		}
@@ -3246,7 +3277,7 @@ export setupGuiCallbacks :: () {
 						project.exportClipboardTemplate = ""
 						markEdited(project)
 					}
-					setCustomClipboardTemplatePath(project, pathObj.toString!())
+					setCustomClipboardTemplatePath(project, pathObj.toString!(), saveRecent=true)
 					guiState.refreshRecursively!("exportProject_clipboard_template")
 					popPanel()
 				}

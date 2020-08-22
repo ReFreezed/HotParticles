@@ -3350,11 +3350,11 @@ export showContextMenu :: (state:State, x,y:int, items:[]string, cb:(choice:int)
 	}
 }
 
-export showContextMenuWithInput :: (state:State, value:string, items:[]string, cb:(choice:int), cbInput:(text:string)=NULL, cbSubmit:(text:string)=NULL, inputTooltip="", minWidth=0) {
+export showContextMenuWithInput :: (state:State, value:string, items:[]string, cb:(choice:int), cbInput:(text:string)=NULL, cbSubmit:(text:string)=NULL, cbOption:()=NULL, inputTooltip="", minWidth=0) {
 	local mx, my = LM.getPosition()
-	state.showContextMenuWithInput!(mx, my, value, items, cb, cbInput, cbSubmit, inputTooltip, minWidth)
+	state.showContextMenuWithInput!(mx, my, value, items, cb, cbInput, cbSubmit, cbOption, inputTooltip, minWidth)
 }
-export showContextMenuWithInput :: (state:State, x,y:int, value:string, items:[]string, cb:(choice:int), cbInput:(text:string)=NULL, cbSubmit:(text:string)=NULL, inputTooltip="", minWidth=0) {
+export showContextMenuWithInput :: (state:State, x,y:int, value:string, items:[]string, cb:(choice:int), cbInput:(text:string)=NULL, cbSubmit:(text:string)=NULL, cbOption:()=NULL, inputTooltip="", minWidth=0) {
 	state.hideContextMenu!()
 
 	local buttonList: []Button
@@ -3387,6 +3387,12 @@ export showContextMenuWithInput :: (state:State, x,y:int, value:string, items:[]
 			scheduleSaveWorkspace()
 		}
 	}
+	-- if cbOption ~= NULL {
+	-- 	state.onOption.__contextMenuInput = [cbOption] (input:InputText) {
+	-- 		cbOption()
+	-- 	}
+	-- }
+
 	state.onSubmit.__contextMenuInput = [state,cb,cbSubmit] (input:InputText) {
 		state.contextMenus[1].data = NULL -- So hideContextMenu() doesn't call the callback too!
 		state.hideContextMenu!()
