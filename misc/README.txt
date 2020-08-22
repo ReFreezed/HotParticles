@@ -260,6 +260,9 @@ Exporting happens using Lua scripts in the "exportTemplates" folder. You can
 edit existing scripts or make completely new ones to fit your game (see the
 "Template API" section).
 
+Note that textures that are somewhere in the base folder (if specified) will
+not be copied.
+
 
 
 8. Template API
