@@ -2621,11 +2621,28 @@ export setupGuiCallbacks :: () {
 				})
 			}
 			for filenames {
+				local EXT_TO_ICON: struct { !key:string, !value:string } : {
+					[".hotparticles"] = "iconFileHotparticles",
+					[".png"]          = "iconFileImage",
+					[".jpg"]          = "iconFileImage",
+					[".jpeg"]         = "iconFileImage",
+					[".tga"]          = "iconFileImage",
+					[".gl"]           = "iconFileShader",
+					[".glh"]          = "iconFileShader",
+					[".glsl"]         = "iconFileShader",
+					[".frag"]         = "iconFileShader",
+					[".vert"]         = "iconFileShader",
+					[".lua"]          = "iconFileLua",
+					[".wlua"]         = "iconFileLua",
+				}
+
 				local basename, ext = splitBasenameAndExtension(it, keepDot=true)
+
 				insert(buttons.buttons, cast(gui.Button){
 					value  = cast(Item) {isDir=false, name=it},
 					label  = basename,
 					suffix = ext,
+					image  = EXT_TO_ICON[ext] ~= NULL ? EXT_TO_ICON[ext] : "",
 				})
 			}
 

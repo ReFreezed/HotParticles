@@ -10,6 +10,7 @@
 --============================================================]]
 
 export generateIcons :: () {
+	-- [[
 	guiImages.iconAdd = newMonochromeImage({
 		"            ",
 		"     FF     ",
@@ -79,20 +80,6 @@ export generateIcons :: () {
 		"  4FFFFFF4  ",
 		"   4FFFF4   ",
 		"    4FF4    ",
-	})
-	guiImages.iconFolder = newMonochromeImage({
-		" 4FFF4      ",
-		"4F4 4F4     ",
-		"EFFFFFFFFFFC",
-		"F          F",
-		"F          F",
-		"F          F",
-		"F          F",
-		"F          F",
-		"F          F",
-		"F          F",
-		"CFFFFFFFFFFC",
-		"            ",
 	})
 	guiImages.iconReload = newMonochromeImage({
 		"  26DFFD62 F",
@@ -193,15 +180,87 @@ export generateIcons :: () {
 		"F F 3D  F F ",
 	})
 
-	guiImages.iconSubmenu = newMonochromeImage({
-		"F   ",
-		"FF  ",
-		"FFF ",
-		"FFFF",
-		"FFF ",
-		"FF  ",
-		"F   ",
+	guiImages.iconFolder = newMonochromeImage({
+		" 4FFF4      ",
+		"4F4 4F4     ",
+		"EFFFFFFFFFFC",
+		"F          F",
+		"F          F",
+		"F          F",
+		"F          F",
+		"F          F",
+		"F          F",
+		"F          F",
+		"CFFFFFFFFFFC",
+		"            ",
 	})
+	guiImages.iconFileHotparticles = newMonochromeImage({
+		"       5F5  ",
+		"      3FFF3 ",
+		"      BFFFB ",
+		"      CFFFC ",
+		"      9FFF7 ",
+		"       EF4  ",
+		"      CF4   ",
+		"     CF4    ",
+		"    CF4     ",
+		"   CF4      ",
+		"  CF4       ",
+		"  F4        ",
+	})
+	guiImages.iconFileImage = newMonochromeImage({
+		"            ",
+		"888888888888",
+		"8          8",
+		"8 FF       8",
+		"8 FF       8",
+		"8     3DD3 8",
+		"83D3 5FFFF58",
+		"AFFF5FFFFFFA",
+		"FFFFFFFFFFFF",
+		"8          8",
+		"888888888888",
+		"            ",
+	})
+	guiImages.iconFileShader = newMonochromeImage({
+		"  26DFFD62  ",
+		" 4DA42247D4 ",
+		"2D42    29D2",
+		"6A2     7FF6",
+		"D4     7FFFD",
+		"F2    7FFFFF",
+		"F2   7FFFFFF",
+		"D4  7FFFFFFD",
+		"6727FFFFFFF6",
+		"2D9FFFFFFFD2",
+		" 4DFFFFFFD4 ",
+		"  26DFFD62  ",
+	})
+	guiImages.iconFileLua = newMonochromeImage({
+		"          DD",
+		"          DD",
+		"   3BDDB3   ",
+		"  3DFFFFD3  ",
+		"  BFFF33FB  ",
+		"  DFFF33FD  ",
+		"  DFFFFFFD  ",
+		"  BFFFFFFB  ",
+		"  3DFFFFD3  ",
+		"   3BDDB3   ",
+		"            ",
+		"            ",
+	})
+
+	guiImages.iconSubmenu = newMonochromeImage({
+		"F4  ",
+		"FF4 ",
+		"FFF4",
+		"FFFF",
+		"FFF4",
+		"FF4 ",
+		"F4  ",
+	})
+	--]]
 
 	local createQuads :: (image:LG.Image, qw,qh:int, names:[]string) -> QuadTable {
 		local iw, ih = image.getDimensions!()
