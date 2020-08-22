@@ -237,6 +237,8 @@ export saveWorkspace :: () {
 	insert(buffer, "bookmarkedFolders")   ; writeValue(buffer, eol=true, app.bookmarkedFolders)
 	insert(buffer, "preferRelativePaths") ; writeValue(buffer, eol=true, app.preferRelativePaths)
 
+	insert(buffer, "initializeSystemInNewProjects") ; writeValue(buffer, eol=true, app.initializeSystemInNewProjects)
+
 	insert(buffer, "maxBufferSize")    ; writeValue(buffer, eol=true, app.maxBufferSize)
 	insert(buffer, "maxRecentFiles")   ; writeValue(buffer, eol=true, app.maxRecentFiles)
 	insert(buffer, "maxRecentFolders") ; writeValue(buffer, eol=true, app.maxRecentFolders)
@@ -541,6 +543,10 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 						local ^ok, ^ptr, flag = readBool(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
 						app.preferRelativePaths = flag
+					case "initializeSystemInNewProjects":
+						local ^ok, ^ptr, flag = readBool(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
+						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
+						app.initializeSystemInNewProjects = flag
 
 					case "maxBufferSize":
 						local ^ok, ^ptr, n = readInt(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)

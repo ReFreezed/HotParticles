@@ -219,7 +219,8 @@ export App :: struct {
 	maxRecentFolders = 4,
 	maxChanges       = 200,
 
-	preferRelativePaths = false, -- For file browser.
+	preferRelativePaths           = false, -- For file browser.
+	initializeSystemInNewProjects = true,
 }
 
 
@@ -951,7 +952,7 @@ export updateImageFilters :: () {
 export newSystem :: (project:Project, showcase=false) -> System {
 	local system = System()
 
-	if showcase {
+	if showcase and app.initializeSystemInNewProjects {
 		system.psDirection           = -math.TAU/4
 		system.psEmissionRate        = 20
 		system.psParticleLifetimeMin = 1.8

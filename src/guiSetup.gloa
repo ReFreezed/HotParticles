@@ -512,8 +512,9 @@ export setupGuiFrames :: () {
 			}),
 
 			guiState.separator!({ thick=true }),
-			guiState.section!({ label="Undo history",
-				guiState.inputText!({ name="preferences_maxChanges", tooltip="Default: 200" }),
+			guiState.section!({ label="Projects",
+				guiState.checkbox!({ name="preferences_initializeSystemInNewProjects", label="Start with default particle system", tooltip="If this is unchecked, the initial particle system in new projects will be completely empty" }),
+				guiState.inputText!({ name="preferences_maxChanges", labelLeft="Undo history", tooltip="Default: 200" }),
 			}),
 
 			guiState.separator!({ thick=true }),
@@ -3812,6 +3813,14 @@ export setupGuiCallbacks :: () {
 		n              = math.clamp(n, 1, 2^52)
 		app.maxChanges = n
 		input.value    = format("%.0f", n)
+		scheduleSaveWorkspace()
+	}
+
+	guiState.onRefresh.preferences_initializeSystemInNewProjects = (checkbox:gui.Checkbox) {
+		checkbox.checked = app.initializeSystemInNewProjects
+	}
+	guiState.onAction.preferences_initializeSystemInNewProjects = (checkbox:gui.Checkbox, _:int) {
+		app.initializeSystemInNewProjects = checkbox.checked
 		scheduleSaveWorkspace()
 	}
 
