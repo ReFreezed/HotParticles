@@ -408,7 +408,13 @@ export setupGuiFrames :: () {
 
 			guiState.separator!({ thick=false }),
 			guiState.section!({ name="exportProject_baseDirectorySection", label="Base folder", icon16="folder",
-				guiState.inputText!({ name="exportProject_baseDirectory", tooltip="Absolute path, or relative to the .hotparticles file" }),
+				guiState.hbox!({
+					guiState.inputText!({ name="exportProject_baseDirectory", tooltip="Absolute path, or relative to the .hotparticles file", weight=1 }),
+					guiState.buttons!({ buttons={
+						{name="exportProject_baseDirectory_choose",   image="iconFolder",            tooltip="Browse folders"},
+						{name="exportProject_baseDirectory_relative", image="iconRelativeDirectory", tooltip="Toggle relative path"},
+					}}),
+				}),
 				guiState.hbox!({ labelLeft="resulting path",
 					guiState.text!({ name="exportProject_baseDirectoryResult", weight=1 }),
 					guiState.buttons!({ name="exportProject_baseDirectoryResultInfo", buttons={{image="iconEye"}} }),
@@ -421,7 +427,13 @@ export setupGuiFrames :: () {
 					guiState.checkbox!({ name="exportProject_particles_writeFile", label="export particle systems" }),
 					guiState.checkbox!({ name="exportProject_particles_overwrite", label="overwrite existing", tooltip="Overwrite existing files without confirmation" }),
 				}),
-				guiState.inputText!({ name="exportProject_particles_path", labelLeft="output filename", placeholder="?.lua", tooltip="Absolute path, or relative to base folder" }),
+				guiState.hbox!({
+					guiState.inputText!({ name="exportProject_particles_path", labelLeft="output filename", placeholder="?.lua", tooltip="Absolute path, or relative to base folder", weight=1 }),
+					guiState.buttons!({ buttons={
+						{name="exportProject_particles_path_choose",   image="iconFolder",            tooltip="Browse files"},
+						{name="exportProject_particles_path_relative", image="iconRelativeDirectory", tooltip="Toggle relative path"},
+					}}),
+				}),
 				guiState.hbox!({ labelLeft="resulting path",
 					guiState.text!({ name="exportProject_particles_pathResult", weight=1 }),
 					guiState.buttons!({ name="exportProject_particles_pathResultInfo", buttons={{image="iconEye"}} }),
@@ -443,7 +455,13 @@ export setupGuiFrames :: () {
 					guiState.checkbox!({ name="exportProject_textures_copyFiles", label="copy texture files" }),
 					guiState.checkbox!({ name="exportProject_textures_overwrite", label="overwrite existing", tooltip="Overwrite existing files without confirmation" }),
 				}),
-				guiState.inputText!({ name="exportProject_textures_directory", labelLeft="output folder", tooltip="Absolute path, or relative to base folder" }),
+				guiState.hbox!({
+					guiState.inputText!({ name="exportProject_textures_directory", labelLeft="output folder", tooltip="Absolute path, or relative to base folder", weight=1 }),
+					guiState.buttons!({ buttons={
+						{name="exportProject_textures_directory_choose",   image="iconFolder",            tooltip="Browse folders"},
+						{name="exportProject_textures_directory_relative", image="iconRelativeDirectory", tooltip="Toggle relative path"},
+					}}),
+				}),
 				guiState.hbox!({ labelLeft="resulting paths",
 					guiState.scrollable!({ height=fontNormal.getHeight!()+2*(gui.SCROLLABLE_PADDING+gui.SPACING), weight=1,
 						guiState.text!({ name="exportProject_textures_pathResults" }),
@@ -628,25 +646,32 @@ export popPanel :: (nameForAssert="") -> (success:bool) {
 
 
 
-local fileDialog_isSave          = false
-local fileDialog_dir             = ""
-local fileDialog_filename        = ""
-local fileDialog_filenamePattern = ""
+export FileDialogType :: enum { OPEN, SAVE, CHOOSE }
+
+local fileDialog_type            : FileDialogType = NULL
+local fileDialog_dir             : string         = NULL
+local fileDialog_filename        : string         = NULL
+local fileDialog_filenamePattern : string         = NULL
+local fileDialog_canChooseFolder : bool           = NULL
+local fileDialog_relativeTo      : string         = NULL
 
 local fileDialog_onHighlight: (pathObj:Path, pathAbsoluteObj:Path) = NULL
 local fileDialog_onChoose:    (pathObj:Path, pathAbsoluteObj:Path) = NULL
 local fileDialog_onClose:     ()                                   = NULL
 
-export showFileDialog :: (title:string, dir,filename:string,
+export showFileDialog :: (type:FileDialogType,
+	title:string, dir,filename:string,
 	onHighlight: type_of(fileDialog_onHighlight) = NULL,
 	onChoose:    type_of(fileDialog_onChoose)    = NULL,
 	onClose:     type_of(fileDialog_onClose)     = NULL,
-	filenamePattern="", isSave=false, floating=false
+	filenamePattern="", floating=false, canChooseFolder=false, relativeTo=""
 ) {
-	fileDialog_isSave          = isSave
+	fileDialog_type            = type
 	fileDialog_dir             = dir
 	fileDialog_filename        = filename
 	fileDialog_filenamePattern = filenamePattern
+	fileDialog_canChooseFolder = canChooseFolder
+	fileDialog_relativeTo      = relativeTo
 	fileDialog_onHighlight     = onHighlight
 	fileDialog_onChoose        = onChoose
 	fileDialog_onClose         = onClose
@@ -1051,7 +1076,7 @@ export setupGuiCallbacks :: () {
 		local ^ok, filename = pathObj.getFilename!()
 		if not ok  filename = ""
 
-		showFileDialog("Choose texture", dir, filename,
+		showFileDialog(.OPEN, "Choose texture", dir, filename,
 			onHighlight = (pathObj:Path, pathAbsoluteObj:Path) {
 				textureBrowserPreviewImage = NULL
 
@@ -1492,7 +1517,7 @@ export setupGuiCallbacks :: () {
 		local ^ok, filename = pathObj.getFilename!()
 		if not ok  filename = ""
 
-		showFileDialog("Choose texture", dir, filename,
+		showFileDialog(.OPEN, "Choose texture", dir, filename,
 			onHighlight = (pathObj:Path, pathAbsoluteObj:Path) {
 				textureBrowserPreviewImage = NULL
 
@@ -2399,7 +2424,7 @@ export setupGuiCallbacks :: () {
 			local ^ok, filename = Path(system.shaderPath).getFilename!()
 			if not ok  filename = ""
 
-			showFileDialog("Choose shader", dir, filename,
+			showFileDialog(.OPEN, "Choose shader", dir, filename,
 				-- onHighlight = (pathObj:Path, pathAbsoluteObj:Path) {
 				-- 	-- @UX: Preview shader.
 				-- },
@@ -2467,6 +2492,11 @@ export setupGuiCallbacks :: () {
 		static dirCurrent:  string = NULL
 		static dirFallback: string = NULL
 
+		local setSelectionToBasename :: (input:gui.InputText, filename:string) {
+			local basename = splitBasenameAndExtension(filename)
+			input.field.setSelection!(0, utf8.getLength(basename))
+		}
+
 		guiState.onActive.fileDialog = (frame:gui.Frame) {
 			dirCurrent  = fileDialog_dir
 			dirFallback = getSaveDirectory()
@@ -2474,7 +2504,11 @@ export setupGuiCallbacks :: () {
 			do {
 				local buttons   = guiState.getElement!("fileDialog_buttons", gui.Buttons)
 				local _, button = itemWith(buttons.buttons, "name", "fileDialog_choose")
-				button.label    = fileDialog_isSave ? "Save" : "Open"
+
+				button.label
+					= fileDialog_type == .OPEN ? "Open"
+					: fileDialog_type == .SAVE ? "Save"
+					:                            "Choose"
 			}
 
 			local filenameInput = guiState.getElement!("fileDialog_filename", gui.InputText)
@@ -2484,9 +2518,7 @@ export setupGuiCallbacks :: () {
 			guiState.refreshRecursively!("fileDialog_recent")
 			guiState.refreshRecursively!("fileDialog_items")
 			guiState.setFocus!(filenameInput)
-
-			local basename, ext = splitBasenameAndExtension(fileDialog_filename)
-			filenameInput.field.setSelection!(0, utf8.getLength(basename))
+			setSelectionToBasename(filenameInput, fileDialog_filename)
 
 			if fileDialog_filename {
 				local itemsButtons = guiState.getElement!("fileDialog_items", gui.Buttons)
@@ -2630,12 +2662,20 @@ export setupGuiCallbacks :: () {
 		}
 
 		local makeRelativeOrClone :: (pathObj:Path) -> Path {
-			if not app.preferRelativePaths or fileDialog_isSave  return pathObj.clone!()
+			if not app.preferRelativePaths or fileDialog_type == .SAVE  return pathObj.clone!()
 
-			local project = app.projects[app.currentProjectIndex]
-			if not project.path  return pathObj.clone!()
+			local dir: string = NULL
 
-			local _, dir              = Path(project.path).getDirectory!()
+			if fileDialog_relativeTo {
+				dir = fileDialog_relativeTo
+
+			} else {
+				local projectPath = app.projects[app.currentProjectIndex].path
+				if not projectPath  return pathObj.clone!()
+
+				_, dir = Path(projectPath).getDirectory!()
+			}
+
 			local ok, pathRelativeObj = pathObj.getRelativeTo!(dir)
 			if ok  return pathRelativeObj
 
@@ -2645,7 +2685,7 @@ export setupGuiCallbacks :: () {
 		guiState.onAction.fileDialog_items = (buttons:gui.Buttons, buttonIndex:int) {
 			local item = cast(Item) buttons.buttons[buttonIndex].value
 
-			if not item.isDir {
+			if not item.isDir or fileDialog_canChooseFolder {
 				local input = guiState.getElement!("fileDialog_filename", gui.InputText)
 				input.value = item.name
 
@@ -2654,60 +2694,70 @@ export setupGuiCallbacks :: () {
 					insert(pathObj.path, item.name)
 					fileDialog_onHighlight(makeRelativeOrClone(pathObj), pathObj)
 				}
-
-			} elseif item.name == ".." {
-				local dirObj = Path(dirCurrent)
-				dirObj.pop!()
-				dirCurrent = dirObj.toString!()
-				guiState.refreshRecursively!("fileDialog_items")
-
-			} else {
-				local dirObj = Path(dirCurrent)
-				insert(dirObj.path, item.name)
-				dirCurrent = dirObj.toString!()
-				guiState.refreshRecursively!(buttons)
 			}
 		}
 
 		-- Choice.
-		guiState.onDouble.fileDialog_items    = (buttons:gui.Buttons, buttonIndex:int) { if not (cast(Item) buttons.buttons[buttonIndex].value).isDir  choosePath() }
-		guiState.onSubmit.fileDialog_filename = (input:gui.InputText)                  { choosePath(testNavigation=true) }
-		guiState.onAction.fileDialog_choose   = (buttons:gui.Buttons, buttonIndex:int) { choosePath(testNavigation=true) }
-		local choosePath :: (testNavigation=false) {
+		guiState.onDouble.fileDialog_items = (buttons:gui.Buttons, buttonIndex:int) {
+			local item = cast(Item) buttons.buttons[buttonIndex].value
+
+			if not item.isDir {
+				choosePath()
+				return
+			}
+
+			local dirObj = Path(dirCurrent)
+
+			if item.name == ".." {
+				dirObj.pop!()
+			} else {
+				insert(dirObj.path, item.name)
+			}
+
+			dirCurrent = dirObj.toString!()
+			guiState.refreshRecursively!(buttons)
+		}
+
+		guiState.onSubmit.fileDialog_filename = (input:gui.InputText)                  {  choosePath()  }
+		guiState.onAction.fileDialog_choose   = (buttons:gui.Buttons, buttonIndex:int) {  choosePath()  }
+
+		local choosePath :: () {
 			local input   = guiState.getElement!("fileDialog_filename", gui.InputText)
 			input.value   = trim(input.value)
 			local pathObj = Path(input.value)
 			input.value   = pathObj.toString!()
 
 			if pathObj.isEmpty!() {
-				guiState.setFocus!(input)
+				guiState.setFocus!("fileDialog_filename")
 				return
 			}
 
 			pathObj.prepend!(dirCurrent) -- Fails if pathObj is absolute.
 
-			if testNavigation {
+			local tryNavigate :: (pathObj:Path) -> (success:bool) {
 				local path = pathObj.toString!()
 
-				if connectToRemoteDirectory(path) { -- Succeeds if the path is a folder, and that it exists.
-					disconnectFromRemoteDirectory()
+				if not connectToRemoteDirectory(path)  return false -- Succeeds if the path exists AND is a folder.
+				disconnectFromRemoteDirectory()
 
-					dirCurrent  = path
-					input.value = fileDialog_filename
+				dirCurrent = path
 
-					guiState.refreshRecursively!("fileDialog_items")
-					guiState.setFocus!(input)
+				local input = guiState.getElement!("fileDialog_filename", gui.InputText)
+				input.value = fileDialog_filename
 
-					local basename, ext = splitBasenameAndExtension(fileDialog_filename)
-					input.field.setSelection!(0, utf8.getLength(basename))
-					return
-				}
+				guiState.refreshRecursively!("fileDialog_items")
+				guiState.setFocus!(input)
+				setSelectionToBasename(input, fileDialog_filename)
+
+				return true
 			}
 
-			if fileDialog_isSave {
+			if tryNavigate(pathObj)  return
+
+			if fileDialog_type ~= .OPEN {
 				local ok, filename = pathObj.getFilename!()
 				if not ok {
-					guiState.setFocus!(input)
+					guiState.setFocus!("fileDialog_filename")
 					return
 				}
 			}
@@ -2761,60 +2811,118 @@ export setupGuiCallbacks :: () {
 	}
 
 	-- Particles file.
-	guiState.onRefresh.exportProject_particles_writeFile = (checkbox:gui.Checkbox) {
-		local project    = app.projects[app.currentProjectIndex]
-		checkbox.checked = project.exportParticles
-	}
-	guiState.onAction.exportProject_particles_writeFile = (checkbox:gui.Checkbox, _:int) {
-		local project           = app.projects[app.currentProjectIndex]
-		project.exportParticles = checkbox.checked
-		markEdited(project)
-		guiState.refreshRecursively!("exportProject_particles_pathResult")
-		guiState.refreshRecursively!("exportProject_particles_pathResultInfo")
-	}
 
-	guiState.onRefresh.exportProject_particles_overwrite = (checkbox:gui.Checkbox) {
-		local project    = app.projects[app.currentProjectIndex]
-		checkbox.checked = project.exportParticlesOverwrite
-	}
-	guiState.onAction.exportProject_particles_overwrite = (checkbox:gui.Checkbox, _:int) {
-		local project                    = app.projects[app.currentProjectIndex]
-		project.exportParticlesOverwrite = checkbox.checked
-		markEdited(project)
-	}
-
-	guiState.onRefresh.exportProject_particles_path = (input:gui.InputText) {
-		local project = app.projects[app.currentProjectIndex]
-		input.value   = project.exportParticlesPath
-		-- input.placeholder = getExportedParticlesDefaultFilename(project)
-	}
-	guiState.onAction.exportProject_particles_path = (input:gui.InputText, _:int) {
-		local project               = app.projects[app.currentProjectIndex]
-		input.value                 = Path(trim(input.value)).toString!()
-		project.exportParticlesPath = input.value
-		markEdited(project)
-		guiState.refreshRecursively!("exportProject_particles_pathResult")
-		guiState.refreshRecursively!("exportProject_particles_pathResultInfo")
-	}
-	guiState.onRefresh.exportProject_particles_pathResult = (textEl:gui.Text) {
-		local project = app.projects[app.currentProjectIndex]
-
-		if not project.exportParticles {
-			textEl.text = ""
-			return
+	do {
+		guiState.onRefresh.exportProject_particles_writeFile = (checkbox:gui.Checkbox) {
+			local project    = app.projects[app.currentProjectIndex]
+			checkbox.checked = project.exportParticles
+		}
+		guiState.onAction.exportProject_particles_writeFile = (checkbox:gui.Checkbox, _:int) {
+			local project           = app.projects[app.currentProjectIndex]
+			project.exportParticles = checkbox.checked
+			markEdited(project)
+			guiState.refreshRecursively!("exportProject_particles_pathResult")
+			guiState.refreshRecursively!("exportProject_particles_pathResultInfo")
 		}
 
-		local ok, path = resolveParticlesOuputPath(project)
+		guiState.onRefresh.exportProject_particles_overwrite = (checkbox:gui.Checkbox) {
+			local project    = app.projects[app.currentProjectIndex]
+			checkbox.checked = project.exportParticlesOverwrite
+		}
+		guiState.onAction.exportProject_particles_overwrite = (checkbox:gui.Checkbox, _:int) {
+			local project                    = app.projects[app.currentProjectIndex]
+			project.exportParticlesOverwrite = checkbox.checked
+			markEdited(project)
+		}
+	}
 
-		if not ok {
-			textEl.text = "Missing/invalid path!"
-			return
+	do {
+		guiState.onRefresh.exportProject_particles_path = (input:gui.InputText) {
+			local project = app.projects[app.currentProjectIndex]
+			input.value   = project.exportParticlesPath
+			-- input.placeholder = getExportedParticlesDefaultFilename(project)
+		}
+		guiState.onAction.exportProject_particles_path = (input:gui.InputText, _:int) {
+			local project               = app.projects[app.currentProjectIndex]
+			input.value                 = Path(trim(input.value)).toString!()
+			project.exportParticlesPath = input.value
+			markEdited(project)
+			guiState.refreshRecursively!("exportProject_particles_pathResult")
+			guiState.refreshRecursively!("exportProject_particles_pathResultInfo")
+		}
+		guiState.onRefresh.exportProject_particles_pathResult = (textEl:gui.Text) {
+			local project = app.projects[app.currentProjectIndex]
+
+			if not project.exportParticles {
+				textEl.text = ""
+				return
+			}
+
+			local ok, path = resolveParticlesOuputPath(project)
+
+			if not ok {
+				textEl.text = "Missing/invalid path!"
+				return
+			}
+
+			textEl.text = path
+		}
+		guiState.onRefresh.exportProject_particles_pathResultInfo = (buttons:gui.Buttons) {
+			buttons.tooltip = guiState.getElement!("exportProject_particles_pathResult", gui.Text).text
 		}
 
-		textEl.text = path
-	}
-	guiState.onRefresh.exportProject_particles_pathResultInfo = (buttons:gui.Buttons) {
-		buttons.tooltip = guiState.getElement!("exportProject_particles_pathResult", gui.Text).text
+		guiState.onAction.exportProject_particles_path_choose = (buttons:gui.Buttons, buttonIndex:int) {
+			local project             = app.projects[app.currentProjectIndex]
+			local hasBaseDir, baseDir = resolveBaseOuputPath(project)
+
+			local filename    = "?.lua"
+			local dir: string = NULL
+
+			local ok, fullPath = resolveParticlesOuputPath(project)
+			if ok
+				_, dir, filename = Path(fullPath).getDirectoryAndFilename!()
+			else
+				dir = hasBaseDir ? baseDir : getSaveDirectory().."/projects"
+
+			showFileDialog(floating=true, .CHOOSE, "Choose particles file", dir, filename, relativeTo=(hasBaseDir ? baseDir : ""),
+				onChoose = (pathObj:Path, pathAbsoluteObj:Path) {
+					local ok, dir = pathAbsoluteObj.getDirectory!()
+					if not ok  return -- @UX: Show error message.
+
+					addRecent(app.recentFolders, dir, app.maxRecentFolders)
+
+					local project               = app.projects[app.currentProjectIndex]
+					project.exportParticlesPath = pathObj.toString!()
+					markEdited(project)
+
+					guiState.refreshRecursively!("exportProject_particles_path")
+					guiState.refreshRecursively!("exportProject_particles_pathResult")
+					guiState.refreshRecursively!("exportProject_particles_pathResultInfo")
+
+					popPanel()
+				}
+			)
+		}
+
+		guiState.onAction.exportProject_particles_path_relative = (buttons:gui.Buttons, buttonIndex:int) {
+			local project             = app.projects[app.currentProjectIndex]
+			local hasBaseDir, baseDir = resolveBaseOuputPath(project)
+
+			local ok, path = toggleRelativePath(project, project.exportParticlesPath, relativeTo=(hasBaseDir ? baseDir : ""),
+				fullPathGetter = [*] () -> (success:bool, fullPath:string) {
+					local ok, fullPath = resolveParticlesOuputPath(project)
+					return ok, fullPath
+				}
+			)
+			if not ok  return
+
+			project.exportParticlesPath = path
+			markEdited(project)
+
+			guiState.refreshRecursively!("exportProject_particles_path")
+			guiState.refreshRecursively!("exportProject_particles_pathResult")     -- @Cleanup: Shouldn't be needed.
+			guiState.refreshRecursively!("exportProject_particles_pathResultInfo") -- @Cleanup: Shouldn't be needed.
+		}
 	}
 
 	local showTemplateDropdownMenu :: (buttons:gui.Buttons, customPath:string, cb:(templateName:string, templatePath:string)) {
@@ -2880,7 +2988,7 @@ export setupGuiCallbacks :: () {
 			local ^ok, filename = pathObj.getFilename!()
 			if not ok  filename = ""
 
-			showFileDialog(floating=true, "Choose template", dir, filename,
+			showFileDialog(floating=true, .OPEN, "Choose template", dir, filename,
 				onChoose = (pathObj:Path, pathAbsoluteObj:Path) {
 					local ok, dir = pathAbsoluteObj.getDirectory!()
 					if not ok  return -- @UX: Show error message.
@@ -3024,7 +3132,7 @@ export setupGuiCallbacks :: () {
 			local ^ok, filename = pathObj.getFilename!()
 			if not ok  filename = ""
 
-			showFileDialog(floating=true, "Choose template", dir, filename,
+			showFileDialog(floating=true, .OPEN, "Choose template", dir, filename,
 				onChoose = (pathObj:Path, pathAbsoluteObj:Path) {
 					local ok, dir = pathAbsoluteObj.getDirectory!()
 					if not ok  return -- @UX: Show error message.

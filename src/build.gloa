@@ -2,14 +2,16 @@
 --=
 --=  Build script
 --=
+--=  $ gloa --root . src/build.gloa
+--=  $ gloa --root . src/build.gloa dev
+--=  $ gloa --root . src/build.gloa release [private]
+--=
 --=-------------------------------------------------------------
 --=
 --=  Hot Particles - a particle editor for LÖVE
 --=  by Marcus 'ReFreezed' Thunström
 --=
 --============================================================]]
-
-local PRIVATE_RELEASE :: 1==0
 
 export !import "basic"
 export !import "string"
@@ -29,15 +31,13 @@ export !self
 	options.outputType = .NONE
 	setBuildOptions(options)
 
-	local dev = indexOf(getProgramArguments(), "--dev")
-
 	-- [[
-	if not dev  print("Compiling...")
+	if not indexOf(getProgramArguments(), "dev")  print("Compiling...")
 	compile("src/main.gloa")
 	compile("src/conf.gloa")
 	--]]
 
-	if not dev  doRelease()
+	if indexOf(getProgramArguments(), "release")  doRelease()
 }
 
 local Values :: struct { !key:string, !value:string }
@@ -223,7 +223,7 @@ local doRelease :: () {
 		}
 	}
 
-	if PRIVATE_RELEASE  return
+	if indexOf(getProgramArguments(), "private")  return
 
 	-- macOS.
 	do {

@@ -49,7 +49,7 @@
 export SPACING       :: 3
 export SPACING_LARGE :: 10
 
-local BUTTON_RADIUS    :: 3
+local BUTTON_RADIUS    :: 2
 local BUTTON_PADDING_Y :: 2
 
 export SCROLLABLE_PADDING   :: 5 -- Vertical.
@@ -2088,7 +2088,9 @@ local drawElement :: (state:State, el:Element) {
 						bx2[itIndex],          by2[itIndex]
 					)
 				} else {
-					LG.rectangle(LG.DrawMode.FILL, bx1[itIndex]+1, by1[itIndex]+1, bw[itIndex]-2, bh[itIndex]-2, BUTTON_RADIUS)
+					local extraW = (not buttons.vertical and itIndex > 1) ? 1 : 0
+					local extraH = (    buttons.vertical and itIndex > 1) ? 1 : 0
+					LG.rectangle(LG.DrawMode.FILL, bx1[itIndex]+1-extraW, by1[itIndex]+1-extraH, bw[itIndex]-2+extraW, bh[itIndex]-2+extraH, BUTTON_RADIUS)
 				}
 			}
 

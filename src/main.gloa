@@ -21,7 +21,7 @@ export EXPORT_TEMPLATES_DIRECTORY :: "exportTemplates"
 
 local isDev :: () -> bool {
 	!import "utils"
-	return (indexOf(getProgramArguments(), "--dev"))
+	return (indexOf(getProgramArguments(), "dev"))
 }
 export DEV :: !run isDev()
 
@@ -1287,21 +1287,21 @@ local onLoad :: (args:[]string, argsRaw:[]string) {
 
 
 local onFileDropped :: (file:LF.DroppedFile) {
-	local path   = Path(file.getFilename!()).toString!()
-	local _, ext = matchPattern(path, "%.(%w+)$")
+	local fullPath = Path(file.getFilename!()).toString!()
+	local _, ext   = matchPattern(fullPath, "%.(%w+)$")
 
 	if ext == "hotparticles" {
-		openProject(path)
+		openProject(fullPath)
 		return
 	}
 
 	if pcall_newImage(file) == NULL {
-		setErrorText("Could not load '%s'", path)
+		setErrorText("Could not load '%s'", fullPath)
 		return
 	}
 
 	local project, system = getCurrentProjectAndSystem()
-	setTexturePath(project, system, path)
+	setTexturePath(project, system, fullPath)
 }
 
 
@@ -1364,9 +1364,9 @@ local onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool) 
 					} elseif code ~= 0 {
 						setErrorText("Failed making gif (Error %d)", code)
 					} else {
-						local path = format("%s/%s", getSaveDirectory(), gifRecordingDirectory)
-						print("Gif: "..path)
-						-- love.system.openURL("file://"..path)
+						local fullPath = format("%s/%s", getSaveDirectory(), gifRecordingDirectory)
+						print("Gif: "..fullPath)
+						-- love.system.openURL("file://"..fullPath)
 					}
 				}
 			}
@@ -2539,25 +2539,25 @@ export scheduleSaveWorkspace :: () {
 
 
 
-export openProject :: (path:string, asPreview=false) -> (success:bool, project:Project, isNew:bool) {
-	local pathObj = Path(path)
-	path          = pathObj.toString!()
+export openProject :: (fullPath:string, asPreview=false) -> (success:bool, project:Project, isNew:bool) {
+	local pathObj = Path(fullPath)
+	fullPath      = pathObj.toString!()
 
 	local ok, dir, filename = pathObj.getDirectoryAndFilename!()
 	if not ok {
-		removeRecent(app.recentFiles, path)
-		if not asPreview  setErrorText("Bad project path '%s'", path)
+		removeRecent(app.recentFiles, fullPath)
+		if not asPreview  setErrorText("Bad project path '%s'", fullPath)
 		return false, NULL, NULL
 	}
 
-	for app.projects  if it.path == path {
+	for app.projects  if it.path == fullPath {
 		setCurrentProject(itIndex)
-		if not asPreview  addRecent(app.recentFiles, path, app.maxRecentFiles)
+		if not asPreview  addRecent(app.recentFiles, fullPath, app.maxRecentFiles)
 		return true, it, false
 	}
 
 	if not connectToRemoteDirectory(dir) {
-		removeRecent(app.recentFiles, path)
+		removeRecent(app.recentFiles, fullPath)
 		if not asPreview  setErrorText("Could not access folder '%s'", dir)
 		return false, NULL, NULL
 	}
@@ -2567,7 +2567,7 @@ export openProject :: (path:string, asPreview=false) -> (success:bool, project:P
 
 	local ^ok, gotError, _app = loadWorkspace(filename)
 	if not ok {
-		removeRecent(app.recentFiles, path)
+		removeRecent(app.recentFiles, fullPath)
 		if not asPreview  setErrorText("Could not load '%s'", filename)
 		return false, NULL, NULL
 	}
@@ -2578,9 +2578,9 @@ export openProject :: (path:string, asPreview=false) -> (success:bool, project:P
 		return false, NULL, NULL
 	}
 
-	if not asPreview  addRecent(app.recentFiles, path, app.maxRecentFiles)
+	if not asPreview  addRecent(app.recentFiles, fullPath, app.maxRecentFiles)
 
-	project.path          = path
+	project.path          = fullPath
 	project.displayedName = filename
 	project.fileIsSaved   = true
 	project.preview       = asPreview
@@ -2745,20 +2745,20 @@ export getAnimationPreviewQuad :: (ps:LG.ParticleSystem, quads:[]LG.Quad) -> (qu
 
 
 
-local getFullPathToProjectResource :: (project:Project, path:string) -> (success:bool, path:string, isDanglingRelativePath:bool) {
+local getFullPathToProjectResource :: (project:Project, path:string) -> (success:bool, fullPath:string, isDanglingRelativePath:bool) {
 	if not path  return false, "", false
 
-	local pathObj0 = Path(path)
+	local pathObj = Path(path)
 
-	if pathObj0.isAbsolute {
-		if not pathObj0.getFilename!()  return false, "", false
+	if pathObj.isAbsolute {
+		if not pathObj.getFilename!()  return false, "", false
 		return true, path, false
 
 	} elseif project.fileIsSaved {
-		local pathObj = Path(project.path)
-		pathObj.pop!() -- @Robustness: Should we check if the path is empty after this?
-		pathObj.append!(pathObj0)
-		return true, pathObj.toString!(), false
+		local fullPathObj = Path(project.path)
+		fullPathObj.pop!() -- @Robustness: Should we check if the path is empty after this?
+		fullPathObj.append!(pathObj)
+		return true, fullPathObj.toString!(), false
 
 	} else {
 		return false, path, true
@@ -2767,21 +2767,21 @@ local getFullPathToProjectResource :: (project:Project, path:string) -> (success
 
 
 
-export getFullPathToTexture :: (project:Project, system:System) -> (success:bool, path:string, isDanglingRelativePath:bool) {
+export getFullPathToTexture :: (project:Project, system:System) -> (success:bool, fullPath:string, isDanglingRelativePath:bool) {
 	local path = system.texturePath
 	if not path  return true, particleImages[system.textureName].fullPath, false
 	return getFullPathToProjectResource(project, path)
 }
-export getFullPathToShader :: (project:Project, system:System) -> (success:bool, path:string, isDanglingRelativePath:bool) {
+export getFullPathToShader :: (project:Project, system:System) -> (success:bool, fullPath:string, isDanglingRelativePath:bool) {
 	return getFullPathToProjectResource(project, system.shaderPath)
 }
-export getFullPathToBackground :: (project:Project) -> (success:bool, path:string, isDanglingRelativePath:bool) {
+export getFullPathToBackground :: (project:Project) -> (success:bool, fullPath:string, isDanglingRelativePath:bool) {
 	return getFullPathToProjectResource(project, project.bgPath)
 }
-export getFullPathToCustomParticlesTemplate :: (project:Project) -> (success:bool, path:string, isDanglingRelativePath:bool) {
+export getFullPathToCustomParticlesTemplate :: (project:Project) -> (success:bool, fullPath:string, isDanglingRelativePath:bool) {
 	return getFullPathToProjectResource(project, project.exportParticlesTemplatePath)
 }
-export getFullPathToCustomClipboardTemplate :: (project:Project) -> (success:bool, path:string, isDanglingRelativePath:bool) {
+export getFullPathToCustomClipboardTemplate :: (project:Project) -> (success:bool, fullPath:string, isDanglingRelativePath:bool) {
 	return getFullPathToProjectResource(project, project.exportClipboardTemplatePath)
 }
 
@@ -2836,10 +2836,10 @@ export setCustomClipboardTemplatePath :: (project:Project, pathNew:string) {
 
 
 
-export toggleRelativePath :: (project:Project, path:string, fullPathGetter:()->(success:bool,path:string)) -> (success:bool, path:string) {
+export toggleRelativePath :: (project:Project, path:string, fullPathGetter:()->(success:bool,fullPath:string), relativeTo="") -> (success:bool, path:string) {
 	if not path  return false, ""
 
-	if not project.path {
+	if not (relativeTo or project.path) {
 		setErrorText("Relative paths require the project to be saved")
 		return false, ""
 	}
@@ -2847,7 +2847,9 @@ export toggleRelativePath :: (project:Project, path:string, fullPathGetter:()->(
 	local pathObj = Path(path)
 
 	if pathObj.isAbsolute {
-		local _, dir              = Path(project.path).getDirectory!()
+		local dir = relativeTo
+		if not dir  _, dir = Path(project.path).getDirectory!()
+
 		local ok, pathRelativeObj = pathObj.getRelativeTo!(dir)
 		if not ok {
 			setErrorText("Could not get relative path to '%s'", path)
@@ -3107,10 +3109,10 @@ export showMainMenu :: () {
 local projectBeingSaved:     Project = NULL
 local lastProjectBeforeTemp: Project = NULL
 
-local loadPreview :: (path:string) {
+local loadPreview :: (fullPath:string) {
 	local lastIndex = app.currentProjectIndex
 
-	local ok, project = openProject(path, asPreview=true)
+	local ok, project = openProject(fullPath, asPreview=true)
 	if not ok  return
 
 	if lastProjectBeforeTemp == NULL {
@@ -3146,8 +3148,8 @@ export showSaveProjectAsDialog :: () {
 
 	projectBeingSaved = project -- Needed as we load previews even in the save dialog, which means app.currentProjectIndex may change.
 
-	showFileDialog(isSave=true, "Save project", dir, filename, filenamePattern="%.hotparticles$",
-		onHighlight = (pathObj:Path, pathAbsoluteObj:Path) {
+	showFileDialog(.SAVE, "Save project", dir, filename, filenamePattern="%.hotparticles$",
+		onHighlight = (pathObj:Path, fullPathObj:Path) {
 			loadPreview(pathObj.toString!())
 
 			local ok, filename = pathObj.getFilename!()
@@ -3158,19 +3160,19 @@ export showSaveProjectAsDialog :: () {
 				input.field.setSelection!(0, utf8.getLength(basename))
 			}
 		},
-		onChoose = (pathObj:Path, pathAbsoluteObj:Path) {
-			local _, filename = pathObj.getFilename!()
+		onChoose = (pathObj:Path, fullPathObj:Path) {
+			local _, filename = fullPathObj.getFilename!()
 
 			if not findPattern(filename, "%.hotparticles$") {
 				filename    = filename..".hotparticles"
 				local input = guiState.getElement!("fileDialog_filename", gui.InputText)
 				input.value = input.value..".hotparticles"
-				pathObj.setFilename!(filename)
+				fullPathObj.setFilename!(filename)
 			}
 
-			local path = pathObj.toString!()
+			local fullPath = fullPathObj.toString!()
 
-			local ok, fileExists = saveProject(projectBeingSaved, path, overwrite=false)
+			local ok, fileExists = saveProject(projectBeingSaved, fullPath, overwrite=false)
 			if ok {
 				updateParticleTextures(projectBeingSaved) -- In case any texture uses a relative path.
 				popPanel()
@@ -3178,10 +3180,10 @@ export showSaveProjectAsDialog :: () {
 			} elseif fileExists {
 				local BUTTONS: []gui.Button : {{label="Overwrite"},{label="Cancel"}}
 
-				pushTempChoiceDialog("Confirm save as", filename.." already exists. Overwite it?", BUTTONS, submitIndex=1, [path] (choice:int) {
+				pushTempChoiceDialog("Confirm save as", filename.." already exists. Overwite it?", BUTTONS, submitIndex=1, [fullPath] (choice:int) {
 					if choice ~= 1  return
 
-					saveProject(projectBeingSaved, path, overwrite=true)
+					saveProject(projectBeingSaved, fullPath, overwrite=true)
 
 					updateParticleTextures(projectBeingSaved) -- In case any texture uses a relative path.
 					popPanel("fileDialog")
@@ -3199,19 +3201,19 @@ export showSaveProjectAsDialog :: () {
 }
 
 export showOpenProjectDialog :: () {
-	local project = app.projects[app.currentProjectIndex]
-	local pathObj = Path(project.path)
+	local project     = app.projects[app.currentProjectIndex]
+	local fullPathObj = Path(project.path)
 
-	local ok, dir = pathObj.getDirectoryAndFilename!()
+	local ok, dir = fullPathObj.getDirectoryAndFilename!()
 	if not ok  dir = getSaveDirectory().."/projects"
 
-	showFileDialog("Open project", dir, "", filenamePattern="%.hotparticles$",
-		onHighlight = (pathObj:Path, pathAbsoluteObj:Path) {
-			loadPreview(pathAbsoluteObj.toString!())
+	showFileDialog(.OPEN, "Open project", dir, "", filenamePattern="%.hotparticles$",
+		onHighlight = (pathObj:Path, fullPathObj:Path) {
+			loadPreview(fullPathObj.toString!())
 		},
-		onChoose = (pathObj:Path, pathAbsoluteObj:Path) {
-			local path        = pathAbsoluteObj.toString!()
-			local ok, project = openProject(path)
+		onChoose = (pathObj:Path, fullPathObj:Path) {
+			local fullPath    = fullPathObj.toString!()
+			local ok, project = openProject(fullPath)
 			if not ok {
 				local input = guiState.getElement!("fileDialog_filename", gui.InputText)
 				guiState.setFocus!(input)
@@ -3221,9 +3223,9 @@ export showOpenProjectDialog :: () {
 			project.preview = false -- In case the project was already opened as a preview (which it probably always is).
 			popPanel()
 
-			local _, dir = pathAbsoluteObj.getDirectory!()
-			addRecent(app.recentFolders, dir,  app.maxRecentFolders)
-			addRecent(app.recentFiles,   path, app.maxRecentFiles)
+			local _, dir = fullPathObj.getDirectory!()
+			addRecent(app.recentFolders, dir,      app.maxRecentFolders)
+			addRecent(app.recentFiles,   fullPath, app.maxRecentFiles)
 
 			-- Make sure the loaded project replaces any single empty project.
 			if #app.projects == 2 and isProjectEmpty(app.projects[1]) {
