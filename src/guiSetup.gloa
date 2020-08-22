@@ -2597,7 +2597,10 @@ export setupGuiCallbacks :: () {
 			sort(filenames, compareFilenames)
 
 			buttons.buttons = {}
-			insert(buttons.buttons, cast(gui.Button){ value=cast(Item){isDir=true,name=".."}, label="..", image="iconFolder" })
+
+			if Path(dir).path {
+				insert(buttons.buttons, cast(gui.Button){ value=cast(Item){isDir=true,name=".."}, label="..", image="iconFolder" })
+			}
 
 			for dirs {
 				insert(buttons.buttons, cast(gui.Button){
@@ -2609,17 +2612,24 @@ export setupGuiCallbacks :: () {
 			for filenames {
 				local EXT_TO_ICON: struct { !key:string, !value:string } : {
 					[".hotparticles"] = "iconFileHotparticles",
-					[".png"]          = "iconFileImage",
-					[".jpg"]          = "iconFileImage",
-					[".jpeg"]         = "iconFileImage",
-					[".tga"]          = "iconFileImage",
-					[".gl"]           = "iconFileShader",
-					[".glh"]          = "iconFileShader",
-					[".glsl"]         = "iconFileShader",
-					[".frag"]         = "iconFileShader",
-					[".vert"]         = "iconFileShader",
-					[".lua"]          = "iconFileLua",
-					[".wlua"]         = "iconFileLua",
+
+					[".jpg"]  = "iconFileImage",
+					[".jpeg"] = "iconFileImage",
+					[".png"]  = "iconFileImage",
+					[".bmp"]  = "iconFileImage",
+					[".tga"]  = "iconFileImage",
+					[".hdr"]  = "iconFileImage",
+					[".pic"]  = "iconFileImage",
+					[".exr"]  = "iconFileImage",
+
+					[".gl"]   = "iconFileShader",
+					[".glh"]  = "iconFileShader",
+					[".glsl"] = "iconFileShader",
+					[".frag"] = "iconFileShader",
+					[".vert"] = "iconFileShader",
+
+					[".lua"]  = "iconFileLua",
+					[".wlua"] = "iconFileLua",
 				}
 
 				local basename, ext = splitBasenameAndExtension(it, keepDot=true)
@@ -2699,8 +2709,17 @@ export setupGuiCallbacks :: () {
 		guiState.onAction.fileDialog_choose   = (buttons:gui.Buttons, buttonIndex:int) {  choosePath()  }
 
 		local choosePath :: () {
-			local input   = guiState.getElement!("fileDialog_filename", gui.InputText)
-			input.value   = trim(input.value)
+			local input = guiState.getElement!("fileDialog_filename", gui.InputText)
+			input.value = trim(input.value)
+
+			if input.value == "." and fileDialog_chooseFolder {
+				if fileDialog_onChoose ~= NULL {
+					local pathObj = Path(dirCurrent)
+					fileDialog_onChoose(makeRelativeOrClone(pathObj), pathObj)
+				}
+				return
+			}
+
 			local dotdot  = (input.value == ".." or findPattern(input.value, "[/\\]%.%.$"))
 			local pathObj = Path(input.value)
 			input.value   = pathObj.toString!()
@@ -2732,7 +2751,7 @@ export setupGuiCallbacks :: () {
 
 			if not fileDialog_chooseFolder or dotdot {
 				if tryNavigate(pathObj)  return
-				if dotdot  return -- Never trigger onChoose with ".."!
+				if dotdot                return -- Never trigger onChoose with ".."!
 			}
 
 			if fileDialog_type ~= .OPEN {
@@ -2810,7 +2829,8 @@ export setupGuiCallbacks :: () {
 
 			showFileDialog(floating=true, .CHOOSE, chooseFolder=true, "Choose base folder", dir, filename,
 				onChoose = (pathObj:Path, pathAbsoluteObj:Path) {
-					-- @Incomplete: Save recent exportBaseDirectory.
+					local ok, parentDir = pathAbsoluteObj.getDirectory!()
+					if ok  addRecent(app.recentFolders, parentDir, app.maxRecentFolders)
 
 					local project               = app.projects[app.currentProjectIndex]
 					project.exportBaseDirectory = pathObj.toString!()
@@ -3176,10 +3196,8 @@ export setupGuiCallbacks :: () {
 
 			showFileDialog(floating=true, .CHOOSE, chooseFolder=true, "Choose texture folder", dir, filename, relativeTo=(hasBaseDir ? baseDir : ""),
 				onChoose = (pathObj:Path, pathAbsoluteObj:Path) {
-					local ok, dir = pathAbsoluteObj.getDirectory!()
-					if not ok  return -- @UX: Show error message.
-
-					addRecent(app.recentFolders, dir, app.maxRecentFolders)
+					local ok, parentDir = pathAbsoluteObj.getDirectory!()
+					if ok  addRecent(app.recentFolders, parentDir, app.maxRecentFolders)
 
 					local project                   = app.projects[app.currentProjectIndex]
 					project.exportTexturesDirectory = pathObj.toString!()
