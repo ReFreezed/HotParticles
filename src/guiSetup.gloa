@@ -373,23 +373,15 @@ export setupGuiFrames :: () {
 
 			guiState.separator!({ thick=true }),
 			guiState.hbox!({
-				guiState.text!({ text="Recent", weight=1 }),
-				guiState.buttons!({ name="fileDialog_clearRecent", buttons={{label="Clear",tooltip="Clear history"}} }),
-			}),
-			guiState.separator!({ thick=false }),
-			guiState.buttons!({ name="fileDialog_recent", vertical=true, align=.LEFT, style=.LIST }),
-
-			guiState.separator!({ thick=true }),
-			guiState.hbox!({
 				guiState.text!({ text="Bookmarks", weight=1 }),
 				guiState.buttons!({ name="fileDialog_addBookmark", buttons={{image="iconAdd",tooltip="Add current folder to bookmarks"}} }),
 			}),
-			guiState.scrollable!({ height=80,
+			guiState.scrollable!({ height=120,
 				guiState.buttons!({ name="fileDialog_bookmarks", vertical=true, align=.LEFT, style=.LIST }),
 			}),
 
 			guiState.separator!({ thick=true }),
-			guiState.inputText!({ name="fileDialog_directory" }),
+			guiState.inputText!({ name="fileDialog_directory", tooltip="Current folder (Right-click for recent)" }),
 			guiState.scrollable!({ name="fileDialog_itemsSrollable",
 				guiState.buttons!({ name="fileDialog_items", vertical=true, align=.LEFT, style=.LIST, buttonMinHeight=MEDIUM_BUTTON_HEIGHT }),
 			}),
@@ -649,12 +641,13 @@ export popPanel :: (nameForAssert="") -> (success:bool) {
 
 export FileDialogType :: enum { OPEN, SAVE, CHOOSE }
 
-local fileDialog_type            : FileDialogType = NULL
-local fileDialog_dir             : string         = NULL
-local fileDialog_filename        : string         = NULL
-local fileDialog_filenamePattern : string         = NULL
-local fileDialog_canChooseFolder : bool           = NULL
-local fileDialog_relativeTo      : string         = NULL
+local fileDialog_type                : FileDialogType = NULL
+local fileDialog_dir                 : string         = NULL
+local fileDialog_filename            : string         = NULL
+local fileDialog_filenamePattern     : string         = NULL
+local fileDialog_filenameHidePattern : string         = NULL
+local fileDialog_chooseFolder        : bool           = NULL
+local fileDialog_relativeTo          : string         = NULL
 
 local fileDialog_onHighlight: (pathObj:Path, pathAbsoluteObj:Path) = NULL
 local fileDialog_onChoose:    (pathObj:Path, pathAbsoluteObj:Path) = NULL
@@ -665,17 +658,18 @@ export showFileDialog :: (type:FileDialogType,
 	onHighlight: type_of(fileDialog_onHighlight) = NULL,
 	onChoose:    type_of(fileDialog_onChoose)    = NULL,
 	onClose:     type_of(fileDialog_onClose)     = NULL,
-	filenamePattern="", floating=false, canChooseFolder=false, relativeTo=""
+	filenamePattern="", filenameHidePattern="", floating=false, chooseFolder=false, relativeTo=""
 ) {
-	fileDialog_type            = type
-	fileDialog_dir             = dir
-	fileDialog_filename        = filename
-	fileDialog_filenamePattern = filenamePattern
-	fileDialog_canChooseFolder = canChooseFolder
-	fileDialog_relativeTo      = relativeTo
-	fileDialog_onHighlight     = onHighlight
-	fileDialog_onChoose        = onChoose
-	fileDialog_onClose         = onClose
+	fileDialog_type                = type
+	fileDialog_dir                 = dir
+	fileDialog_filename            = filename
+	fileDialog_filenamePattern     = filenamePattern
+	fileDialog_filenameHidePattern = filenameHidePattern
+	fileDialog_chooseFolder        = chooseFolder
+	fileDialog_relativeTo          = relativeTo
+	fileDialog_onHighlight         = onHighlight
+	fileDialog_onChoose            = onChoose
+	fileDialog_onClose             = onClose
 
 	guiState.getElement!("fileDialog_title", gui.Text).text = title
 
@@ -1067,7 +1061,7 @@ export setupGuiCallbacks :: () {
 		local ^ok, filename = Path(project.bgPath).getFilename!()
 		if not ok  filename = ""
 
-		showFileDialog(.OPEN, "Choose texture", dir, filename,
+		showFileDialog(.OPEN, "Choose texture", dir, filename, filenameHidePattern="%.hotparticles$",
 			onHighlight = (pathObj:Path, pathAbsoluteObj:Path) {
 				textureBrowserPreviewImage = NULL
 
@@ -1499,7 +1493,7 @@ export setupGuiCallbacks :: () {
 		local ^ok, filename = Path(system.texturePath).getFilename!()
 		if not ok  filename = ""
 
-		showFileDialog(.OPEN, "Choose texture", dir, filename,
+		showFileDialog(.OPEN, "Choose texture", dir, filename, filenameHidePattern="%.hotparticles$",
 			onHighlight = (pathObj:Path, pathAbsoluteObj:Path) {
 				textureBrowserPreviewImage = NULL
 
@@ -2396,7 +2390,7 @@ export setupGuiCallbacks :: () {
 			local ^ok, filename = Path(system.shaderPath).getFilename!()
 			if not ok  filename = ""
 
-			showFileDialog(.OPEN, "Choose shader", dir, filename,
+			showFileDialog(.OPEN, "Choose shader", dir, filename, filenameHidePattern="%.hotparticles$",
 				-- onHighlight = (pathObj:Path, pathAbsoluteObj:Path) {
 				-- 	-- @UX: Preview shader.
 				-- },
@@ -2487,7 +2481,6 @@ export setupGuiCallbacks :: () {
 			filenameInput.value = fileDialog_filename
 
 			guiState.refreshRecursively!("fileDialog_bookmarks")
-			guiState.refreshRecursively!("fileDialog_recent")
 			guiState.refreshRecursively!("fileDialog_items")
 			guiState.setFocus!(filenameInput)
 			setSelectionToBasename(filenameInput, fileDialog_filename)
@@ -2540,35 +2533,24 @@ export setupGuiCallbacks :: () {
 			guiState.refreshRecursively!("fileDialog_bookmarks")
 		}
 
-		-- Recent.
-		guiState.onRefresh.fileDialog_recent = (buttons:gui.Buttons) {
-			buttons.buttons = {}
-			for app.recentFolders {
-				insert(buttons.buttons, cast(gui.Button){ value=it, label=it, image="iconFolder" })
-			}
-		}
-
-		guiState.onAction.fileDialog_recent = (buttons:gui.Buttons, buttonIndex:int) {
-			dirCurrent = app.recentFolders[buttonIndex]
-			guiState.refreshRecursively!("fileDialog_items")
-		}
-
-		guiState.onAction.fileDialog_clearRecent = (buttons:gui.Buttons, buttonIndex:int) {
-			app.recentFolders = {}
-			guiState.refreshRecursively!("fileDialog_recent")
-		}
-
 		-- Directory.
-		guiState.onRefresh.fileDialog_directory = (input:gui.InputText, buttonIndex:int) {
+		guiState.onRefresh.fileDialog_directory = (input:gui.InputText, _:int) {
 			input.value = dirCurrent
 		}
 
-		guiState.onSubmit.fileDialog_directory = (input:gui.InputText, buttonIndex:int) {
+		guiState.onSubmit.fileDialog_directory = (input:gui.InputText, _:int) {
 			local dirObj = Path(trim(input.value))
 			if not dirObj.isAbsolute  return
 
 			dirCurrent = dirObj.toString!()
 			guiState.refreshRecursively!("fileDialog_items")
+		}
+
+		guiState.onOption.fileDialog_directory = (input:gui.InputText, _:int) {
+			showRecentFilesContextMenu("Recent folders", app.recentFolders, (dir:string) {
+				dirCurrent = dir
+				guiState.refreshRecursively!("fileDialog_items")
+			})
 		}
 
 		-- Directory items.
@@ -2603,7 +2585,13 @@ export setupGuiCallbacks :: () {
 				} elseif info.type == .DIRECTORY {
 					if not findPattern(it, "^%$")  insert(dirs, it)
 				} elseif info.type == .FILE {
-					if not fileDialog_filenamePattern or findPattern(it, fileDialog_filenamePattern)  insert(filenames, it)
+					if (
+						not fileDialog_chooseFolder
+						and (not fileDialog_filenamePattern or findPattern(it, fileDialog_filenamePattern))
+						and not (fileDialog_filenameHidePattern and findPattern(it, fileDialog_filenameHidePattern))
+					) {
+						insert(filenames, it)
+					}
 				}
 			}
 
@@ -2674,7 +2662,7 @@ export setupGuiCallbacks :: () {
 		guiState.onAction.fileDialog_items = (buttons:gui.Buttons, buttonIndex:int) {
 			local item = cast(Item) buttons.buttons[buttonIndex].value
 
-			if item.isDir and (item.name == ".." or not fileDialog_canChooseFolder)  return
+			if item.isDir and (item.name == ".." or not fileDialog_chooseFolder)  return
 
 			local input = guiState.getElement!("fileDialog_filename", gui.InputText)
 			input.value = item.name
@@ -2695,7 +2683,7 @@ export setupGuiCallbacks :: () {
 				return
 			}
 
-			-- Note: We don't care about canChooseFolder here - we always navigate folders on double-click!
+			-- Note: We don't care about chooseFolder here - we always navigate folders on double-click!
 
 			local dirObj = Path(dirCurrent)
 
@@ -2739,12 +2727,12 @@ export setupGuiCallbacks :: () {
 
 				guiState.refreshRecursively!("fileDialog_items")
 				guiState.setFocus!(input)
-				setSelectionToBasename(input, fileDialog_filename)
+				input.field.selectAll!()--setSelectionToBasename(input, fileDialog_filename)
 
 				return true
 			}
 
-			if not fileDialog_canChooseFolder or dotdot {
+			if not fileDialog_chooseFolder or dotdot {
 				if tryNavigate(pathObj)  return
 				if dotdot  return -- Never trigger onChoose with ".."!
 			}
@@ -2820,7 +2808,7 @@ export setupGuiCallbacks :: () {
 			else
 				dir = getSaveDirectory().."/projects"
 
-			showFileDialog(floating=true, .CHOOSE, canChooseFolder=true, "Choose base folder", dir, filename,
+			showFileDialog(floating=true, .CHOOSE, chooseFolder=true, "Choose base folder", dir, filename,
 				onChoose = (pathObj:Path, pathAbsoluteObj:Path) {
 					-- @Incomplete: Save recent exportBaseDirectory.
 
@@ -3067,7 +3055,7 @@ export setupGuiCallbacks :: () {
 			local ^ok, filename = pathObj.getFilename!()
 			if not ok  filename = ""
 
-			showFileDialog(floating=true, .OPEN, "Choose template", dir, filename,
+			showFileDialog(floating=true, .OPEN, "Choose template", dir, filename, filenamePattern="%.lua$",
 				onChoose = (pathObj:Path, pathAbsoluteObj:Path) {
 					local ok, dir = pathAbsoluteObj.getDirectory!()
 					if not ok  return -- @UX: Show error message.
@@ -3184,7 +3172,7 @@ export setupGuiCallbacks :: () {
 			else
 				dir = hasBaseDir ? baseDir : getSaveDirectory().."/projects"
 
-			showFileDialog(floating=true, .CHOOSE, canChooseFolder=true, "Choose texture folder", dir, filename, relativeTo=(hasBaseDir ? baseDir : ""),
+			showFileDialog(floating=true, .CHOOSE, chooseFolder=true, "Choose texture folder", dir, filename, relativeTo=(hasBaseDir ? baseDir : ""),
 				onChoose = (pathObj:Path, pathAbsoluteObj:Path) {
 					local ok, dir = pathAbsoluteObj.getDirectory!()
 					if not ok  return -- @UX: Show error message.
@@ -3282,7 +3270,7 @@ export setupGuiCallbacks :: () {
 			local ^ok, filename = pathObj.getFilename!()
 			if not ok  filename = ""
 
-			showFileDialog(floating=true, .OPEN, "Choose template", dir, filename,
+			showFileDialog(floating=true, .OPEN, "Choose template", dir, filename, filenamePattern="%.lua$",
 				onChoose = (pathObj:Path, pathAbsoluteObj:Path) {
 					local ok, dir = pathAbsoluteObj.getDirectory!()
 					if not ok  return -- @UX: Show error message.
