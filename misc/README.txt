@@ -132,6 +132,8 @@ Emitter movement: Automatically move the emitter in a pattern.
     linear movement.
 - Speed: The speed of the emitter's movement.
 
+Region: Show a rectangular guide which can be used as a reference.
+
 Global scale: Scale time, space and/or size parameters for all particle
     systems in the project.
 

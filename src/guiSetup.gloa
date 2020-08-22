@@ -94,11 +94,9 @@ export setupGuiFrames :: () {
 
 				guiState.separator!({ thick=false }),
 
-				guiState.section!({ name="regionSection", label="Region", tooltip="Visual region guide",
-					guiState.hbox!({
-						guiState.slider!({ name="regionWidth",  labelLeft="width",  canDisable=true, defaultValue=0, min=0, max=1024, exponential=true, isInt=true, limitName="region", readout="%d", linkMultiDrag={"regionHeight"}, weight=1 }),
-						guiState.slider!({ name="regionHeight", labelLeft="height", canDisable=true, defaultValue=0, min=0, max=1024, exponential=true, isInt=true, limitName="region", readout="%d", linkMultiDrag={"regionWidth"},  weight=1, inset=40 }),
-					}),
+				guiState.section!({ name="regionSection", label="Region", tooltip="Visual rectangular guide", icon16="region",
+					guiState.slider!({ name="regionWidth",  labelLeft="width",  canDisable=true, defaultValue=0, min=0, max=1024, exponential=true, isInt=true, limitName="region", readout="%d", linkMultiDrag={"regionHeight"} }),
+					guiState.slider!({ name="regionHeight", labelLeft="height", canDisable=true, defaultValue=0, min=0, max=1024, exponential=true, isInt=true, limitName="region", readout="%d", linkMultiDrag={"regionWidth"} }),
 				}),
 
 				guiState.separator!({ thick=false }),

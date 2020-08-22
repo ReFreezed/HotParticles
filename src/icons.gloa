@@ -306,7 +306,7 @@ export generateIcons :: () {
 		"scaleGlobal",
 		-- 4
 		"data",
-		"",
+		"region",
 		"",
 		"",
 		"",
