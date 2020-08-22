@@ -1057,23 +1057,13 @@ export setupGuiCallbacks :: () {
 
 	guiState.onAction.bgChoose = (buttons:gui.Buttons, buttonIndex:int) {
 		local project = app.projects[app.currentProjectIndex]
-		local pathObj = Path(project.bgPath)
-		local ok, dir = pathObj.getDirectory!()
 
-		if not ok {
-			dir = getSaveDirectory().."/projects"
-
-		} else {
-			local dirObj = Path(dir)
-
-			if not dirObj.isAbsolute {
-				ok, dir = Path(project.path).getDirectory!()
-				dirObj.prepend!(ok ? dir : getSaveDirectory().."/projects")
-				dir = dirObj.toString!()
-			}
-		}
-
-		local ^ok, filename = pathObj.getFilename!()
+		local ok, path = getFullPathToBackground(project)
+		local dir: string
+		if ok      ok, dir  = Path(path).getDirectory!()
+		if not ok  ok, dir  = Path(project.path).getDirectory!()
+		if not ok  dir      = getSaveDirectory().."/projects"
+		local ^ok, filename = Path(project.bgPath).getFilename!()
 		if not ok  filename = ""
 
 		showFileDialog(.OPEN, "Choose texture", dir, filename,
@@ -1498,23 +1488,14 @@ export setupGuiCallbacks :: () {
 
 	guiState.onAction.textureChoose = (buttons:gui.Buttons, buttonIndex:int) {
 		local project, system = getCurrentProjectAndSystem()
-		local pathObj         = Path(system.texturePath)
-		local ok, dir         = pathObj.getDirectory!()
 
-		if not ok {
-			dir = getSaveDirectory().."/projects"
-
-		} else {
-			local dirObj = Path(dir)
-
-			if not dirObj.isAbsolute {
-				ok, dir = Path(project.path).getDirectory!()
-				dirObj.prepend!(ok ? dir : getSaveDirectory().."/projects")
-				dir = dirObj.toString!()
-			}
-		}
-
-		local ^ok, filename = pathObj.getFilename!()
+		local ok, path = getFullPathToTexture(project, system)
+		if not system.texturePath  ok = false
+		local dir: string
+		if ok      ok, dir  = Path(path).getDirectory!()
+		if not ok  ok, dir  = Path(project.path).getDirectory!()
+		if not ok  dir      = getSaveDirectory().."/projects"
+		local ^ok, filename = Path(system.texturePath).getFilename!()
 		if not ok  filename = ""
 
 		showFileDialog(.OPEN, "Choose texture", dir, filename,
@@ -2405,22 +2386,12 @@ export setupGuiCallbacks :: () {
 
 		guiState.onAction.shaderChoose = (buttons:gui.Buttons, buttonIndex:int) {
 			local project, system = getCurrentProjectAndSystem()
-			local pathObj         = Path(system.shaderPath)
-			local ok, dir         = pathObj.getDirectory!()
 
-			if not ok {
-				dir = getSaveDirectory().."/projects"
-
-			} else {
-				local dirObj = Path(dir)
-
-				if not dirObj.isAbsolute {
-					ok, dir = Path(project.path).getDirectory!()
-					dirObj.prepend!(ok ? dir : getSaveDirectory().."/projects")
-					dir = dirObj.toString!()
-				}
-			}
-
+			local ok, path = getFullPathToShader(project, system)
+			local dir: string
+			if ok      ok, dir  = Path(path).getDirectory!()
+			if not ok  ok, dir  = Path(project.path).getDirectory!()
+			if not ok  dir      = getSaveDirectory().."/projects"
 			local ^ok, filename = Path(system.shaderPath).getFilename!()
 			if not ok  filename = ""
 
