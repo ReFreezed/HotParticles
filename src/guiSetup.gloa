@@ -3096,71 +3096,129 @@ export setupGuiCallbacks :: () {
 	}
 
 	-- Texture files.
-	guiState.onRefresh.exportProject_textures_copyFiles = (checkbox:gui.Checkbox) {
-		local project    = app.projects[app.currentProjectIndex]
-		checkbox.checked = project.exportTextures
-	}
-	guiState.onAction.exportProject_textures_copyFiles = (checkbox:gui.Checkbox, _:int) {
-		local project          = app.projects[app.currentProjectIndex]
-		project.exportTextures = checkbox.checked
-		markEdited(project)
-		guiState.refreshRecursively!("exportProject_textures_pathResults")
-		guiState.refreshRecursively!("exportProject_textures_pathResultsInfo")
-	}
-
-	guiState.onRefresh.exportProject_textures_overwrite = (checkbox:gui.Checkbox) {
-		local project    = app.projects[app.currentProjectIndex]
-		checkbox.checked = project.exportTexturesOverwrite
-	}
-	guiState.onAction.exportProject_textures_overwrite = (checkbox:gui.Checkbox, _:int) {
-		local project                   = app.projects[app.currentProjectIndex]
-		project.exportTexturesOverwrite = checkbox.checked
-		markEdited(project)
-	}
-
-	guiState.onRefresh.exportProject_textures_directory = (input:gui.InputText) {
-		local project = app.projects[app.currentProjectIndex]
-		input.value   = project.exportTexturesDirectory
-	}
-	guiState.onAction.exportProject_textures_directory = (input:gui.InputText, _:int) {
-		local project                   = app.projects[app.currentProjectIndex]
-		input.value                     = Path(trim(input.value)).toString!()
-		project.exportTexturesDirectory = input.value
-		markEdited(project)
-		guiState.refreshRecursively!("exportProject_textures_pathResults")
-		guiState.refreshRecursively!("exportProject_textures_pathResultsInfo")
-	}
-
-	guiState.onRefresh.exportProject_textures_pathResults = (textEl:gui.Text) {
-		local project = app.projects[app.currentProjectIndex]
-
-		if not project.exportTextures {
-			textEl.text = ""
-			return
+	do {
+		guiState.onRefresh.exportProject_textures_copyFiles = (checkbox:gui.Checkbox) {
+			local project    = app.projects[app.currentProjectIndex]
+			checkbox.checked = project.exportTextures
+		}
+		guiState.onAction.exportProject_textures_copyFiles = (checkbox:gui.Checkbox, _:int) {
+			local project          = app.projects[app.currentProjectIndex]
+			project.exportTextures = checkbox.checked
+			markEdited(project)
+			guiState.refreshRecursively!("exportProject_textures_pathResults")
+			guiState.refreshRecursively!("exportProject_textures_pathResultsInfo")
 		}
 
-		local paths: []string
-		local pathSet: struct { !key:string, !value:bool }
+		guiState.onRefresh.exportProject_textures_overwrite = (checkbox:gui.Checkbox) {
+			local project    = app.projects[app.currentProjectIndex]
+			checkbox.checked = project.exportTexturesOverwrite
+		}
+		guiState.onAction.exportProject_textures_overwrite = (checkbox:gui.Checkbox, _:int) {
+			local project                   = app.projects[app.currentProjectIndex]
+			project.exportTexturesOverwrite = checkbox.checked
+			markEdited(project)
+		}
+	}
 
-		for project.systems {
-			local ok, path = resolveTextureOuputPath(project, it)
+	do {
+		guiState.onRefresh.exportProject_textures_directory = (input:gui.InputText) {
+			local project = app.projects[app.currentProjectIndex]
+			input.value   = project.exportTexturesDirectory
+		}
+		guiState.onAction.exportProject_textures_directory = (input:gui.InputText, _:int) {
+			local project                   = app.projects[app.currentProjectIndex]
+			input.value                     = Path(trim(input.value)).toString!()
+			project.exportTexturesDirectory = input.value
+			markEdited(project)
+			guiState.refreshRecursively!("exportProject_textures_pathResults")
+			guiState.refreshRecursively!("exportProject_textures_pathResultsInfo")
+		}
+		guiState.onRefresh.exportProject_textures_pathResults = (textEl:gui.Text) {
+			local project = app.projects[app.currentProjectIndex]
 
-			if not ok {
-				textEl.text = "Missing/invalid paths!"
+			if not project.exportTextures {
+				textEl.text = ""
 				return
 			}
 
-			if not pathSet[path] {
-				pathSet[path] = true
-				insert(paths, path)
+			local paths: []string
+			local pathSet: struct { !key:string, !value:bool }
+
+			for project.systems {
+				local ok, path = resolveTextureOutputPath(project, it)
+
+				if not ok {
+					textEl.text = "Missing/invalid paths!"
+					return
+				}
+
+				if not pathSet[path] {
+					pathSet[path] = true
+					insert(paths, path)
+				}
 			}
+
+			textEl.text = concatinate(paths, "\n")
+		}
+		guiState.onRefresh.exportProject_textures_pathResultsInfo = (buttons:gui.Buttons) {
+			buttons.tooltip = guiState.getElement!("exportProject_textures_pathResults", gui.Text).text
 		}
 
-		textEl.text = concatinate(paths, "\n")
+		guiState.onAction.exportProject_textures_directory_choose = (buttons:gui.Buttons, buttonIndex:int) {
+			local project             = app.projects[app.currentProjectIndex]
+			local hasBaseDir, baseDir = resolveBaseOuputPath(project)
+
+			local filename    = "?.lua"
+			local dir: string = NULL
+
+			local ok, fullPath = resolveTextureOutputDirectory(project)
+			if ok
+				_, dir, filename = Path(fullPath).getDirectoryAndFilename!()
+			else
+				dir = hasBaseDir ? baseDir : getSaveDirectory().."/projects"
+
+			showFileDialog(floating=true, .CHOOSE, canChooseFolder=true, "Choose texture folder", dir, filename, relativeTo=(hasBaseDir ? baseDir : ""),
+				onChoose = (pathObj:Path, pathAbsoluteObj:Path) {
+					local ok, dir = pathAbsoluteObj.getDirectory!()
+					if not ok  return -- @UX: Show error message.
+
+					addRecent(app.recentFolders, dir, app.maxRecentFolders)
+
+					local project                   = app.projects[app.currentProjectIndex]
+					project.exportTexturesDirectory = pathObj.toString!()
+					markEdited(project)
+
+					guiState.refreshRecursively!("exportProject_textures_directory")
+					guiState.refreshRecursively!("exportProject_textures_pathResults")
+					guiState.refreshRecursively!("exportProject_textures_pathResultsInfo")
+
+					popPanel()
+				}
+			)
+		}
+
+		guiState.onAction.exportProject_textures_directory_relative = (buttons:gui.Buttons, buttonIndex:int) {
+			local project             = app.projects[app.currentProjectIndex]
+			local hasBaseDir, baseDir = resolveBaseOuputPath(project)
+
+			local ok, path = toggleRelativePath(project, project.exportTexturesDirectory, relativeTo=(hasBaseDir ? baseDir : ""),
+				fullPathGetter = [*] () -> (success:bool, fullPath:string) {
+					local ok, fullPath = resolveTextureOutputDirectory(project)
+					return ok, fullPath
+				}
+			)
+			if not ok  return
+
+			project.exportTexturesDirectory = path
+			markEdited(project)
+
+			guiState.refreshRecursively!("exportProject_textures_directory")
+			-- Shouldn't be needed, but just to be safe:
+			guiState.refreshRecursively!("exportProject_textures_pathResults")
+			guiState.refreshRecursively!("exportProject_textures_pathResultsInfo")
+		}
 	}
-	guiState.onRefresh.exportProject_textures_pathResultsInfo = (buttons:gui.Buttons) {
-		buttons.tooltip = guiState.getElement!("exportProject_textures_pathResults", gui.Text).text
-	}
+
 	guiState.onAction.exportProject_exportFiles = (buttons:gui.Buttons, buttonIndex:int) {
 		tryExportFiles()
 	}

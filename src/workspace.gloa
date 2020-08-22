@@ -302,6 +302,7 @@ export saveProject :: (project:Project, path:string, overwrite:bool) -> (success
 
 	writeProject(buffer, project, isSavingWorkspace=false)
 
+	log("Writing %s", path)
 	local ^ok, err = LF.write(filename, concatinate(buffer))
 	if not ok  return setErrorMessage(false, "Could not write project to file: %s", err)
 

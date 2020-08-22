@@ -1052,8 +1052,7 @@ export setActionText :: (s:string, v,...:int|float|string) {
 }
 
 export setMessageText :: (s:string) {
-	if messageText ~= s  log(s)
-
+	log(s)
 	messageText         = s
 	messageTextTime     = LT.getTime()
 	messageTextDuration = 3.00
@@ -1064,8 +1063,7 @@ export setMessageText :: (s:string, v,...:int|float|string) {
 
 export setErrorText :: (s:string) {
 	s = "Error: "..s
-	if messageText ~= s  log(s)
-
+	log(s)
 	messageText         = s
 	messageTextTime     = LT.getTime()
 	messageTextDuration = 8.00
@@ -2769,7 +2767,8 @@ local getFullPathToProjectResource :: (project:Project, path:string) -> (success
 
 export getFullPathToTexture :: (project:Project, system:System) -> (success:bool, fullPath:string, isDanglingRelativePath:bool) {
 	local path = system.texturePath
-	if not path  return true, particleImages[system.textureName].fullPath, false
+	if not path  return true, format("%s/gfx/particles/%s.png", getAppDirectory(), system.textureName), false
+	-- if not path  return true, particleImages[system.textureName].fullPath, false -- Doesn't work in test code!
 	return getFullPathToProjectResource(project, path)
 }
 export getFullPathToShader :: (project:Project, system:System) -> (success:bool, fullPath:string, isDanglingRelativePath:bool) {
@@ -3309,70 +3308,79 @@ export resolveBaseOuputPath :: (project:Project) -> (success:bool, dir:string) {
 }
 
 export resolveParticlesOuputPath :: (project:Project) -> (success:bool, path:string) {
-	local pathObj      = Path(replaceQuestionMarks(project, project.exportParticlesPath))
-	local ok, filename = pathObj.getFilename!()
+	local pathObj = Path(replaceQuestionMarks(project, project.exportParticlesPath))
 
-	if not ok {
-		filename = getExportedParticlesDefaultFilename(project)
-		pathObj.setFilename!(filename)
-	} elseif filename == "." or filename == ".." {
-		return false, NULL
+	do {
+		local ok, filename = pathObj.getFilename!()
+		if not ok {
+			pathObj.setFilename!(getExportedParticlesDefaultFilename(project))
+		} elseif filename == ".." {
+			return false, NULL
+		}
 	}
 
-	if not pathObj.isAbsolute  pathObj.prepend!(replaceQuestionMarks(project, project.exportBaseDirectory))
-
 	if not pathObj.isAbsolute {
-		local ^ok, dir = Path(project.path).getDirectory!()
+		local ok, baseDir = resolveBaseOuputPath(project)
 		if not ok  return false, NULL
-		pathObj.prepend!(dir)
+		pathObj.prepend!(baseDir)
 	}
 
 	return true, pathObj.toString!()
 }
 
-export resolveTextureOuputPath :: (project:Project, system:System) -> (success:bool, path:string, sameAsInput:bool) {
-	local pathObj = Path(system.texturePath ?: system.textureName..".png")
+export resolveTextureOutputDirectory :: (project:Project) -> (success:bool, path:string) {
+	local pathObj = Path(replaceQuestionMarks(project, project.exportTexturesDirectory))
 
-	-- Resolve to current path.
 	if not pathObj.isAbsolute {
-		local ok, dir = Path(project.path).getDirectory!()
-		if ok  pathObj.prepend!(dir)
+		local ok, baseDir = resolveBaseOuputPath(project)
+		if not ok  return false, NULL
+		pathObj.prepend!(baseDir)
 	}
 
-	local hasBaseDir, baseDir = resolveBaseOuputPath(project)
+	return true, pathObj.toString!()
+}
 
-	if hasBaseDir {
-		local baseDirObj = Path(baseDir)
-		assert(baseDirObj.isAbsolute)
+export resolveTextureOutputPath :: (project:Project, system:System) -> (success:bool, path:string, sameAsInput:bool) {
+	if not system.texturePath {
+		local ok, dir = resolveTextureOutputDirectory(project)
+		if not ok  return false, NULL, NULL
 
-		if not baseDirObj.contains!(pathObj) {
-			pathObj = Path(pathObj.path[#pathObj.path])
+		local pathObj = Path(dir)
+		pathObj.append!(system.textureName..".png")
+
+		return true, pathObj.toString!(), false
+	}
+
+	local inputPath: string = NULL
+	do {
+		local ok, ^inputPath = getFullPathToTexture(project, system)
+		if not ok  return false, NULL, NULL
+	}
+
+	-- Resolve to current path to see if the texture is inside the base directory already.
+	local pathObj = Path(inputPath) -- Always a full path here.
+
+	do {
+		local hasBaseDir, baseDir = resolveBaseOuputPath(project)
+
+		if hasBaseDir {
+			local baseDirObj = Path(baseDir)
+			assert(baseDirObj.isAbsolute)
+
+			if baseDirObj.contains!(pathObj)  return true, inputPath, true
 		}
 	}
 
-	-- Resolve to generated path or the current path isn't in the base directory.
-	if not pathObj.isAbsolute {
-		pathObj.prepend!(replaceQuestionMarks(project, project.exportTexturesDirectory))
+	-- If the path isn't in the base directory, resolve to a completely generated path.
+	pathObj = Path(pathObj.path[#pathObj.path]) -- Keep the filename.
 
-		if not pathObj.isAbsolute and hasBaseDir  pathObj.prepend!(baseDir)
-
-		if not pathObj.isAbsolute  return false, NULL, NULL
+	do {
+		local ok, dir = resolveTextureOutputDirectory(project)
+		if not ok  return false, NULL, NULL
+		pathObj.prepend!(dir)
 	}
 
-	local ok, inputPath = getFullPathToTexture(project, system) -- @Cleanup: Can we just use system.currentImage.fullPath here?
-	if not ok  inputPath = ""
-
-	local path = pathObj.toString!()
-
-	--[[ DEBUG
-	printf(
-		"%-40s  %-40s  %-40s  %s",
-		(system.texturePath ?: format("%s/gfx/particles/%s.png", getAppDirectory(), system.textureName)),
-		inputPath, path, toString(path == inputPath)
-	)
-	--]]
-
-	return true, path, (path == inputPath)
+	return true, pathObj.toString!(), false
 }
 
 --[[
@@ -3387,18 +3395,20 @@ export resolveTextureOuputPath :: (project:Project, system:System) -> (success:b
 	local TESTS: []Test : {
 		{
 			project = {
+				fileIsSaved             = true,
 				path                    = "C:/MyProject/particles/cool.hotparticles",
 				exportBaseDirectory     = "..",
 				exportParticlesPath     = "data/particles_?.lua",
 				exportTexturesDirectory = "gfxOutput",
-				systems                 = {{texturePath="../gfx/cool.png"},{textureName="star"}},
+				systems                 = {{texturePath="../gfx/cool.png"},{texturePath="D:/Misc/Yes.png"},{texturePath="../../outside.png"},{textureName="star"}},
 			},
 			expectedBaseDirectory = "C:/MyProject",
 			expectedParticlesPath = "C:/MyProject/data/particles_cool.lua",
-			expectedTexturePaths  = {"C:/MyProject/gfx/cool.png","C:/MyProject/gfxOutput/star.png"},
+			expectedTexturePaths  = {"C:/MyProject/gfx/cool.png","C:/MyProject/gfxOutput/Yes.png","C:/MyProject/gfxOutput/outside.png","C:/MyProject/gfxOutput/star.png"},
 		},
 		{
 			project = {
+				fileIsSaved             = true,
 				path                    = "C:/TheFoo/my.hotparticles",
 				exportBaseDirectory     = "",
 				exportParticlesPath     = "",
@@ -3411,6 +3421,7 @@ export resolveTextureOuputPath :: (project:Project, system:System) -> (success:b
 		},
 		{
 			project = {
+				fileIsSaved             = true,
 				path                    = "C:/Place1/very.hotparticles",
 				exportBaseDirectory     = "D:/Place2",
 				exportParticlesPath     = "E:/Place3/?.lua",
@@ -3419,6 +3430,19 @@ export resolveTextureOuputPath :: (project:Project, system:System) -> (success:b
 			},
 			expectedBaseDirectory = "D:/Place2",
 			expectedParticlesPath = "E:/Place3/very.lua",
+			expectedTexturePaths  = {"F:/Place4/the.png"},
+		},
+		{
+			project = {
+				fileIsSaved             = false,
+				path                    = "",
+				exportBaseDirectory     = "D:/Place2",
+				exportParticlesPath     = "E:/Place3/?.lua",
+				exportTexturesDirectory = "F:/Place4",
+				systems                 = {{texturePath="G:/Place5/the.png"}},
+			},
+			expectedBaseDirectory = "D:/Place2",
+			expectedParticlesPath = "E:/Place3/untitled.lua",
 			expectedTexturePaths  = {"F:/Place4/the.png"},
 		},
 	}
@@ -3448,7 +3472,7 @@ export resolveTextureOuputPath :: (project:Project, system:System) -> (success:b
 			print("texturePath")
 			print("  HAS   ", system.texturePath, "|", system.textureName..".png")
 			print("  EXPECT", test.expectedTexturePaths[itIndex])
-			ok, path = resolveTextureOuputPath(project, system)
+			ok, path = resolveTextureOutputPath(project, system)
 			assert(ok, "not ok")
 			print("  GOT   ", path)
 			assert(path == test.expectedTexturePaths[itIndex], "no match")
@@ -3496,10 +3520,10 @@ export tryExportFiles :: (quick=false) {
 	}
 
 	local texturePaths: []string
-	local texturePathSameAsInput: []bool
+	local texturePathSameAsInput: []bool -- We don't copy these ones.
 
 	if project.exportTextures  for project.systems {
-		local ok, path, sameAsInput = resolveTextureOuputPath(project, it)
+		local ok, path, sameAsInput = resolveTextureOutputPath(project, it)
 
 		if not ok {
 			setErrorText("Missing texture output path(s)")
@@ -3561,6 +3585,7 @@ export tryExportFiles :: (quick=false) {
 			}
 			defer disconnectFromRemoteDirectory()
 
+			log("Writing %s", particlesPath)
 			local ok, err = LF.write(filename, particlesData)
 			if not ok {
 				setErrorText(err)
@@ -3586,6 +3611,7 @@ export tryExportFiles :: (quick=false) {
 			}
 			defer disconnectFromRemoteDirectory()
 
+			log("Writing %s", path)
 			local ok, err = LF.write(filename, system.currentImage.fileData.getString!())
 			if not ok {
 				setErrorText(err)
@@ -3669,7 +3695,7 @@ export generateDataToExportFromTemplate :: (templateName:string, templateFullPat
 		insert(publicParticleSystems, publicParticleSystem)
 
 		do {
-			local ^ok, texturePath = resolveTextureOuputPath(project, system)
+			local ^ok, texturePath = resolveTextureOutputPath(project, system)
 
 			if ok {
 				local ^ok, basePath = resolveBaseOuputPath(project)
