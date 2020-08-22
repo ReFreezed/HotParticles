@@ -2685,15 +2685,15 @@ export setupGuiCallbacks :: () {
 		guiState.onAction.fileDialog_items = (buttons:gui.Buttons, buttonIndex:int) {
 			local item = cast(Item) buttons.buttons[buttonIndex].value
 
-			if not item.isDir or fileDialog_canChooseFolder {
-				local input = guiState.getElement!("fileDialog_filename", gui.InputText)
-				input.value = item.name
+			if item.isDir and (item.name == ".." or not fileDialog_canChooseFolder)  return
 
-				if fileDialog_onHighlight ~= NULL {
-					local pathObj = Path(dirCurrent)
-					insert(pathObj.path, item.name)
-					fileDialog_onHighlight(makeRelativeOrClone(pathObj), pathObj)
-				}
+			local input = guiState.getElement!("fileDialog_filename", gui.InputText)
+			input.value = item.name
+
+			if fileDialog_onHighlight ~= NULL {
+				local pathObj = Path(dirCurrent)
+				insert(pathObj.path, item.name)
+				fileDialog_onHighlight(makeRelativeOrClone(pathObj), pathObj)
 			}
 		}
 
@@ -2705,6 +2705,8 @@ export setupGuiCallbacks :: () {
 				choosePath()
 				return
 			}
+
+			-- Note: We don't care about canChooseFolder here - we always navigate folders on double-click!
 
 			local dirObj = Path(dirCurrent)
 
@@ -2724,6 +2726,7 @@ export setupGuiCallbacks :: () {
 		local choosePath :: () {
 			local input   = guiState.getElement!("fileDialog_filename", gui.InputText)
 			input.value   = trim(input.value)
+			local dotdot  = (input.value == ".." or findPattern(input.value, "[/\\]%.%.$"))
 			local pathObj = Path(input.value)
 			input.value   = pathObj.toString!()
 
@@ -2752,7 +2755,10 @@ export setupGuiCallbacks :: () {
 				return true
 			}
 
-			if tryNavigate(pathObj)  return
+			if not fileDialog_canChooseFolder or dotdot {
+				if tryNavigate(pathObj)  return
+				if dotdot  return -- Never trigger onChoose with ".."!
+			}
 
 			if fileDialog_type ~= .OPEN {
 				local ok, filename = pathObj.getFilename!()
@@ -2777,37 +2783,102 @@ export setupGuiCallbacks :: () {
 	}
 
 	-- Files.
-	guiState.onRefresh.exportProject_baseDirectory = (input:gui.InputText) {
-		local project = app.projects[app.currentProjectIndex]
-		input.value   = project.exportBaseDirectory
-	}
-	guiState.onAction.exportProject_baseDirectory = (input:gui.InputText, _:int) {
-		local project               = app.projects[app.currentProjectIndex]
-		input.value                 = Path(trim(input.value)).toString!()
-		project.exportBaseDirectory = input.value
-		markEdited(project)
-		guiState.refreshRecursively!("exportProject_baseDirectoryResult")
-		guiState.refreshRecursively!("exportProject_baseDirectoryResultInfo")
-		guiState.refreshRecursively!("exportProject_particles_path")
-		guiState.refreshRecursively!("exportProject_particles_pathResult")
-		guiState.refreshRecursively!("exportProject_particles_pathResultInfo")
-		guiState.refreshRecursively!("exportProject_textures_directory")
-		guiState.refreshRecursively!("exportProject_textures_pathResults")
-		guiState.refreshRecursively!("exportProject_textures_pathResultsInfo")
-	}
-	guiState.onRefresh.exportProject_baseDirectoryResult = (textEl:gui.Text) {
-		local project  = app.projects[app.currentProjectIndex]
-		local ok, path = resolveBaseOuputPath(project)
+	do {
+		guiState.onRefresh.exportProject_baseDirectory = (input:gui.InputText) {
+			local project = app.projects[app.currentProjectIndex]
+			input.value   = project.exportBaseDirectory
+		}
+		guiState.onAction.exportProject_baseDirectory = (input:gui.InputText, _:int) {
+			local project = app.projects[app.currentProjectIndex]
+			input.value   = Path(trim(input.value)).toString!()
 
-		if not ok {
-			textEl.text = "Missing/invalid path!"
-			return
+			project.exportBaseDirectory = input.value
+			markEdited(project)
+
+			guiState.refreshRecursively!("exportProject_baseDirectoryResult")
+			guiState.refreshRecursively!("exportProject_baseDirectoryResultInfo")
+			guiState.refreshRecursively!("exportProject_particles_path")
+			guiState.refreshRecursively!("exportProject_particles_pathResult")
+			guiState.refreshRecursively!("exportProject_particles_pathResultInfo")
+			guiState.refreshRecursively!("exportProject_textures_directory")
+			guiState.refreshRecursively!("exportProject_textures_pathResults")
+			guiState.refreshRecursively!("exportProject_textures_pathResultsInfo")
+		}
+		guiState.onRefresh.exportProject_baseDirectoryResult = (textEl:gui.Text) {
+			local project  = app.projects[app.currentProjectIndex]
+			local ok, path = resolveBaseOuputPath(project)
+
+			if not ok {
+				textEl.text = "Missing/invalid path!"
+				return
+			}
+
+			textEl.text = path
+		}
+		guiState.onRefresh.exportProject_baseDirectoryResultInfo = (buttons:gui.Buttons) {
+			buttons.tooltip = guiState.getElement!("exportProject_baseDirectoryResult", gui.Text).text
 		}
 
-		textEl.text = path
-	}
-	guiState.onRefresh.exportProject_baseDirectoryResultInfo = (buttons:gui.Buttons) {
-		buttons.tooltip = guiState.getElement!("exportProject_baseDirectoryResult", gui.Text).text
+		guiState.onAction.exportProject_baseDirectory_choose = (buttons:gui.Buttons, buttonIndex:int) {
+			local project = app.projects[app.currentProjectIndex]
+
+			local filename    = ""
+			local dir: string = NULL
+
+			local ok, fullPath = resolveBaseOuputPath(project)
+			if ok
+				_, dir, filename = Path(fullPath).getDirectoryAndFilename!()
+			else
+				dir = getSaveDirectory().."/projects"
+
+			showFileDialog(floating=true, .CHOOSE, canChooseFolder=true, "Choose base folder", dir, filename,
+				onChoose = (pathObj:Path, pathAbsoluteObj:Path) {
+					-- @Incomplete: Save recent exportBaseDirectory.
+
+					local project               = app.projects[app.currentProjectIndex]
+					project.exportBaseDirectory = pathObj.toString!()
+					markEdited(project)
+
+					guiState.refreshRecursively!("exportProject_baseDirectory")
+					guiState.refreshRecursively!("exportProject_baseDirectoryResult")
+					guiState.refreshRecursively!("exportProject_baseDirectoryResultInfo")
+					guiState.refreshRecursively!("exportProject_particles_path")
+					guiState.refreshRecursively!("exportProject_particles_pathResult")
+					guiState.refreshRecursively!("exportProject_particles_pathResultInfo")
+					guiState.refreshRecursively!("exportProject_textures_directory")
+					guiState.refreshRecursively!("exportProject_textures_pathResults")
+					guiState.refreshRecursively!("exportProject_textures_pathResultsInfo")
+
+					popPanel()
+				}
+			)
+		}
+
+		guiState.onAction.exportProject_baseDirectory_relative = (buttons:gui.Buttons, buttonIndex:int) {
+			local project = app.projects[app.currentProjectIndex]
+
+			local ok, path = toggleRelativePath(project, project.exportBaseDirectory,
+				fullPathGetter = [*] () -> (success:bool, fullPath:string) {
+					local ok, fullPath = resolveBaseOuputPath(project)
+					return ok, fullPath
+				}
+			)
+			if not ok  return
+
+			project.exportBaseDirectory = path
+			markEdited(project)
+
+			guiState.refreshRecursively!("exportProject_baseDirectory")
+			-- Shouldn't be needed, but just to be safe:
+			guiState.refreshRecursively!("exportProject_baseDirectoryResult")
+			guiState.refreshRecursively!("exportProject_baseDirectoryResultInfo")
+			guiState.refreshRecursively!("exportProject_particles_path")
+			guiState.refreshRecursively!("exportProject_particles_pathResult")
+			guiState.refreshRecursively!("exportProject_particles_pathResultInfo")
+			guiState.refreshRecursively!("exportProject_textures_directory")
+			guiState.refreshRecursively!("exportProject_textures_pathResults")
+			guiState.refreshRecursively!("exportProject_textures_pathResultsInfo")
+		}
 	}
 
 	-- Particles file.
@@ -2920,8 +2991,9 @@ export setupGuiCallbacks :: () {
 			markEdited(project)
 
 			guiState.refreshRecursively!("exportProject_particles_path")
-			guiState.refreshRecursively!("exportProject_particles_pathResult")     -- @Cleanup: Shouldn't be needed.
-			guiState.refreshRecursively!("exportProject_particles_pathResultInfo") -- @Cleanup: Shouldn't be needed.
+			-- Shouldn't be needed, but just to be safe:
+			guiState.refreshRecursively!("exportProject_particles_pathResult")
+			guiState.refreshRecursively!("exportProject_particles_pathResultInfo")
 		}
 	}
 
