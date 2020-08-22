@@ -2801,10 +2801,12 @@ export setupGuiCallbacks :: () {
 			local dir: string = NULL
 
 			local ok, fullPath = resolveBaseOuputPath(project)
-			if ok
-				_, dir, filename = Path(fullPath).getDirectoryAndFilename!()
-			else
+			if ok {
+				ok, dir, filename = Path(fullPath).getDirectoryAndFilename!()
+				if not ok  dir, filename = fullPath, "."
+			} else {
 				dir = getSaveDirectory().."/projects"
+			}
 
 			showFileDialog(floating=true, .CHOOSE, chooseFolder=true, "Choose base folder", dir, filename,
 				onChoose = (pathObj:Path, pathAbsoluteObj:Path) {
@@ -3161,14 +3163,16 @@ export setupGuiCallbacks :: () {
 			local project             = app.projects[app.currentProjectIndex]
 			local hasBaseDir, baseDir = resolveBaseOuputPath(project)
 
-			local filename    = "?.lua"
+			local filename    = ""
 			local dir: string = NULL
 
 			local ok, fullPath = resolveTextureOutputDirectory(project)
-			if ok
-				_, dir, filename = Path(fullPath).getDirectoryAndFilename!()
-			else
+			if ok {
+				ok, dir, filename = Path(fullPath).getDirectoryAndFilename!()
+				if not ok  dir, filename = fullPath, "."
+			} else {
 				dir = hasBaseDir ? baseDir : getSaveDirectory().."/projects"
+			}
 
 			showFileDialog(floating=true, .CHOOSE, chooseFolder=true, "Choose texture folder", dir, filename, relativeTo=(hasBaseDir ? baseDir : ""),
 				onChoose = (pathObj:Path, pathAbsoluteObj:Path) {
