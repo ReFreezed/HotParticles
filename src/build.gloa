@@ -219,7 +219,8 @@ local doRelease :: () {
 		-- Add remaining files.
 		do {
 			copyFilesInDirectory("exportTemplates", outputDir.."/exportTemplates", "%.lua$")
-			copyFile("misc/README.txt", outputDir.."/_README.txt")
+			copyFile("misc/Changelog.txt", outputDir.."/_Changelog.txt")
+			copyFile("misc/README.txt",    outputDir.."/_README.txt")
 		}
 	}
 
@@ -273,9 +274,10 @@ local doRelease :: () {
 		-- Add remaining files.
 		do {
 			copyFilesInDirectory("exportTemplates", outputDir.."/exportTemplates", "%.lua$")
-			copyFile(values.lovePath,     contentsDir.."/Resources/Game.love")
-			copyFile("temp/appIcon.icns", contentsDir.."/Resources/AppIcon.icns")
-			copyFile("misc/README.txt",   outputDir.."/_README.txt")
+			copyFile(values.lovePath,      contentsDir.."/Resources/Game.love")
+			copyFile("temp/appIcon.icns",  contentsDir.."/Resources/AppIcon.icns")
+			copyFile("misc/Changelog.txt", outputDir.."/_Changelog.txt")
+			copyFile("misc/README.txt",    outputDir.."/_README.txt")
 		}
 	}
 
@@ -287,7 +289,8 @@ local doRelease :: () {
 		lfs.makeDirectory(outputDir)
 
 		copyFilesInDirectory("exportTemplates", outputDir.."/exportTemplates", "%.lua$")
-		copyFile(values.lovePath,          format("%s/%s.love",     outputDir, values.exeName))
+		copyFile(values.lovePath,               format("%s/%s.love",                 outputDir, values.exeName))
+		copyFile("misc/Changelog.txt",          format("%s/_Changelog.txt",          outputDir))
 		copyFile("misc/README.txt",             format("%s/_README.txt",             outputDir))
 		copyFile("misc/README (universal).txt", format("%s/_README (universal).txt", outputDir))
 	}

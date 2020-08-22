@@ -1,0 +1,75 @@
+Changelog
+Hot Particles
+
+v1.6 (2020-08-22)
+- Added custom visual rectangular regions.
+- Added preference for the initial system in new projects to be completely empty.
+- Added shortcut for quickly exporting files. (See README.)
+- Right-click particle viewing area to reset emitter position.
+- Whole particle systems can be copied and pasted. (Right-click system tabs.)
+- Doubled zoom granularity.
+- Exporter: Templates can be loaded from custom locations (e.g. from your project folder).
+- Exporter: Added file browsers for all paths.
+- Exporter: Fixed the textures output folder not being used.
+- File browser: Added icons for common file types.
+- File browser: Moved recent folders to the context menu.
+
+v1.5.2 (2020-08-14)
+- Parameters can be reset to the default value through the context menu.
+- Animations can be copied and pasted. (Right-click the 'Animations' button.)
+- Fixed crash when alt-tabbing from within an input field in a context menu.
+
+v1.5.1 (2020-08-13)
+- Added preference for prefering relative paths from the file browser.
+- Added buttons for toggling paths between relative and absolute.
+- Fixed an issue with comparisons of paths containing different drives.
+
+v1.5 (2020-08-13)
+- It's now possible to use a custom background image.
+- Parameters can be disabled through the context menu.
+- Showing emitter position indicator when relevant.
+- Added tooltips to more things.
+- Fixed distribution area preview not using the angle value.
+- Animation editor: Added particle lifetime sliders (which controls the speed of the animation).
+- Animation editor: Improved visibility of the highlighted frame.
+
+v1.4 (2020-08-02)
+- Textures and shaders are hot-loaded (i.e. they automatically reload if the files are modified).
+- Press 'p' to preview particle movement paths in the current system.
+- Fixed log rendering issue when the log was long.
+
+v1.3 (2020-06-19)
+- Added shader parameter. (See the README for more info.)
+- Projects and particle systems can now have custom data strings.
+- Added parameter for scaling the background pattern.
+- Added texture file browser.
+- Added dialog for error log.
+- Animation changes can be canceled and undone.
+- Improved/fixed some small things in the export dialog.
+- Fixed crash when trying to load an invalid texture file.
+- Fixed crash when pressing a context menu button twice without moving the mouse.
+- Fixed "recent textures" not getting saved.
+
+v1.2 (2020-06-08)
+- Image files can be dragged into the window to replace the current particle texture.
+- Particle systems can have custom titles.
+- Added some program preferences (like max undo entries).
+- Added a more conventional menu for saving etc.
+- Improved snap points for sliders.
+- Fixed "pixelate textures" not updating the texture filtering right away.
+- Fixed project not being marked as edited after updating the animation.
+- Made the program slightly more forward compatible in regards to .hotparticles files.
+- Animation editor: The current frame is highlighted.
+- Animation editor: Displaying animation time.
+- Animation editor: Fast-forward and slowdown keys work.
+
+v1.1 (2020-06-04)
+- Added undo/redo.
+- Fixed size variation slider not doing anything.
+- Fixed start-up error on some Linux systems.
+
+v1.0.1 (2020-05-31)
+- Fixed crash on start-up caused by save folder not existing yet.
+
+v1.0 (2020-05-31)
+- Initial release!
