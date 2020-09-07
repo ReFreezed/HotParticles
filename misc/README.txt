@@ -108,8 +108,10 @@ Ctrl+Shift+Z    Redo
 5. Parameters
 ==============================================================================
 
-Note: Many parameter controls have additional actions available through the
-context menu.
+Notes:
+- Many parameter controls have additional actions available through the
+    context menu.
+- Paths can be absolute or relative to the saved .hotparticles file.
 
 
 Project settings
@@ -126,6 +128,9 @@ Pixelate:
 Background: Change the background of the particle viewing area.
 - Pattern: Change the opacity of the checker pattern in the background.
 - Size: Change the size of the pattern.
+- Path: Path to a custom background image.
+- Scale: Scale of the custom background image.
+- Repeat x/y: Whether the custom background image should repeat.
 
 Emitter movement: Automatically move the emitter in a pattern.
 - Scale: Specify how much the emitter should move. Set one axis to 0% to use
@@ -262,8 +267,9 @@ Exporting happens using Lua scripts in the "exportTemplates" folder. You can
 edit existing scripts or make completely new ones to fit your game (see the
 "Template API" section).
 
-Note that textures that are somewhere in the base folder (if specified) will
-not be copied.
+The base folder, if specified, should usually point to the folder containing
+the game's main.lua. Note that textures that are somewhere in the base folder
+will not be copied.
 
 
 
