@@ -1055,7 +1055,7 @@ export setActionText :: (s:string, v,...:int|float|string) {
 }
 
 export setMessageText :: (s:string) {
-	log(s)
+	if s  log(s)
 	messageText         = s
 	messageTextTime     = LT.getTime()
 	messageTextDuration = 3.00

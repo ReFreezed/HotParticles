@@ -543,7 +543,7 @@ export setupGuiFrames :: () {
 					guiState.inputText!({ name="animation_sequence_frameSpacing", labelLeft="spacing", value="0", inset=50, weight=1, tooltip="Space between frames. Format: [spacingX spacingY] or [spacing]" }),
 				}),
 				guiState.hbox!({
-					guiState.inputText!({ name="animation_sequence_frameSize", labelLeft="frame size", value="10 10", weight=1, tooltip="Format: [width height] or [size]" }),
+					guiState.inputText!({ name="animation_sequence_frameSize", labelLeft="frame size", value="10 10", weight=1, tooltip="Zero means full length. Format: [width height] or [size]" }),
 					guiState.buttons!({ width=200, buttons={{name="animation_sequence_generateFromSize",label="Generate using frame size"}} }),
 				}),
 				guiState.hbox!({
@@ -3570,7 +3570,10 @@ export setupGuiCallbacks :: () {
 			if not ok { setErrorText("Invalid spacing format") ; return }
 
 			local ^ok, frameW, frameH = parseOneOrTwoInts(frameSizeStr)
-			if not ok                          { setErrorText("Invalid frame size format") ; return }
+			if not ok { setErrorText("Invalid frame size format") ; return }
+
+			if frameW == 0  frameW = iw
+			if frameH == 0  frameH = ih
 			if not (frameW > 0 and frameH > 0) { setErrorText("Frame size must be positive") ; return }
 
 			local paddedW = frameW + 2*padX
