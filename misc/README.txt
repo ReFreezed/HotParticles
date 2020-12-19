@@ -103,6 +103,12 @@ Ctrl+Q          Quit
 Ctrl+Z          Undo
 Ctrl+Shift+Z    Redo
 
+Ctrl+PageDown   Move particle system forward
+Ctrl+PageUp     Move particle system backward
+
+Ctrl+Shift+PageDown  Move project tab right
+Ctrl+Shift+PageUp    Move project tab left
+
 
 
 5. Parameters

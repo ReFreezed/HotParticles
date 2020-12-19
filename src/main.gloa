@@ -1468,6 +1468,50 @@ local onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool) 
 		case "c-k":      pushPanel("preferences")
 
 		case "f10":      showMainMenu()
+
+		case "c-pagedown":
+			if project.systems[project.systemIndex+1] ~= NULL {
+				local i1 = project.systemIndex
+				local i2 = project.systemIndex + 1
+
+				recordChange("Reorder particle systems",
+					[i1, i2] (project:Project) {  project.systems[i1], project.systems[i2] = project.systems[i2], project.systems[i1] ; project.systemIndex = i2  },
+					[i1, i2] (project:Project) {  project.systems[i1], project.systems[i2] = project.systems[i2], project.systems[i1] ; project.systemIndex = i1  },
+					--[[  ]] (project:Project) {  guiState.refreshRecursively!("systems") ; setCurrentSystem(project.systemIndex, force=true)  }
+				)
+			}
+		case "c-pageup":
+			if project.systemIndex > 1 {
+				local i1 = project.systemIndex
+				local i2 = project.systemIndex - 1
+
+				recordChange("Reorder particle systems",
+					[i1, i2] (project:Project) {  project.systems[i1], project.systems[i2] = project.systems[i2], project.systems[i1] ; project.systemIndex = i2  },
+					[i1, i2] (project:Project) {  project.systems[i1], project.systems[i2] = project.systems[i2], project.systems[i1] ; project.systemIndex = i1  },
+					--[[  ]] (project:Project) {  guiState.refreshRecursively!("systems") ; setCurrentSystem(project.systemIndex, force=true)  }
+				)
+			}
+
+		case "c-s-pagedown":
+			if app.projects[app.currentProjectIndex+1] ~= NULL {
+				local i1 = app.currentProjectIndex
+				local i2 = app.currentProjectIndex + 1
+
+				app.projects[i1], app.projects[i2] = app.projects[i2], app.projects[i1]
+				app.currentProjectIndex                  = i2
+
+				guiState.refreshRecursively!("projects")
+			}
+		case "c-s-pageup":
+			if app.currentProjectIndex > 1 {
+				local i1 = app.currentProjectIndex
+				local i2 = app.currentProjectIndex - 1
+
+				app.projects[i1], app.projects[i2] = app.projects[i2], app.projects[i1]
+				app.currentProjectIndex                  = i2
+
+				guiState.refreshRecursively!("projects")
+			}
 	}
 }
 
