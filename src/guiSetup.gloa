@@ -647,6 +647,8 @@ local fileDialog_filenameHidePattern : string         = NULL
 local fileDialog_chooseFolder        : bool           = NULL
 local fileDialog_relativeTo          : string         = NULL
 
+export fileDialog_lastDirectory = ""
+
 local fileDialog_onHighlight: (pathObj:Path, pathAbsoluteObj:Path) = NULL
 local fileDialog_onChoose:    (pathObj:Path, pathAbsoluteObj:Path) = NULL
 local fileDialog_onClose:     ()                                   = NULL
@@ -668,6 +670,8 @@ export showFileDialog :: (type:FileDialogType,
 	fileDialog_onHighlight         = onHighlight
 	fileDialog_onChoose            = onChoose
 	fileDialog_onClose             = onClose
+
+	fileDialog_lastDirectory = dir ?: fileDialog_lastDirectory
 
 	guiState.getElement!("fileDialog_title", gui.Text).text = title
 
@@ -1055,7 +1059,7 @@ export setupGuiCallbacks :: () {
 		local dir: string
 		if ok      ok, dir  = Path(path).getDirectory!()
 		if not ok  ok, dir  = Path(project.path).getDirectory!()
-		if not ok  dir      = getSaveDirectory().."/projects"
+		if not ok  dir      = fileDialog_lastDirectory ?: getSaveDirectory().."/projects"
 		local ^ok, filename = Path(project.bgPath).getFilename!()
 		if not ok  filename = ""
 
@@ -1487,7 +1491,7 @@ export setupGuiCallbacks :: () {
 		local dir: string
 		if ok      ok, dir  = Path(path).getDirectory!()
 		if not ok  ok, dir  = Path(project.path).getDirectory!()
-		if not ok  dir      = getSaveDirectory().."/projects"
+		if not ok  dir      = fileDialog_lastDirectory ?: getSaveDirectory().."/projects"
 		local ^ok, filename = Path(system.texturePath).getFilename!()
 		if not ok  filename = ""
 
@@ -2384,7 +2388,7 @@ export setupGuiCallbacks :: () {
 			local dir: string
 			if ok      ok, dir  = Path(path).getDirectory!()
 			if not ok  ok, dir  = Path(project.path).getDirectory!()
-			if not ok  dir      = getSaveDirectory().."/projects"
+			if not ok  dir      = fileDialog_lastDirectory ?: getSaveDirectory().."/projects"
 			local ^ok, filename = Path(system.shaderPath).getFilename!()
 			if not ok  filename = ""
 
@@ -2558,12 +2562,15 @@ export setupGuiCallbacks :: () {
 			if not connectToRemoteDirectory(dir) {
 				dir = dirFallback
 				if not connectToRemoteDirectory(dir) {
-					dir = getSaveDirectory().."/projects"
-					if not connectToRemoteDirectory(dir) {
-						dir = getSaveDirectory()
+					dir = fileDialog_lastDirectory
+					if not (dir and connectToRemoteDirectory(dir)) {
+						dir = getSaveDirectory().."/projects"
 						if not connectToRemoteDirectory(dir) {
-							dir = getCwd()
-							assert(connectToRemoteDirectory(dir))
+							dir = getSaveDirectory()
+							if not connectToRemoteDirectory(dir) {
+								dir = getCwd()
+								assert(connectToRemoteDirectory(dir))
+							}
 						}
 					}
 				}
@@ -2824,7 +2831,7 @@ export setupGuiCallbacks :: () {
 				ok, dir, filename = Path(fullPath).getDirectoryAndFilename!()
 				if not ok  dir, filename = fullPath, "."
 			} else {
-				dir = getSaveDirectory().."/projects"
+				dir = fileDialog_lastDirectory ?: getSaveDirectory().."/projects"
 			}
 
 			showFileDialog(floating=true, .CHOOSE, chooseFolder=true, "Choose base folder", dir, filename,
@@ -2950,7 +2957,7 @@ export setupGuiCallbacks :: () {
 			if ok
 				_, dir, filename = Path(fullPath).getDirectoryAndFilename!()
 			else
-				dir = hasBaseDir ? baseDir : getSaveDirectory().."/projects"
+				dir = hasBaseDir ? baseDir : (fileDialog_lastDirectory ?: getSaveDirectory().."/projects")
 
 			showFileDialog(floating=true, .CHOOSE, "Choose particles file", dir, filename, relativeTo=(hasBaseDir ? baseDir : ""),
 				onChoose = (pathObj:Path, pathAbsoluteObj:Path) {
@@ -3060,14 +3067,14 @@ export setupGuiCallbacks :: () {
 			local ok, dir = pathObj.getDirectory!()
 
 			if not ok {
-				dir = getSaveDirectory().."/projects"
+				dir = fileDialog_lastDirectory ?: getSaveDirectory().."/projects"
 
 			} else {
 				local dirObj = Path(dir)
 
 				if not dirObj.isAbsolute {
 					ok, dir = Path(project.path).getDirectory!()
-					dirObj.prepend!(ok ? dir : getSaveDirectory().."/projects")
+					dirObj.prepend!(ok ? dir : (fileDialog_lastDirectory ?: getSaveDirectory().."/projects"))
 					dir = dirObj.toString!()
 				}
 			}
@@ -3191,7 +3198,7 @@ export setupGuiCallbacks :: () {
 				ok, dir, filename = Path(fullPath).getDirectoryAndFilename!()
 				if not ok  dir, filename = fullPath, "."
 			} else {
-				dir = hasBaseDir ? baseDir : getSaveDirectory().."/projects"
+				dir = hasBaseDir ? baseDir : (fileDialog_lastDirectory ?: getSaveDirectory().."/projects")
 			}
 
 			showFileDialog(floating=true, .CHOOSE, chooseFolder=true, "Choose texture folder", dir, filename, relativeTo=(hasBaseDir ? baseDir : ""),
@@ -3275,14 +3282,14 @@ export setupGuiCallbacks :: () {
 			local ok, dir = pathObj.getDirectory!()
 
 			if not ok {
-				dir = getSaveDirectory().."/projects"
+				dir = fileDialog_lastDirectory ?: getSaveDirectory().."/projects"
 
 			} else {
 				local dirObj = Path(dir)
 
 				if not dirObj.isAbsolute {
 					ok, dir = Path(project.path).getDirectory!()
-					dirObj.prepend!(ok ? dir : getSaveDirectory().."/projects")
+					dirObj.prepend!(ok ? dir : (fileDialog_lastDirectory ?: getSaveDirectory().."/projects"))
 					dir = dirObj.toString!()
 				}
 			}

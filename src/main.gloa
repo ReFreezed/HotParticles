@@ -1000,6 +1000,7 @@ export createCanvases :: () {
 	local SETTINGS: LG.CanvasSettings : {msaa=2^2}
 	canvasGui   = LG.newCanvas(ww, wh, SETTINGS)
 	canvasWorld = LG.newCanvas(math.max(ww-MAIN_PANEL_WIDTH, 1), wh)
+	-- canvasWorld = LG.newCanvas(ww, wh) -- @Incomplete: Make the main panel collapsible for real.
 
 	if app.projects[app.currentProjectIndex].pixelateWorld {
 		canvasWorld.setFilter!(.NEAREST, .NEAREST)
@@ -3145,7 +3146,7 @@ export showSaveProjectAsDialog :: () {
 
 	local ok, dir, filename = pathObj.getDirectoryAndFilename!()
 	if not ok {
-		dir      = getSaveDirectory().."/projects"
+		dir      = fileDialog_lastDirectory ?: getSaveDirectory().."/projects"
 		filename = "untitled.hotparticles"
 	}
 
@@ -3208,7 +3209,7 @@ export showOpenProjectDialog :: () {
 	local fullPathObj = Path(project.path)
 
 	local ok, dir = fullPathObj.getDirectoryAndFilename!()
-	if not ok  dir = getSaveDirectory().."/projects"
+	if not ok  dir = fileDialog_lastDirectory ?: getSaveDirectory().."/projects"
 
 	showFileDialog(.OPEN, "Open project", dir, "", filenamePattern="%.hotparticles$",
 		onHighlight = (pathObj:Path, fullPathObj:Path) {
