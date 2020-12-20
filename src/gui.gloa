@@ -135,7 +135,7 @@ export State :: struct {
 	onSubmit:       struct { !key:string, !value:any--[[ (el:Element) ]] },
 	onBeforeAction: struct { !key:string, !value:any--[[ (widget:Widget, subid:int) -> (ignore:bool) ]] }, -- Only used for Radio and Tabs.
 	onBegin:        struct { !key:string, !value:any--[[ (widget:Widget, subid:int) ]] },
-	onAction:       struct { !key:string, !value:any--[[ (widget:Widget, subid:int) ]] },
+	onAction:       struct { !key:string, !value:any--[[ (widget:Widget, subid:int, source:ActionSource) ]] },
 	onEnd:          struct { !key:string, !value:any--[[ (widget:Widget, subid:int) ]] },
 	onDouble:       struct { !key:string, !value:any--[[ (widget:Widget, subid:int) ]] },
 	onOption:       struct { !key:string, !value:any--[[ (widget:Widget, subid:int) ]] },
@@ -598,7 +598,7 @@ export onKeyPressed :: (state:State, key:LK.KeyConstant, scancode:LK.Scancode, i
 
 				triggerBeginEvent(state, direction, "", 0, alsoEnsureEnabled=true)
 				direction.angle = ((key == "left" ? direction.angle-delta : direction.angle+delta) + math.PI) % math.TAU - math.PI
-				triggerActionEvent(state, direction, "", 0, alsoEnd=true)
+				triggerActionEvent(state, direction, "", 0, .KEYBOARD, alsoEnd=true)
 
 				return true
 			}
@@ -623,7 +623,7 @@ export onKeyPressed :: (state:State, key:LK.KeyConstant, scancode:LK.Scancode, i
 					applyLimitMultiplier(slider, slider.min),
 					applyLimitMultiplier(slider, slider.max)
 				)
-				triggerActionEvent(state, slider, "", 0, alsoEnd=true)
+				triggerActionEvent(state, slider, "", 0, .KEYBOARD, alsoEnd=true)
 
 				return true
 			}
@@ -642,7 +642,7 @@ export onKeyPressed :: (state:State, key:LK.KeyConstant, scancode:LK.Scancode, i
 
 				triggerBeginEvent(state, colorEl, "", component, alsoEnsureEnabled=true)
 				colorEl.color[component] = math.clamp01(key == "left" ? colorEl.color[component]-delta : colorEl.color[component]+delta)
-				triggerActionEvent(state, colorEl, "", component, alsoEnd=true)
+				triggerActionEvent(state, colorEl, "", component, .KEYBOARD, alsoEnd=true)
 
 				return true
 			}
@@ -707,7 +707,7 @@ export onMousePressed :: (state:State, mx,my:int, mbutton:int, presses:int) -> (
 				}
 				if not handled {
 					triggerBeginEvent (state, buttons, buttons.buttons[state.hoveredSubid].name, state.hoveredSubid, alsoEnsureEnabled=true)
-					triggerActionEvent(state, buttons, buttons.buttons[state.hoveredSubid].name, state.hoveredSubid, alsoEnd=true)
+					triggerActionEvent(state, buttons, buttons.buttons[state.hoveredSubid].name, state.hoveredSubid, .MOUSE, alsoEnd=true)
 				}
 
 			} elseif el.type == Slider and presses % 2 == 0 and triggerDoublePressEvent(state, slider, "", 0) {
@@ -894,7 +894,7 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int, begin=false, end=fals
 				if begin  triggerBeginEvent(state, slider, "", 0, alsoEnsureEnabled=true)
 				if value ~= slider.value {
 					slider.value = value
-					triggerActionEvent(state, slider, "", 0)
+					triggerActionEvent(state, slider, "", 0, .MOUSE)
 				}
 				if end  triggerEndEvent(state, slider, "", 0)
 
@@ -907,7 +907,7 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int, begin=false, end=fals
 							if begin  triggerBeginEvent(state, other, "", 0, alsoEnsureEnabled=true)
 							if other.value ~= value {
 								other.value = value
-								triggerActionEvent(state, other, "", 0)
+								triggerActionEvent(state, other, "", 0, .MOUSE)
 							}
 							if end  triggerEndEvent(state, other, "", 0)
 						}
@@ -930,7 +930,7 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int, begin=false, end=fals
 			if begin  triggerBeginEvent(state, colorEl, "", component, alsoEnsureEnabled=true)
 			if value ~= colorEl.color[component] {
 				colorEl.color[component] = value
-				triggerActionEvent(state, colorEl, "", component)
+				triggerActionEvent(state, colorEl, "", component, .MOUSE)
 			}
 			if end  triggerEndEvent(state, colorEl, "", component)
 
@@ -942,7 +942,7 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int, begin=false, end=fals
 						if begin  triggerBeginEvent(state, other, "", component, alsoEnsureEnabled=true)
 						if other.color[component] ~= value {
 							other.color[component] = value
-							triggerActionEvent(state, other, "", component)
+							triggerActionEvent(state, other, "", component, .MOUSE)
 						}
 						if end  triggerEndEvent(state, other, "", component)
 					}
@@ -974,7 +974,7 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int, begin=false, end=fals
 			if begin  triggerBeginEvent(state, direction, "", 0, alsoEnsureEnabled=true)
 			if angle ~= direction.angle {
 				direction.angle = angle
-				triggerActionEvent(state, direction, "", 0)
+				triggerActionEvent(state, direction, "", 0, .MOUSE)
 			}
 			if end  triggerEndEvent(state, direction, "", 0)
 
@@ -986,7 +986,7 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int, begin=false, end=fals
 						if begin  triggerBeginEvent(state, other, "", 0, alsoEnsureEnabled=true)
 						if other.angle ~= angle {
 							other.angle = angle
-							triggerActionEvent(state, other, "", 0)
+							triggerActionEvent(state, other, "", 0, .MOUSE)
 						}
 						if end  triggerEndEvent(state, other, "", 0)
 					}
@@ -1087,7 +1087,7 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int, can
 				if state.hoveredId and not state.activeDragging {
 					local buttons = cast(Buttons) widget
 					triggerBeginEvent (state, buttons, buttons.buttons[state.activeSubid].name, state.activeSubid, alsoEnsureEnabled=false)
-					triggerActionEvent(state, buttons, buttons.buttons[state.activeSubid].name, state.activeSubid, alsoEnd=true)
+					triggerActionEvent(state, buttons, buttons.buttons[state.activeSubid].name, state.activeSubid, .MOUSE, alsoEnd=true)
 				}
 
 			case Radio:
@@ -1099,7 +1099,7 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int, can
 					} elseif radio.index ~= state.hoveredSubid {
 						triggerBeginEvent (state, radio, radio.buttons[state.activeSubid].name, state.activeSubid, alsoEnsureEnabled=false)
 						radio.index = state.hoveredSubid
-						triggerActionEvent(state, radio, radio.buttons[state.activeSubid].name, state.activeSubid, alsoEnd=true)
+						triggerActionEvent(state, radio, radio.buttons[state.activeSubid].name, state.activeSubid, .MOUSE, alsoEnd=true)
 					}
 				}
 
@@ -1111,11 +1111,11 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int, can
 						-- void
 					} elseif tabs.specialLastTab and state.hoveredSubid == #tabs.buttons {
 						triggerBeginEvent (state, tabs, tabs.buttons[state.activeSubid].name, state.activeSubid, alsoEnsureEnabled=false)
-						triggerActionEvent(state, tabs, tabs.buttons[state.activeSubid].name, state.activeSubid, alsoEnd=true)
+						triggerActionEvent(state, tabs, tabs.buttons[state.activeSubid].name, state.activeSubid, .MOUSE, alsoEnd=true)
 					} elseif tabs.index ~= state.hoveredSubid {
 						triggerBeginEvent (state, tabs, tabs.buttons[state.activeSubid].name, state.activeSubid, alsoEnsureEnabled=false)
 						tabs.index = state.hoveredSubid
-						triggerActionEvent(state, tabs, tabs.buttons[state.activeSubid].name, state.activeSubid, alsoEnd=true)
+						triggerActionEvent(state, tabs, tabs.buttons[state.activeSubid].name, state.activeSubid, .MOUSE, alsoEnd=true)
 					}
 				}
 
@@ -1125,7 +1125,7 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int, can
 
 					triggerBeginEvent(state, checkbox, "", 0, alsoEnsureEnabled=false)
 					checkbox.checked = not checkbox.checked
-					triggerActionEvent(state, checkbox, "", 0, alsoEnd=true)
+					triggerActionEvent(state, checkbox, "", 0, .MOUSE, alsoEnd=true)
 				}
 
 			case Slider: !through
@@ -1196,7 +1196,7 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int, can
 							if choice == iReset {
 								triggerBeginEvent(state, direction, "", 0, alsoEnsureEnabled=true)
 								direction.angle = 0
-								triggerActionEvent(state, direction, "", 0, alsoEnd=true)
+								triggerActionEvent(state, direction, "", 0, .MOUSE, alsoEnd=true)
 
 							} elseif choice == iToggle {
 								direction.enabled = not direction.enabled
@@ -1211,7 +1211,7 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int, can
 
 								triggerBeginEvent(state, direction, "", 0, alsoEnsureEnabled=true)
 								direction.angle = clipboardAngle
-								triggerActionEvent(state, direction, "", 0, alsoEnd=true)
+								triggerActionEvent(state, direction, "", 0, .MOUSE, alsoEnd=true)
 							}
 						},
 						[*] (text:string) {
@@ -1243,7 +1243,7 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int, can
 							if choice == iReset {
 								triggerBeginEvent(state, slider, "", 0, alsoEnsureEnabled=true)
 								slider.value = slider.defaultValue
-								triggerActionEvent(state, slider, "", 0, alsoEnd=true)
+								triggerActionEvent(state, slider, "", 0, .MOUSE, alsoEnd=true)
 
 							} elseif choice == iToggle {
 								slider.enabled = not slider.enabled
@@ -1258,7 +1258,7 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int, can
 
 								triggerBeginEvent(state, slider, "", 0, alsoEnsureEnabled=true)
 								slider.value = clipboardScalar
-								triggerActionEvent(state, slider, "", 0, alsoEnd=true)
+								triggerActionEvent(state, slider, "", 0, .MOUSE, alsoEnd=true)
 
 							} elseif choice == iResetLimits {
 								forgetLimitMultiplier(slider)
@@ -1305,7 +1305,7 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int, can
 								for 1, 4 {
 									triggerBeginEvent(state, colorEl, "", it, alsoEnsureEnabled=true)
 									colorEl.color[it] = (it <= 2) ? 0 : 1
-									triggerActionEvent(state, colorEl, "", it, alsoEnd=true)
+									triggerActionEvent(state, colorEl, "", it, .MOUSE, alsoEnd=true)
 								}
 
 							} elseif choice == iCopyComponent {
@@ -1321,7 +1321,7 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int, can
 
 								triggerBeginEvent(state, colorEl, "", component, alsoEnsureEnabled=true)
 								colorEl.color[component] = clipboardScalar
-								triggerActionEvent(state, colorEl, "", component, alsoEnd=true)
+								triggerActionEvent(state, colorEl, "", component, .MOUSE, alsoEnd=true)
 
 							} elseif choice == iPasteColor {
 								if not hasClipboardColor  return
@@ -1329,7 +1329,7 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int, can
 								for 1, 4 {
 									triggerBeginEvent(state, colorEl, "", it, alsoEnsureEnabled=true)
 									colorEl.color[it] = clipboardColor[it]
-									triggerActionEvent(state, colorEl, "", it, alsoEnd=true)
+									triggerActionEvent(state, colorEl, "", it, .MOUSE, alsoEnd=true)
 								}
 							}
 						},
@@ -2982,6 +2982,8 @@ local triggerSubmitEvent :: (state:State, el:Element) {
 	cb(el)
 }
 
+export ActionSource :: enum { UNKNOWN::0, MOUSE, KEYBOARD }
+
 local triggerBeforeActionEvent :: (state:State, widget:Widget, name:string, subid:int) -> (ignore:bool) {
 	local cb = cast((widget:Widget, subid:int) -> (ignore:bool)) state.onBeforeAction[name ?: widget.name]
 	if cb == NULL  return false
@@ -3000,11 +3002,11 @@ local triggerBeginEvent :: (state:State, widget:Widget, name:string, subid:int, 
 		triggerToggleEvent(state, widget, name, subid)
 	}
 }
-local triggerActionEvent :: (state:State, widget:Widget, name:string, subid:int, alsoEnd=false) {
+local triggerActionEvent :: (state:State, widget:Widget, name:string, subid:int, source:ActionSource, alsoEnd=false) {
 	-- printf("GuiEvent: Action '%s'", (name ?: widget.name)) -- DEBUG
 
-	local cb = cast((widget:Widget, subid:int)) state.onAction[name ?: widget.name]
-	if cb ~= NULL  cb(widget, subid)
+	local cb = cast((widget:Widget, subid:int, source:ActionSource)) state.onAction[name ?: widget.name]
+	if cb ~= NULL  cb(widget, subid, source)
 
 	if alsoEnd {
 		triggerEndEvent(state, widget, name, subid)
@@ -3185,7 +3187,7 @@ export blurFocus :: (state:State, abort=false) {
 	} else {
 		triggerBeginEvent(state, input, "", 0, alsoEnsureEnabled=false)
 		input.value = field.getText!()
-		triggerActionEvent(state, input, "", 0, alsoEnd=true)
+		triggerActionEvent(state, input, "", 0, .UNKNOWN, alsoEnd=true)
 	}
 
 	state.focusId = 0
@@ -3222,7 +3224,7 @@ export pressButton :: (state:State, buttonsElementName:string, i:int) {
 	}
 
 	triggerBeginEvent (state, buttons, button.name, i, alsoEnsureEnabled=false)
-	triggerActionEvent(state, buttons, button.name, i, alsoEnd=true)
+	triggerActionEvent(state, buttons, button.name, i, .UNKNOWN, alsoEnd=true)
 }
 
 
@@ -3301,7 +3303,7 @@ export showMenu :: (state:State, x,y:int, items:[]MenuItem, cb:(choice:string, d
 		limitMenuPosition(state, item.submenuFrame)
 	}
 
-	state.onAction.__contextMenuButtons = [state,cb] (buttons:Buttons, buttonIndex:int) {
+	state.onAction.__contextMenuButtons = [state,cb] (buttons:Buttons, buttonIndex:int, source:ActionSource) {
 		local button = buttons.buttons[buttonIndex]
 		local item   = cast(MenuItem) button.value
 
@@ -3342,7 +3344,7 @@ export showContextMenu :: (state:State, x,y:int, items:[]string, cb:(choice:int)
 	state.layoutNeedsUpdate = true
 	limitMenuPosition(state, contextMenu)
 
-	state.onAction.__contextMenuButtons = [state,cb] (buttons:Buttons, buttonIndex:int) {
+	state.onAction.__contextMenuButtons = [state,cb] (buttons:Buttons, buttonIndex:int, source:ActionSource) {
 		state.contextMenus[1].data = NULL -- So hideContextMenu() doesn't call the callback too!
 		state.hideContextMenu!()
 		cb(buttonIndex)
@@ -3382,7 +3384,7 @@ export showContextMenuWithInput :: (state:State, x,y:int, value:string, items:[]
 	limitMenuPosition(state, contextMenu)
 
 	if cbInput ~= NULL {
-		state.onAction.__contextMenuInput = [cbInput] (input:InputText) {
+		state.onAction.__contextMenuInput = [cbInput] (input:InputText, _:int, source:ActionSource) {
 			cbInput(input.value)
 			scheduleSaveWorkspace()
 		}
@@ -3401,7 +3403,7 @@ export showContextMenuWithInput :: (state:State, x,y:int, value:string, items:[]
 		scheduleSaveWorkspace()
 	}
 
-	state.onAction.__contextMenuButtons = [state,cb] (buttons:Buttons, buttonIndex:int) {
+	state.onAction.__contextMenuButtons = [state,cb] (buttons:Buttons, buttonIndex:int, source:ActionSource) {
 		state.contextMenus[1].data = NULL -- So hideContextMenu() doesn't call the callback too!
 		state.hideContextMenu!()
 		cb(buttonIndex)
@@ -3576,7 +3578,7 @@ local commitValueFromInput :: (state:State, slider:Slider, text:string) {
 
 	triggerBeginEvent(state, slider, "", 0, alsoEnsureEnabled=false)
 	slider.value = n
-	triggerActionEvent(state, slider, "", 0, alsoEnd=true)
+	triggerActionEvent(state, slider, "", 0, .UNKNOWN, alsoEnd=true)
 }
 
 local commitValueFromInput :: (state:State, direction:Direction, text:string) {
@@ -3589,7 +3591,7 @@ local commitValueFromInput :: (state:State, direction:Direction, text:string) {
 
 	triggerBeginEvent(state, direction, "", 0, alsoEnsureEnabled=false)
 	direction.angle = angle
-	triggerActionEvent(state, direction, "", 0, alsoEnd=true)
+	triggerActionEvent(state, direction, "", 0, .UNKNOWN, alsoEnd=true)
 }
 
 local commitValueFromInput :: (state:State, colorEl:Color, component:int, text:string) {
@@ -3603,7 +3605,7 @@ local commitValueFromInput :: (state:State, colorEl:Color, component:int, text:s
 
 	triggerBeginEvent(state, colorEl, "", component, alsoEnsureEnabled=false)
 	colorEl.color[component] = value
-	triggerActionEvent(state, colorEl, "", component, alsoEnd=true)
+	triggerActionEvent(state, colorEl, "", component, .UNKNOWN, alsoEnd=true)
 }
 
 

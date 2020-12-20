@@ -566,7 +566,9 @@ export AnimationFrame :: struct { x=0.0, y=0.0, w=0.0, h=0.0 }
 
 export Change :: struct {
 	bundle:   int,
+	name:     string,
 	label:    string,
+	data:     any,
 	onDo:     (project:Project) = NULL,
 	onUndo:   (project:Project) = NULL,
 	finalize: (project:Project) = NULL,
@@ -1474,7 +1476,7 @@ local onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool) 
 				local i1 = project.systemIndex
 				local i2 = project.systemIndex + 1
 
-				recordChange("Reorder particle systems",
+				recordChange("", "Reorder particle systems", nil,
 					[i1, i2] (project:Project) {  project.systems[i1], project.systems[i2] = project.systems[i2], project.systems[i1] ; project.systemIndex = i2  },
 					[i1, i2] (project:Project) {  project.systems[i1], project.systems[i2] = project.systems[i2], project.systems[i1] ; project.systemIndex = i1  },
 					--[[  ]] (project:Project) {  guiState.refreshRecursively!("systems") ; setCurrentSystem(project.systemIndex, force=true)  }
@@ -1485,7 +1487,7 @@ local onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool) 
 				local i1 = project.systemIndex
 				local i2 = project.systemIndex - 1
 
-				recordChange("Reorder particle systems",
+				recordChange("", "Reorder particle systems", nil,
 					[i1, i2] (project:Project) {  project.systems[i1], project.systems[i2] = project.systems[i2], project.systems[i1] ; project.systemIndex = i2  },
 					[i1, i2] (project:Project) {  project.systems[i1], project.systems[i2] = project.systems[i2], project.systems[i1] ; project.systemIndex = i1  },
 					--[[  ]] (project:Project) {  guiState.refreshRecursively!("systems") ; setCurrentSystem(project.systemIndex, force=true)  }
@@ -2734,13 +2736,13 @@ export confirmDeleteSystem :: (systemIndexToDelete:int) {
 
 		if #project.systems == 1 {
 			local emptySystem = newSystem(project)
-			recordChange("Delete particle system",
+			recordChange("", "Delete particle system", nil,
 				[emptySystem] (project:Project) {  project.systems[1] = emptySystem  },
 				[system     ] (project:Project) {  project.systems[1] = system       },
 				--[[       ]] (project:Project) {  guiState.refreshRecursively!("systems") ; setCurrentSystem(1, force=true)  }
 			)
 		} else {
-			recordChange("Delete particle system",
+			recordChange("", "Delete particle system", nil,
 				[systemIndexToDelete        ] (project:Project) {  remove(project.systems, systemIndexToDelete) ; project.systemIndex = math.min(project.systemIndex, #project.systems)  },
 				[systemIndexToDelete, system] (project:Project) {  insert(project.systems, systemIndexToDelete, system)  },
 				--[[                       ]] (project:Project) {  guiState.refreshRecursively!("systems") ; setCurrentSystem(project.systemIndex, force=true)  }
@@ -2753,7 +2755,7 @@ export duplicateSystem :: (systemIndex:int) {
 	local project = app.projects[app.currentProjectIndex]
 	local system  = project.systems[systemIndex].clone!()
 
-	recordChange("Duplicate particle system",
+	recordChange("", "Duplicate particle system", nil,
 		[systemIndex, system] (project:Project) {  insert(project.systems, systemIndex+1, system) ; project.systemIndex = systemIndex+1  },
 		[systemIndex        ] (project:Project) {  remove(project.systems, systemIndex+1)         ; project.systemIndex = math.min(project.systemIndex, #project.systems)  },
 		--[[               ]] (project:Project) {  guiState.refreshRecursively!("systems") ; setCurrentSystem(project.systemIndex, force=true)  }
@@ -2837,7 +2839,7 @@ export setTexturePath :: (project:Project, system:System, pathNew:string) {
 
 	local saveRecent = true
 
-	recordChange("Texture path",
+	recordChange("", "Texture path", nil,
 		[system, pathNew            ] (project:Project) {  system.texturePath = pathNew  },
 		[system, pathOld, saveRecent] (project:Project) {  system.texturePath = pathOld ; saveRecent = false  },
 		[system,          saveRecent] (project:Project) {  updateParticleTexture(project, system, saveRecent) ; saveRecent = false ; guiState.refreshRecursively!("texturePath")  }
@@ -2849,7 +2851,7 @@ export setShaderPath :: (project:Project, system:System, pathNew:string) {
 
 	local saveRecent = true
 
-	recordChange("Shader path",
+	recordChange("", "Shader path", nil,
 		[system, pathNew            ] (project:Project) {  system.shaderPath = pathNew  },
 		[system, pathOld, saveRecent] (project:Project) {  system.shaderPath = pathOld ; saveRecent = false  },
 		[system,          saveRecent] (project:Project) {  updateParticleShader(project, system, saveRecent) ; saveRecent = false ; guiState.refreshRecursively!("shaderPath")  }
@@ -2861,7 +2863,7 @@ export setBackgroundPath :: (project:Project, pathNew:string) {
 
 	local saveRecent = true
 
-	recordChange("Background path",
+	recordChange("", "Background path", nil,
 		[pathNew            ] (project:Project) {  project.bgPath = pathNew  },
 		[pathOld, saveRecent] (project:Project) {  project.bgPath = pathOld ; saveRecent = false  },
 		[         saveRecent] (project:Project) {  updateBackgroundTexture(project, NULL, saveRecent) ; saveRecent = false ; guiState.refreshRecursively!("bgPath")  }
@@ -2990,7 +2992,7 @@ export isProjectEmpty :: (project:Project) -> bool {
 
 
 
-export recordChange :: (label:string, onDo:(project:Project), onUndo:(project:Project), finalize:(project:Project)=NULL--[[, trigger=true]]) -> Change {
+export recordChange :: (name:string, label:string, data:any, onDo:(project:Project), onUndo:(project:Project), finalize:(project:Project)=NULL--[[, trigger=true]]) -> Change {
 	-- @Polish: Reset project.edited if all changes since the last save has been undone/redone.
 	local project = app.projects[app.currentProjectIndex]
 
@@ -3001,7 +3003,9 @@ export recordChange :: (label:string, onDo:(project:Project), onUndo:(project:Pr
 
 	local change: Change = {
 		bundle   = updateEventCount,
+		name     = name, -- May be empty.
 		label    = label,
+		data     = data,
 		onDo     = onDo,
 		onUndo   = onUndo,
 		finalize = finalize,
@@ -3021,7 +3025,7 @@ export recordChange :: (label:string, onDo:(project:Project), onUndo:(project:Pr
 	return change
 }
 
-export undo :: () {
+export undo :: (silent=false) {
 	local project = app.projects[app.currentProjectIndex]
 	if project.changeIndex == 1  return
 
@@ -3033,7 +3037,7 @@ export undo :: () {
 	local labelsAdded: struct { !key:string, !value:bool }
 
 	while true {
-		if not labelsAdded[change.label] {
+		if not (silent or labelsAdded[change.label]) {
 			labelsAdded[change.label] = true
 			insert(labels, change.label)
 		}
@@ -3046,8 +3050,10 @@ export undo :: () {
 		project.changeIndex -= 1
 	}
 
-	reverseArray(labels)
-	setActionText("Undo:  "..concatinate(labels, ", "), clearMessage=false)
+	if not silent {
+		reverseArray(labels)
+		setActionText("Undo:  "..concatinate(labels, ", "), clearMessage=false)
+	}
 
 	markEdited(project)
 	guiState.refreshRecursively!("undoRedoText")
@@ -3084,6 +3090,22 @@ export redo :: () {
 	markEdited(project)
 	guiState.refreshRecursively!("undoRedoText")
 	scheduleSaveWorkspace()
+}
+
+
+
+export getFirstChangeInPreviousBundle :: (project:Project) -> Change {
+	if project.changeIndex == 1  return NULL
+
+	local change = project.changes[project.changeIndex-1]
+
+	for project.changeIndex-2, 1, -1 {
+		local _change = project.changes[it]
+		if _change.bundle ~= change.bundle  break
+		change = _change
+	}
+
+	return change
 }
 
 

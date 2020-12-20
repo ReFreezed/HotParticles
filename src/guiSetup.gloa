@@ -610,7 +610,7 @@ export pushTempChoiceDialog :: (title:string, text:string, buttonList:[]gui.Butt
 			cb(submitIndex)
 		}
 	}
-	guiState.onAction[nameButtons] = [cb,cleanUp] (buttons:gui.Buttons, choice:int) {
+	guiState.onAction[nameButtons] = [cb,cleanUp] (buttons:gui.Buttons, choice:int, source:gui.ActionSource) {
 		cleanUp()
 		popPanel()
 		cb(choice)
@@ -706,7 +706,7 @@ export setupGuiCallbacks :: () {
 
 		tabs.index = app.currentProjectIndex
 	}
-	guiState.onAction.projects = (tabs:gui.Tabs, buttonIndex:int) {
+	guiState.onAction.projects = (tabs:gui.Tabs, buttonIndex:int, source:gui.ActionSource) {
 		if buttonIndex < #tabs.buttons {
 			setCurrentProject(buttonIndex)
 			return
@@ -825,10 +825,10 @@ export setupGuiCallbacks :: () {
 		button.image    = app.showProjectSettings ? "iconUp" : "iconDown"
 		guiState.setActive!("projectSettings", app.showProjectSettings)
 	}
-	guiState.onAction.menu = (buttons:gui.Buttons, buttonIndex:int) {
+	guiState.onAction.menu = (buttons:gui.Buttons, buttonIndex:int, source:gui.ActionSource) {
 		showMainMenu()
 	}
-	guiState.onAction.toggleProjectSettings = (buttons:gui.Buttons, buttonIndex:int) {
+	guiState.onAction.toggleProjectSettings = (buttons:gui.Buttons, buttonIndex:int, source:gui.ActionSource) {
 		app.showProjectSettings = not app.showProjectSettings
 		local _, button         = itemWith(buttons.buttons, "name", "toggleProjectSettings")
 		button.image            = app.showProjectSettings ? "iconUp" : "iconDown"
@@ -836,10 +836,10 @@ export setupGuiCallbacks :: () {
 	}
 
 	-- Undo/redo.
-	guiState.onAction.undo = (buttons:gui.Buttons, buttonIndex:int) {
+	guiState.onAction.undo = (buttons:gui.Buttons, buttonIndex:int, source:gui.ActionSource) {
 		undo()
 	}
-	guiState.onAction.redo = (buttons:gui.Buttons, buttonIndex:int) {
+	guiState.onAction.redo = (buttons:gui.Buttons, buttonIndex:int, source:gui.ActionSource) {
 		redo()
 	}
 	guiState.onRefresh.undoRedoText = (textEl:gui.Text) {
@@ -880,17 +880,21 @@ export setupGuiCallbacks :: () {
 	}
 
 	-- Project settings.
+	static lastSource: gui.ActionSource = NULL
+
 	local addEventHandlersForDirection :: (name:string, changeLabel:string,
 		onUpdateValue: (project:Project, system:System, angle:float),
 		finalize:      (project:Project, system:System) = NULL,
 		forSystem = false
 	) {
 		guiState.onBegin[name] = (direction:gui.Direction, _:int) {
+			lastSource         = .UNKNOWN
 			direction.dataTemp = direction.angle
 		}
-		guiState.onAction[name] = [*] (direction:gui.Direction, _:int) {
+		guiState.onAction[name] = [*] (direction:gui.Direction, _:int, source:gui.ActionSource) {
 			local project, system = getCurrentProjectAndSystem()
 			onUpdateValue(project, system, direction.angle)
+			lastSource = source
 		}
 		guiState.onEnd[name] = [*] (direction:gui.Direction, _:int) {
 			local project, system = getCurrentProjectAndSystem()
@@ -898,7 +902,15 @@ export setupGuiCallbacks :: () {
 			local valueNew        = direction.angle
 			if valueNew == valueOld  return
 
-			recordChange(changeLabel,
+			local sourceIsKeyboard = (lastSource == .KEYBOARD)
+			local prevChange       = getFirstChangeInPreviousBundle(project)
+
+			if sourceIsKeyboard and prevChange ~= NULL and prevChange.name == name and prevChange.data == "nudge" {
+				undo(silent=true) -- Hopefully this updates our widget!
+				valueOld = direction.angle
+			}
+
+			recordChange(name, changeLabel, (sourceIsKeyboard ? "nudge" : NULL),
 				[system, valueNew, onUpdateValue] (project:Project) {  onUpdateValue(project, system, valueNew)  },
 				[system, valueOld, onUpdateValue] (project:Project) {  onUpdateValue(project, system, valueOld)  },
 				[system, name, finalize, forSystem] (project:Project) {
@@ -919,6 +931,7 @@ export setupGuiCallbacks :: () {
 		forSystem = false
 	) {
 		guiState.onBegin[name] = [*] (slider:gui.Slider, _:int) {
+			lastSource      = .UNKNOWN
 			slider.dataTemp = slider.value
 
 			if onBegin ~= NULL {
@@ -926,25 +939,36 @@ export setupGuiCallbacks :: () {
 				onBegin(project, system)
 			}
 		}
-		guiState.onAction[name] = [*] (slider:gui.Slider, _:int) {
+		guiState.onAction[name] = [*] (slider:gui.Slider, _:int, source:gui.ActionSource) {
 			local project, system = getCurrentProjectAndSystem()
 			onUpdateValue(project, system, slider.value)
+			lastSource = source
 		}
 		guiState.onEnd[name] = [*] (slider:gui.Slider, _:int) {
 			local project, system = getCurrentProjectAndSystem()
 			local valueOld        = cast(float) slider.dataTemp
 			local valueNew        = slider.value
 
-			if valueNew ~= valueOld  recordChange(changeLabel,
-				[system, valueNew, onUpdateValue  ] (project:Project) {  onUpdateValue(project, system, valueNew)  },
-				[system, valueOld, onUpdateValue  ] (project:Project) {  onUpdateValue(project, system, valueOld)  },
-				[system, name, finalize, forSystem] (project:Project) {
-					if not (forSystem and not isSystemCurrent(system)) {
-						if guiState.isElementVisible!(name)  guiState.refreshRecursively!(name)
-					}
-					if finalize ~= NULL  finalize(project, system)
+			if valueNew ~= valueOld {
+				local sourceIsKeyboard = (lastSource == .KEYBOARD)
+				local prevChange       = getFirstChangeInPreviousBundle(project)
+
+				if sourceIsKeyboard and prevChange ~= NULL and prevChange.name == name and prevChange.data == "nudge" {
+					undo(silent=true) -- Hopefully this updates our widget!
+					valueOld = slider.value
 				}
-			)
+
+				recordChange(name, changeLabel, (sourceIsKeyboard ? "nudge" : NULL),
+					[system, valueNew, onUpdateValue  ] (project:Project) {  onUpdateValue(project, system, valueNew)  },
+					[system, valueOld, onUpdateValue  ] (project:Project) {  onUpdateValue(project, system, valueOld)  },
+					[system, name, finalize, forSystem] (project:Project) {
+						if not (forSystem and not isSystemCurrent(system)) {
+							if guiState.isElementVisible!(name)  guiState.refreshRecursively!(name)
+						}
+						if finalize ~= NULL  finalize(project, system)
+					}
+				)
+			}
 
 			if onEnd ~= NULL  onEnd(project, system)
 		}
@@ -958,6 +982,7 @@ export setupGuiCallbacks :: () {
 		forSystem = false
 	) {
 		guiState.onBegin[name] = [*] (colorEl:gui.Color, component:int) {
+			lastSource       = .UNKNOWN
 			colorEl.dataTemp = colorEl.color[component]
 
 			if onBegin ~= NULL {
@@ -965,25 +990,39 @@ export setupGuiCallbacks :: () {
 				onBegin(project, system)
 			}
 		}
-		guiState.onAction[name] = [*] (colorEl:gui.Color, component:int) {
+		guiState.onAction[name] = [*] (colorEl:gui.Color, component:int, source:gui.ActionSource) {
 			local project, system = getCurrentProjectAndSystem()
 			onUpdateValue(project, system, component, colorEl.color[component])
+			lastSource = source
 		}
 		guiState.onEnd[name] = [*] (colorEl:gui.Color, component:int) {
 			local project, system = getCurrentProjectAndSystem()
 			local valueOld        = cast(float) colorEl.dataTemp
 			local valueNew        = colorEl.color[component]
 
-			if valueNew ~= valueOld  recordChange(changeLabel,
-				[system, valueNew, component, onUpdateValue] (project:Project) {  onUpdateValue(project, system, component, valueNew)  },
-				[system, valueOld, component, onUpdateValue] (project:Project) {  onUpdateValue(project, system, component, valueOld)  },
-				[system, name, finalize, forSystem         ] (project:Project) {
-					if not (forSystem and not isSystemCurrent(system)) {
-						if guiState.isElementVisible!(name)  guiState.refreshRecursively!(name)
-					}
-					if finalize ~= NULL  finalize(project, system)
+			if valueNew ~= valueOld {
+				local sourceIsKeyboard = (lastSource == .KEYBOARD)
+				local prevChange       = getFirstChangeInPreviousBundle(project)
+
+				local NUDGE_CHANGE_DATAS :: {"nudge1","nudge2","nudge3","nudge4"}
+				local changeData = NUDGE_CHANGE_DATAS[component]
+
+				if sourceIsKeyboard and prevChange ~= NULL and prevChange.name == name and prevChange.data == changeData {
+					undo(silent=true) -- Hopefully this updates our widget!
+					valueOld = colorEl.color[component]
 				}
-			)
+
+				recordChange(name, changeLabel, (sourceIsKeyboard ? changeData : NULL),
+					[system, valueNew, component, onUpdateValue] (project:Project) {  onUpdateValue(project, system, component, valueNew)  },
+					[system, valueOld, component, onUpdateValue] (project:Project) {  onUpdateValue(project, system, component, valueOld)  },
+					[system, name, finalize, forSystem         ] (project:Project) {
+						if not (forSystem and not isSystemCurrent(system)) {
+							if guiState.isElementVisible!(name)  guiState.refreshRecursively!(name)
+						}
+						if finalize ~= NULL  finalize(project, system)
+					}
+				)
+			}
 
 			if onEnd ~= NULL  onEnd(project, system)
 		}
@@ -995,13 +1034,13 @@ export setupGuiCallbacks :: () {
 		guiState.onBegin[name] = (radio:gui.Radio, buttonIndex:int) {
 			radio.dataTemp = radio.buttons[radio.index].value
 		}
-		guiState.onAction[name] = [*] (radio:gui.Radio, buttonIndex:int) {
+		guiState.onAction[name] = [*] (radio:gui.Radio, buttonIndex:int, source:gui.ActionSource) {
 			local project, system = getCurrentProjectAndSystem()
 			local valueOld        = cast(ValueType) radio.dataTemp
 			local valueNew        = cast(ValueType) radio.buttons[buttonIndex].value
 			if valueNew == valueOld  return
 
-			recordChange(changeLabel,
+			recordChange(name, changeLabel, nil,
 				[system, valueNew, onUpdateValue] (project:Project) {  onUpdateValue(project, system, valueNew)  },
 				[system, valueOld, onUpdateValue] (project:Project) {  onUpdateValue(project, system, valueOld)  },
 				[name                           ] (project:Project) {  if guiState.isElementVisible!(name)  guiState.refreshRecursively!(name)  }
@@ -1012,11 +1051,11 @@ export setupGuiCallbacks :: () {
 	local addEventHandlersForCheckbox :: (name:string, changeLabel:string,
 		onUpdateValue: (project:Project, system:System, value:bool)
 	) {
-		guiState.onAction[name] = [*] (checkbox:gui.Checkbox, _:int) {
+		guiState.onAction[name] = [*] (checkbox:gui.Checkbox, _:int, source:gui.ActionSource) {
 			local project, system = getCurrentProjectAndSystem()
 			local valueNew        = checkbox.checked
 
-			recordChange(changeLabel,
+			recordChange(name, changeLabel, nil,
 				[system, valueNew, onUpdateValue] (project:Project) {  onUpdateValue(project, system,     valueNew)  },
 				[system, valueNew, onUpdateValue] (project:Project) {  onUpdateValue(project, system, not valueNew)  },
 				[name                           ] (project:Project) {  if guiState.isElementVisible!(name)  guiState.refreshRecursively!(name)  }
@@ -1034,7 +1073,7 @@ export setupGuiCallbacks :: () {
 			local enabled         = widget.enabled
 			local changeLabel     = changeLabelPrefix .. (enabled ? " enabled" : " disabled")
 
-			recordChange(changeLabel,
+			recordChange(name, changeLabel, nil,
 				[system, onToggle, enabled        ] (project:Project) {  onToggle(project, system,     enabled)  },
 				[system, onToggle, enabled        ] (project:Project) {  onToggle(project, system, not enabled)  },
 				[system, name, finalize, forSystem] (project:Project) {
@@ -1097,7 +1136,7 @@ export setupGuiCallbacks :: () {
 		local project = app.projects[app.currentProjectIndex]
 		input.value   = project.bgPath
 	}
-	guiState.onAction.bgPath = (input:gui.InputText) {
+	guiState.onAction.bgPath = (input:gui.InputText, _:int, source:gui.ActionSource) {
 		local project = app.projects[app.currentProjectIndex]
 		setBackgroundPath(project, Path(trim(input.value)).toString!())
 	}
@@ -1108,7 +1147,7 @@ export setupGuiCallbacks :: () {
 		})
 	}
 
-	guiState.onAction.bgChoose = (buttons:gui.Buttons, buttonIndex:int) {
+	guiState.onAction.bgChoose = (buttons:gui.Buttons, buttonIndex:int, source:gui.ActionSource) {
 		local project = app.projects[app.currentProjectIndex]
 
 		local ok, path = getFullPathToBackground(project)
@@ -1165,7 +1204,7 @@ export setupGuiCallbacks :: () {
 		)
 	}
 
-	guiState.onAction.bgRelative = (buttons:gui.Buttons, buttonIndex:int) {
+	guiState.onAction.bgRelative = (buttons:gui.Buttons, buttonIndex:int, source:gui.ActionSource) {
 		local project  = app.projects[app.currentProjectIndex]
 		local ok, path = toggleRelativePath(project, project.bgPath, [*] () -> (success:bool, path:string) {
 			local ok, path = getFullPathToBackground(project)
@@ -1174,7 +1213,7 @@ export setupGuiCallbacks :: () {
 		if ok  setBackgroundPath(project, path)
 	}
 
-	guiState.onAction.bgReload = (buttons:gui.Buttons, buttonIndex:int) {
+	guiState.onAction.bgReload = (buttons:gui.Buttons, buttonIndex:int, source:gui.ActionSource) {
 		local project = app.projects[app.currentProjectIndex]
 		if project.bgPath  updateBackgroundTexture(project)
 	}
@@ -1251,12 +1290,12 @@ export setupGuiCallbacks :: () {
 		local project = app.projects[app.currentProjectIndex]
 		input.value   = project.customData
 	}
-	guiState.onAction.customDataProject = (input:gui.InputText) {
+	guiState.onAction.customDataProject = (input:gui.InputText, _:int, source:gui.ActionSource) {
 		local project = app.projects[app.currentProjectIndex]
 		local dataOld = project.customData
 		local dataNew = input.value
 
-		recordChange("Project custom data",
+		recordChange("", "Project custom data", nil,
 			[dataNew] (project:Project) {  project.customData = dataNew  },
 			[dataOld] (project:Project) {  project.customData = dataOld  },
 			--[[   ]] (project:Project) {  guiState.refreshRecursively!("customDataProject")  }
@@ -1371,7 +1410,7 @@ export setupGuiCallbacks :: () {
 
 		return true
 	}
-	guiState.onAction.systems = (tabs:gui.Tabs, buttonIndex:int) {
+	guiState.onAction.systems = (tabs:gui.Tabs, buttonIndex:int, source:gui.ActionSource) {
 		local project = app.projects[app.currentProjectIndex]
 
 		if buttonIndex < #tabs.buttons {
@@ -1381,7 +1420,7 @@ export setupGuiCallbacks :: () {
 
 		local system = newSystem(project)
 
-		recordChange("Add particle system",
+		recordChange("", "Add particle system", nil,
 			[system] (project:Project) {  insert(project.systems, system) ; setCurrentSystem(#project.systems)  },
 			--[[  ]] (project:Project) {  remove(project.systems)         ; setCurrentSystem(math.min(project.systemIndex, #project.systems))  },
 			--[[  ]] (project:Project) {  guiState.refreshRecursively!("systems")  }
@@ -1428,7 +1467,7 @@ export setupGuiCallbacks :: () {
 						-- file may be modified. @UX
 						updateParticleTexture(project, systemPasted)
 
-						recordChange("Paste particle system",
+						recordChange("", "Paste particle system", nil,
 							[system, systemIndex, systemPasted] (project:Project) {
 								insert(project.systems, systemIndex, systemPasted)
 								setCurrentSystem(systemIndex, force=true)
@@ -1447,7 +1486,7 @@ export setupGuiCallbacks :: () {
 				local valueOld = system.title
 				if valueNew == valueOld  return
 
-				recordChange("Particle system title",
+				recordChange("", "Particle system title", nil,
 					[system, valueNew] (project:Project) {  system.title = valueNew  },
 					[system, valueOld] (project:Project) {  system.title = valueOld  }
 				)
@@ -1500,7 +1539,7 @@ export setupGuiCallbacks :: () {
 		}
 		if not newOrder  return
 
-		recordChange("Reorder particle systems",
+		recordChange("", "Reorder particle systems", nil,
 			[systemsNew, systemsOld] (project:Project) {  _, project.systemIndex = indexOf(systemsNew, project.systems[project.systemIndex]) ; project.systems = systemsNew  },
 			[systemsNew, systemsOld] (project:Project) {  _, project.systemIndex = indexOf(systemsOld, project.systems[project.systemIndex]) ; project.systems = systemsOld  },
 			--[[                  ]] (project:Project) {  guiState.refreshRecursively!("systems") ; setCurrentSystem(project.systemIndex, force=true)  }
@@ -1528,7 +1567,7 @@ export setupGuiCallbacks :: () {
 		local project, system = getCurrentProjectAndSystem()
 		input.value           = system.texturePath
 	}
-	guiState.onAction.texturePath = (input:gui.InputText) {
+	guiState.onAction.texturePath = (input:gui.InputText, _:int, source:gui.ActionSource) {
 		local project, system = getCurrentProjectAndSystem()
 		setTexturePath(project, system, Path(trim(input.value)).toString!())
 	}
@@ -1539,7 +1578,7 @@ export setupGuiCallbacks :: () {
 		})
 	}
 
-	guiState.onAction.textureChoose = (buttons:gui.Buttons, buttonIndex:int) {
+	guiState.onAction.textureChoose = (buttons:gui.Buttons, buttonIndex:int, source:gui.ActionSource) {
 		local project, system = getCurrentProjectAndSystem()
 
 		local ok, path = getFullPathToTexture(project, system)
@@ -1597,7 +1636,7 @@ export setupGuiCallbacks :: () {
 		)
 	}
 
-	guiState.onAction.textureRelative = (buttons:gui.Buttons, buttonIndex:int) {
+	guiState.onAction.textureRelative = (buttons:gui.Buttons, buttonIndex:int, source:gui.ActionSource) {
 		local project, system = getCurrentProjectAndSystem()
 		local ok, path = toggleRelativePath(project, system.texturePath, [*] () -> (success:bool, path:string) {
 			local ok, path = getFullPathToTexture(project, system)
@@ -1606,7 +1645,7 @@ export setupGuiCallbacks :: () {
 		if ok  setTexturePath(project, system, path)
 	}
 
-	guiState.onAction.textureReload = (buttons:gui.Buttons, buttonIndex:int) {
+	guiState.onAction.textureReload = (buttons:gui.Buttons, buttonIndex:int, source:gui.ActionSource) {
 		local project, system = getCurrentProjectAndSystem()
 		if system.texturePath  updateParticleTexture(project, system)
 	}
@@ -1633,7 +1672,7 @@ export setupGuiCallbacks :: () {
 		static clipboardLifetimeMax: float          = NULL
 		static hasClipboardAnimation                = false
 
-		guiState.onAction.animationButton = (buttons:gui.Buttons, buttonIndex:int) {
+		guiState.onAction.animationButton = (buttons:gui.Buttons, buttonIndex:int, source:gui.ActionSource) {
 			pushPanel("animation")
 		}
 		guiState.onOption.animationButton = (buttons:gui.Buttons, buttonIndex:int) {
@@ -1649,7 +1688,7 @@ export setupGuiCallbacks :: () {
 						local framesOld = system.frames
 						local framesNew: []AnimationFrame
 
-						recordChange("Clear animation",
+						recordChange("", "Clear animation", nil,
 							[system, framesNew] (project:Project) {  system.frames = framesNew ; updateParticleAnimation(system)  },
 							[system, framesOld] (project:Project) {  system.frames = framesOld ; updateParticleAnimation(system)  }
 						)
@@ -1667,7 +1706,7 @@ export setupGuiCallbacks :: () {
 						local lifetimeMinOld, lifetimeMinNew = system.psParticleLifetimeMin, clipboardLifetimeMin
 						local lifetimeMaxOld, lifetimeMaxNew = system.psParticleLifetimeMax, clipboardLifetimeMax
 
-						recordChange("Paste animation",
+						recordChange("", "Paste animation", nil,
 							[system, framesNew, lifetimeMinNew, lifetimeMaxNew] (project:Project) {
 								system.frames, system.psParticleLifetimeMin, system.psParticleLifetimeMax = framesNew, lifetimeMinNew, lifetimeMaxNew
 							},
@@ -1755,7 +1794,7 @@ export setupGuiCallbacks :: () {
 				lastContinuousChange = NULL
 				return
 			}
-			lastContinuousChange = recordChange("Continuous emitter",
+			lastContinuousChange = recordChange("", "Continuous emitter", nil,
 				[system] (project:Project) {  system.psEmitterContinuous = false  },
 				[system] (project:Project) {  system.psEmitterContinuous = true   },
 				[system] (project:Project) {
@@ -2151,7 +2190,7 @@ export setupGuiCallbacks :: () {
 			local project, system = getCurrentProjectAndSystem()
 			for 1, 8  guiState.setActive!(format("sizeContainer%d", it), (system.psSizes[it] ~= NULL))
 		}
-		guiState.onAction.sizeAdd = (buttons:gui.Buttons, buttonIndex:int) {
+		guiState.onAction.sizeAdd = (buttons:gui.Buttons, buttonIndex:int, source:gui.ActionSource) {
 			local project, system = getCurrentProjectAndSystem()
 			local i               = cast(int) buttons.data
 
@@ -2160,7 +2199,7 @@ export setupGuiCallbacks :: () {
 				return
 			}
 
-			recordChange("Add size",
+			recordChange("", "Add size", nil,
 				[system, i] (project:Project) {  insert(system.psSizes, i, system.psSizes[i])  },
 				[system, i] (project:Project) {  remove(system.psSizes, i)  },
 				[system, i] (project:Project) {
@@ -2174,7 +2213,7 @@ export setupGuiCallbacks :: () {
 				}
 			)
 		}
-		guiState.onAction.sizeRemove = (buttons:gui.Buttons, buttonIndex:int) {
+		guiState.onAction.sizeRemove = (buttons:gui.Buttons, buttonIndex:int, source:gui.ActionSource) {
 			local project, system = getCurrentProjectAndSystem()
 			local i               = cast(int) buttons.data
 			local valueOld        = system.psSizes[i]
@@ -2183,13 +2222,13 @@ export setupGuiCallbacks :: () {
 			if removingLast and valueOld == 1  return
 
 			if removingLast {
-				recordChange("Remove size",
+				recordChange("", "Remove size", nil,
 					[system          ] (project:Project) {  system.psSizes[1] = 1         },
 					[system, valueOld] (project:Project) {  system.psSizes[1] = valueOld  },
 					[system          ] (project:Project) {  updateParticleParams(project, system) ; guiState.refreshRecursively!("sizeContainer1")  }
 				)
 			} else {
-				recordChange("Remove size",
+				recordChange("", "Remove size", nil,
 					[system, i          ] (project:Project) {  remove(system.psSizes, i)  },
 					[system, i, valueOld] (project:Project) {  insert(system.psSizes, i, valueOld)  },
 					[system, i          ] (project:Project) {
@@ -2235,7 +2274,7 @@ export setupGuiCallbacks :: () {
 		local colors          = system.colors
 		for 1, 8  guiState.setActive!(format("colorContainer%d", it), (colors[it*4] ~= NULL))
 	}
-	guiState.onAction.colorAdd = (buttons:gui.Buttons, buttonIndex:int) {
+	guiState.onAction.colorAdd = (buttons:gui.Buttons, buttonIndex:int, source:gui.ActionSource) {
 		local project, system = getCurrentProjectAndSystem()
 		local i               = cast(int) buttons.data
 
@@ -2244,7 +2283,7 @@ export setupGuiCallbacks :: () {
 			return
 		}
 
-		recordChange("Add color",
+		recordChange("", "Add color", nil,
 			[system, i] (project:Project) {
 				local i1 = i*4 - 3
 				local h  = system.colors[i1  ]
@@ -2274,7 +2313,7 @@ export setupGuiCallbacks :: () {
 			}
 		)
 	}
-	guiState.onAction.colorRemove = (buttons:gui.Buttons, buttonIndex:int) {
+	guiState.onAction.colorRemove = (buttons:gui.Buttons, buttonIndex:int, source:gui.ActionSource) {
 		local project, system = getCurrentProjectAndSystem()
 		local i               = cast(int) buttons.data
 		local i1              = i*4 - 3
@@ -2287,7 +2326,7 @@ export setupGuiCallbacks :: () {
 		if removingLast and hOld == 0 and sOld == 0 and vOld == 1 and aOld == 1  return
 
 		if removingLast {
-			recordChange("Remove color",
+			recordChange("", "Remove color", nil,
 				[system] (project:Project) {
 					system.colors[1] = 0
 					system.colors[2] = 0
@@ -2305,7 +2344,7 @@ export setupGuiCallbacks :: () {
 				}
 			)
 		} else {
-			recordChange("Remove color",
+			recordChange("", "Remove color", nil,
 				[system, i] (project:Project) {
 					local i1 = i*4 - 3
 					remove(system.colors, i1+3)
@@ -2377,7 +2416,7 @@ export setupGuiCallbacks :: () {
 		}
 		if not newOrder  return
 
-		recordChange("Reorder colors",
+		recordChange("", "Reorder colors", nil,
 			[system, colorsNew] (project:Project) {  system.colors = colorsNew  },
 			[system, colorsOld] (project:Project) {  system.colors = colorsOld  },
 			[system           ] (project:Project) {
@@ -2426,7 +2465,7 @@ export setupGuiCallbacks :: () {
 			local project, system = getCurrentProjectAndSystem()
 			input.value           = system.shaderPath
 		}
-		guiState.onAction.shaderPath = (input:gui.InputText) {
+		guiState.onAction.shaderPath = (input:gui.InputText, _:int, source:gui.ActionSource) {
 			local project, system = getCurrentProjectAndSystem()
 			setShaderPath(project, system, Path(trim(input.value)).toString!())
 		}
@@ -2437,7 +2476,7 @@ export setupGuiCallbacks :: () {
 			})
 		}
 
-		guiState.onAction.shaderChoose = (buttons:gui.Buttons, buttonIndex:int) {
+		guiState.onAction.shaderChoose = (buttons:gui.Buttons, buttonIndex:int, source:gui.ActionSource) {
 			local project, system = getCurrentProjectAndSystem()
 
 			local ok, path = getFullPathToShader(project, system)
@@ -2477,7 +2516,7 @@ export setupGuiCallbacks :: () {
 			)
 		}
 
-		guiState.onAction.shaderRelative = (buttons:gui.Buttons, buttonIndex:int) {
+		guiState.onAction.shaderRelative = (buttons:gui.Buttons, buttonIndex:int, source:gui.ActionSource) {
 			local project, system = getCurrentProjectAndSystem()
 			local ok, path = toggleRelativePath(project, system.shaderPath, [*] () -> (success:bool, path:string) {
 				local ok, path = getFullPathToShader(project, system)
@@ -2486,7 +2525,7 @@ export setupGuiCallbacks :: () {
 			if ok  setShaderPath(project, system, path)
 		}
 
-		guiState.onAction.shaderReload = (buttons:gui.Buttons, buttonIndex:int) {
+		guiState.onAction.shaderReload = (buttons:gui.Buttons, buttonIndex:int, source:gui.ActionSource) {
 			local project, system = getCurrentProjectAndSystem()
 			if system.shaderPath  updateParticleShader(project, system)
 		}
@@ -2496,12 +2535,12 @@ export setupGuiCallbacks :: () {
 		local project, system = getCurrentProjectAndSystem()
 		input.value           = system.customData
 	}
-	guiState.onAction.customDataSystem = (input:gui.InputText) {
+	guiState.onAction.customDataSystem = (input:gui.InputText, _:int, source:gui.ActionSource) {
 		local project, system = getCurrentProjectAndSystem()
 		local dataOld         = system.customData
 		local dataNew         = input.value
 
-		recordChange("Particle system custom data",
+		recordChange("", "Particle system custom data", nil,
 			[system, dataNew] (project:Project) {  system.customData = dataNew  },
 			[system, dataOld] (project:Project) {  system.customData = dataOld  },
 			--[[           ]] (project:Project) {  guiState.refreshRecursively!("customDataSystem")  }
@@ -2570,7 +2609,7 @@ export setupGuiCallbacks :: () {
 			}
 		}
 
-		guiState.onAction.fileDialog_bookmarks = (buttons:gui.Buttons, buttonIndex:int) {
+		guiState.onAction.fileDialog_bookmarks = (buttons:gui.Buttons, buttonIndex:int, source:gui.ActionSource) {
 			dirCurrent = app.bookmarkedFolders[buttonIndex]
 			guiState.refreshRecursively!("fileDialog_items")
 		}
@@ -2585,7 +2624,7 @@ export setupGuiCallbacks :: () {
 			})
 		}
 
-		guiState.onAction.fileDialog_addBookmark = (buttons:gui.Buttons, buttonIndex:int) {
+		guiState.onAction.fileDialog_addBookmark = (buttons:gui.Buttons, buttonIndex:int, source:gui.ActionSource) {
 			if not insertIfUnique(app.bookmarkedFolders, dirCurrent)  return
 			sort(app.bookmarkedFolders)
 			guiState.refreshRecursively!("fileDialog_bookmarks")
@@ -2730,7 +2769,7 @@ export setupGuiCallbacks :: () {
 			return pathObj.clone!()
 		}
 
-		guiState.onAction.fileDialog_items = (buttons:gui.Buttons, buttonIndex:int) {
+		guiState.onAction.fileDialog_items = (buttons:gui.Buttons, buttonIndex:int, source:gui.ActionSource) {
 			local item = cast(Item) buttons.buttons[buttonIndex].value
 
 			if item.isDir and (item.name == ".." or not fileDialog_chooseFolder)  return
@@ -2768,8 +2807,8 @@ export setupGuiCallbacks :: () {
 			guiState.refreshRecursively!(buttons)
 		}
 
-		guiState.onSubmit.fileDialog_filename = (input:gui.InputText)                  {  choosePath()  }
-		guiState.onAction.fileDialog_choose   = (buttons:gui.Buttons, buttonIndex:int) {  choosePath()  }
+		guiState.onSubmit.fileDialog_filename = (input:gui.InputText)                                           {  choosePath()  }
+		guiState.onAction.fileDialog_choose   = (buttons:gui.Buttons, buttonIndex:int, source:gui.ActionSource) {  choosePath()  }
 
 		local choosePath :: () {
 			local input = guiState.getElement!("fileDialog_filename", gui.InputText)
@@ -2845,7 +2884,7 @@ export setupGuiCallbacks :: () {
 			local project = app.projects[app.currentProjectIndex]
 			input.value   = project.exportBaseDirectory
 		}
-		guiState.onAction.exportProject_baseDirectory = (input:gui.InputText, _:int) {
+		guiState.onAction.exportProject_baseDirectory = (input:gui.InputText, _:int, source:gui.ActionSource) {
 			local project = app.projects[app.currentProjectIndex]
 			input.value   = Path(trim(input.value)).toString!()
 
@@ -2876,7 +2915,7 @@ export setupGuiCallbacks :: () {
 			buttons.tooltip = guiState.getElement!("exportProject_baseDirectoryResult", gui.Text).text
 		}
 
-		guiState.onAction.exportProject_baseDirectory_choose = (buttons:gui.Buttons, buttonIndex:int) {
+		guiState.onAction.exportProject_baseDirectory_choose = (buttons:gui.Buttons, buttonIndex:int, source:gui.ActionSource) {
 			local project = app.projects[app.currentProjectIndex]
 
 			local filename    = ""
@@ -2914,7 +2953,7 @@ export setupGuiCallbacks :: () {
 			)
 		}
 
-		guiState.onAction.exportProject_baseDirectory_relative = (buttons:gui.Buttons, buttonIndex:int) {
+		guiState.onAction.exportProject_baseDirectory_relative = (buttons:gui.Buttons, buttonIndex:int, source:gui.ActionSource) {
 			local project = app.projects[app.currentProjectIndex]
 
 			local ok, path = toggleRelativePath(project, project.exportBaseDirectory,
@@ -2948,7 +2987,7 @@ export setupGuiCallbacks :: () {
 			local project    = app.projects[app.currentProjectIndex]
 			checkbox.checked = project.exportParticles
 		}
-		guiState.onAction.exportProject_particles_writeFile = (checkbox:gui.Checkbox, _:int) {
+		guiState.onAction.exportProject_particles_writeFile = (checkbox:gui.Checkbox, _:int, source:gui.ActionSource) {
 			local project           = app.projects[app.currentProjectIndex]
 			project.exportParticles = checkbox.checked
 			markEdited(project)
@@ -2960,7 +2999,7 @@ export setupGuiCallbacks :: () {
 			local project    = app.projects[app.currentProjectIndex]
 			checkbox.checked = project.exportParticlesOverwrite
 		}
-		guiState.onAction.exportProject_particles_overwrite = (checkbox:gui.Checkbox, _:int) {
+		guiState.onAction.exportProject_particles_overwrite = (checkbox:gui.Checkbox, _:int, source:gui.ActionSource) {
 			local project                    = app.projects[app.currentProjectIndex]
 			project.exportParticlesOverwrite = checkbox.checked
 			markEdited(project)
@@ -2973,7 +3012,7 @@ export setupGuiCallbacks :: () {
 			input.value   = project.exportParticlesPath
 			-- input.placeholder = getExportedParticlesDefaultFilename(project)
 		}
-		guiState.onAction.exportProject_particles_path = (input:gui.InputText, _:int) {
+		guiState.onAction.exportProject_particles_path = (input:gui.InputText, _:int, source:gui.ActionSource) {
 			local project               = app.projects[app.currentProjectIndex]
 			input.value                 = Path(trim(input.value)).toString!()
 			project.exportParticlesPath = input.value
@@ -3002,7 +3041,7 @@ export setupGuiCallbacks :: () {
 			buttons.tooltip = guiState.getElement!("exportProject_particles_pathResult", gui.Text).text
 		}
 
-		guiState.onAction.exportProject_particles_path_choose = (buttons:gui.Buttons, buttonIndex:int) {
+		guiState.onAction.exportProject_particles_path_choose = (buttons:gui.Buttons, buttonIndex:int, source:gui.ActionSource) {
 			local project             = app.projects[app.currentProjectIndex]
 			local hasBaseDir, baseDir = resolveBaseOuputPath(project)
 
@@ -3035,7 +3074,7 @@ export setupGuiCallbacks :: () {
 			)
 		}
 
-		guiState.onAction.exportProject_particles_path_relative = (buttons:gui.Buttons, buttonIndex:int) {
+		guiState.onAction.exportProject_particles_path_relative = (buttons:gui.Buttons, buttonIndex:int, source:gui.ActionSource) {
 			local project             = app.projects[app.currentProjectIndex]
 			local hasBaseDir, baseDir = resolveBaseOuputPath(project)
 
@@ -3092,7 +3131,7 @@ export setupGuiCallbacks :: () {
 			local project            = app.projects[app.currentProjectIndex]
 			buttons.buttons[1].label = project.exportParticlesTemplate ?: project.exportParticlesTemplatePath
 		}
-		guiState.onAction.exportProject_particles_template = (buttons:gui.Buttons, buttonIndex:int) {
+		guiState.onAction.exportProject_particles_template = (buttons:gui.Buttons, buttonIndex:int, source:gui.ActionSource) {
 			showTemplateDropdownMenu(buttons, app.projects[app.currentProjectIndex].exportParticlesTemplatePath, (templateName:string, templatePath:string) {
 				local project = app.projects[app.currentProjectIndex]
 
@@ -3117,7 +3156,7 @@ export setupGuiCallbacks :: () {
 			})
 		}
 
-		guiState.onAction.exportProject_particles_templateChoose = (buttons:gui.Buttons, buttonIndex:int) {
+		guiState.onAction.exportProject_particles_templateChoose = (buttons:gui.Buttons, buttonIndex:int, source:gui.ActionSource) {
 			local project = app.projects[app.currentProjectIndex]
 			local pathObj = Path(project.exportParticlesTemplatePath)
 			local ok, dir = pathObj.getDirectory!()
@@ -3158,7 +3197,7 @@ export setupGuiCallbacks :: () {
 			)
 		}
 
-		guiState.onAction.exportProject_particles_templateRelative = (buttons:gui.Buttons, buttonIndex:int) {
+		guiState.onAction.exportProject_particles_templateRelative = (buttons:gui.Buttons, buttonIndex:int, source:gui.ActionSource) {
 			local project = app.projects[app.currentProjectIndex]
 			if project.exportParticlesTemplate  return
 
@@ -3179,7 +3218,7 @@ export setupGuiCallbacks :: () {
 			local project    = app.projects[app.currentProjectIndex]
 			checkbox.checked = project.exportTextures
 		}
-		guiState.onAction.exportProject_textures_copyFiles = (checkbox:gui.Checkbox, _:int) {
+		guiState.onAction.exportProject_textures_copyFiles = (checkbox:gui.Checkbox, _:int, source:gui.ActionSource) {
 			local project          = app.projects[app.currentProjectIndex]
 			project.exportTextures = checkbox.checked
 			markEdited(project)
@@ -3191,7 +3230,7 @@ export setupGuiCallbacks :: () {
 			local project    = app.projects[app.currentProjectIndex]
 			checkbox.checked = project.exportTexturesOverwrite
 		}
-		guiState.onAction.exportProject_textures_overwrite = (checkbox:gui.Checkbox, _:int) {
+		guiState.onAction.exportProject_textures_overwrite = (checkbox:gui.Checkbox, _:int, source:gui.ActionSource) {
 			local project                   = app.projects[app.currentProjectIndex]
 			project.exportTexturesOverwrite = checkbox.checked
 			markEdited(project)
@@ -3203,7 +3242,7 @@ export setupGuiCallbacks :: () {
 			local project = app.projects[app.currentProjectIndex]
 			input.value   = project.exportTexturesDirectory
 		}
-		guiState.onAction.exportProject_textures_directory = (input:gui.InputText, _:int) {
+		guiState.onAction.exportProject_textures_directory = (input:gui.InputText, _:int, source:gui.ActionSource) {
 			local project                   = app.projects[app.currentProjectIndex]
 			input.value                     = Path(trim(input.value)).toString!()
 			project.exportTexturesDirectory = input.value
@@ -3242,7 +3281,7 @@ export setupGuiCallbacks :: () {
 			buttons.tooltip = guiState.getElement!("exportProject_textures_pathResults", gui.Text).text
 		}
 
-		guiState.onAction.exportProject_textures_directory_choose = (buttons:gui.Buttons, buttonIndex:int) {
+		guiState.onAction.exportProject_textures_directory_choose = (buttons:gui.Buttons, buttonIndex:int, source:gui.ActionSource) {
 			local project             = app.projects[app.currentProjectIndex]
 			local hasBaseDir, baseDir = resolveBaseOuputPath(project)
 
@@ -3275,7 +3314,7 @@ export setupGuiCallbacks :: () {
 			)
 		}
 
-		guiState.onAction.exportProject_textures_directory_relative = (buttons:gui.Buttons, buttonIndex:int) {
+		guiState.onAction.exportProject_textures_directory_relative = (buttons:gui.Buttons, buttonIndex:int, source:gui.ActionSource) {
 			local project             = app.projects[app.currentProjectIndex]
 			local hasBaseDir, baseDir = resolveBaseOuputPath(project)
 
@@ -3297,7 +3336,7 @@ export setupGuiCallbacks :: () {
 		}
 	}
 
-	guiState.onAction.exportProject_exportFiles = (buttons:gui.Buttons, buttonIndex:int) {
+	guiState.onAction.exportProject_exportFiles = (buttons:gui.Buttons, buttonIndex:int, source:gui.ActionSource) {
 		tryExportFiles()
 	}
 
@@ -3307,7 +3346,7 @@ export setupGuiCallbacks :: () {
 			local project            = app.projects[app.currentProjectIndex]
 			buttons.buttons[1].label = project.exportClipboardTemplate ?: project.exportClipboardTemplatePath
 		}
-		guiState.onAction.exportProject_clipboard_template = (buttons:gui.Buttons, buttonIndex:int) {
+		guiState.onAction.exportProject_clipboard_template = (buttons:gui.Buttons, buttonIndex:int, source:gui.ActionSource) {
 			showTemplateDropdownMenu(buttons, app.projects[app.currentProjectIndex].exportClipboardTemplatePath, (templateName:string, templatePath:string) {
 				local project = app.projects[app.currentProjectIndex]
 
@@ -3332,7 +3371,7 @@ export setupGuiCallbacks :: () {
 			})
 		}
 
-		guiState.onAction.exportProject_clipboard_templateChoose = (buttons:gui.Buttons, buttonIndex:int) {
+		guiState.onAction.exportProject_clipboard_templateChoose = (buttons:gui.Buttons, buttonIndex:int, source:gui.ActionSource) {
 			local project = app.projects[app.currentProjectIndex]
 			local pathObj = Path(project.exportClipboardTemplatePath)
 			local ok, dir = pathObj.getDirectory!()
@@ -3373,7 +3412,7 @@ export setupGuiCallbacks :: () {
 			)
 		}
 
-		guiState.onAction.exportProject_clipboard_templateRelative = (buttons:gui.Buttons, buttonIndex:int) {
+		guiState.onAction.exportProject_clipboard_templateRelative = (buttons:gui.Buttons, buttonIndex:int, source:gui.ActionSource) {
 			local project = app.projects[app.currentProjectIndex]
 			if project.exportClipboardTemplate  return
 
@@ -3387,7 +3426,7 @@ export setupGuiCallbacks :: () {
 			guiState.refreshRecursively!("exportProject_clipboard_template")
 		}
 
-		guiState.onAction.exportProject_clipboard_export = (buttons:gui.Buttons, buttonIndex:int) {
+		guiState.onAction.exportProject_clipboard_export = (buttons:gui.Buttons, buttonIndex:int, source:gui.ActionSource) {
 			local project      = app.projects[app.currentProjectIndex]
 			local data: string = NULL
 
@@ -3445,13 +3484,13 @@ export setupGuiCallbacks :: () {
 			guiState.refreshRecursively!(frame)
 		}
 
-		guiState.onAction.animation_ok = (buttons:gui.Buttons, buttonIndex:int) {
+		guiState.onAction.animation_ok = (buttons:gui.Buttons, buttonIndex:int, source:gui.ActionSource) {
 			local project,        system         = getCurrentProjectAndSystem()
 			local framesOld,      framesNew      = savedFrames,      system.frames
 			local lifetimeMinOld, lifetimeMinNew = savedLifetimeMin, system.psParticleLifetimeMin
 			local lifetimeMaxOld, lifetimeMaxNew = savedLifetimeMax, system.psParticleLifetimeMax
 
-			recordChange("Animation",
+			recordChange("", "Animation", nil,
 				[system, framesNew, lifetimeMinNew, lifetimeMaxNew] (project:Project) {
 					system.frames                = framesNew
 					system.psParticleLifetimeMin = lifetimeMinNew
@@ -3472,7 +3511,7 @@ export setupGuiCallbacks :: () {
 
 			popPanel()
 		}
-		guiState.onAction.animation_cancel = (buttons:gui.Buttons, buttonIndex:int) {
+		guiState.onAction.animation_cancel = (buttons:gui.Buttons, buttonIndex:int, source:gui.ActionSource) {
 			local project, system        = getCurrentProjectAndSystem()
 			project.edited               = savedEdited
 			system.frames                = savedFrames
@@ -3534,7 +3573,7 @@ export setupGuiCallbacks :: () {
 			local project, system = getCurrentProjectAndSystem()
 			slider.value          = system.psParticleLifetimeMin
 		}
-		guiState.onAction.animation_particleLifetimeMin = (slider:gui.Slider, _:int) {
+		guiState.onAction.animation_particleLifetimeMin = (slider:gui.Slider, _:int, source:gui.ActionSource) {
 			local project, system        = getCurrentProjectAndSystem()
 			system.psParticleLifetimeMin = slider.value
 			updateParticleParams(project, system)
@@ -3543,13 +3582,13 @@ export setupGuiCallbacks :: () {
 			local project, system = getCurrentProjectAndSystem()
 			slider.value          = system.psParticleLifetimeMax
 		}
-		guiState.onAction.animation_particleLifetimeMax = (slider:gui.Slider, _:int) {
+		guiState.onAction.animation_particleLifetimeMax = (slider:gui.Slider, _:int, source:gui.ActionSource) {
 			local project, system        = getCurrentProjectAndSystem()
 			system.psParticleLifetimeMax = slider.value
 			updateParticleParams(project, system)
 		}
 
-		guiState.onAction.animation_empty = (buttons:gui.Buttons, buttonIndex:int) {
+		guiState.onAction.animation_empty = (buttons:gui.Buttons, buttonIndex:int, source:gui.ActionSource) {
 			local project, system = getCurrentProjectAndSystem()
 			if not system.frames  return
 
@@ -3599,7 +3638,7 @@ export setupGuiCallbacks :: () {
 			return true, x, y
 		}
 
-		guiState.onAction.animation_sequence_generateFromSize = (buttons:gui.Buttons, buttonIndex:int) {
+		guiState.onAction.animation_sequence_generateFromSize = (buttons:gui.Buttons, buttonIndex:int, source:gui.ActionSource) {
 			local project, system = getCurrentProjectAndSystem()
 			local iw, ih          = system.currentImage.image.getDimensions!()
 
@@ -3663,7 +3702,7 @@ export setupGuiCallbacks :: () {
 			guiState.refreshRecursively!("animation_frames")
 		}
 
-		guiState.onAction.animation_sequence_generateFromDivision = (buttons:gui.Buttons, buttonIndex:int) {
+		guiState.onAction.animation_sequence_generateFromDivision = (buttons:gui.Buttons, buttonIndex:int, source:gui.ActionSource) {
 			local project, system = getCurrentProjectAndSystem()
 			local iw, ih          = system.currentImage.image.getDimensions!()
 
@@ -3757,7 +3796,7 @@ export setupGuiCallbacks :: () {
 
 			return system.frames[i], i
 		}
-		guiState.onAction.animation_delete = (buttons:gui.Buttons, buttonIndex:int) {
+		guiState.onAction.animation_delete = (buttons:gui.Buttons, buttonIndex:int, source:gui.ActionSource) {
 			local project, system = getCurrentProjectAndSystem()
 			local animFrame, i    = getAnimationFrame(buttons)
 
@@ -3767,7 +3806,7 @@ export setupGuiCallbacks :: () {
 			updateParticleAnimation(system)
 			guiState.refreshRecursively!("animation_frames")
 		}
-		guiState.onAction.animation_add = (buttons:gui.Buttons, buttonIndex:int) {
+		guiState.onAction.animation_add = (buttons:gui.Buttons, buttonIndex:int, source:gui.ActionSource) {
 			local project, system = getCurrentProjectAndSystem()
 			local animFrame, i    = getAnimationFrame(buttons)
 
@@ -3783,7 +3822,7 @@ export setupGuiCallbacks :: () {
 			updateParticleAnimation(system)
 			guiState.refreshRecursively!("animation_frames")
 		}
-		guiState.onAction.animation_xywh = (input:gui.InputText, _:int) {
+		guiState.onAction.animation_xywh = (input:gui.InputText, _:int, source:gui.ActionSource) {
 			local project, system = getCurrentProjectAndSystem()
 			local animFrame, i    = getAnimationFrame(input)
 
@@ -3839,7 +3878,7 @@ export setupGuiCallbacks :: () {
 	guiState.onRefresh.preferences_preferRelativePaths = (checkbox:gui.Checkbox) {
 		checkbox.checked = app.preferRelativePaths
 	}
-	guiState.onAction.preferences_preferRelativePaths = (checkbox:gui.Checkbox, _:int) {
+	guiState.onAction.preferences_preferRelativePaths = (checkbox:gui.Checkbox, _:int, source:gui.ActionSource) {
 		app.preferRelativePaths = checkbox.checked
 		scheduleSaveWorkspace()
 	}
@@ -3847,7 +3886,7 @@ export setupGuiCallbacks :: () {
 	guiState.onRefresh.preferences_maxBufferSize = (input:gui.InputText) {
 		input.value = format("%.0f", app.maxBufferSize)
 	}
-	guiState.onAction.preferences_maxBufferSize = (input:gui.InputText, _:int) {
+	guiState.onAction.preferences_maxBufferSize = (input:gui.InputText, _:int, source:gui.ActionSource) {
 		local ok, n = stringToInt(input.value)
 		if not ok {
 			setErrorText("Bad value format: "..input.value)
@@ -3866,7 +3905,7 @@ export setupGuiCallbacks :: () {
 	guiState.onRefresh.preferences_maxRecentFiles = (input:gui.InputText) {
 		input.value = format("%.0f", app.maxRecentFiles)
 	}
-	guiState.onAction.preferences_maxRecentFiles = (input:gui.InputText, _:int) {
+	guiState.onAction.preferences_maxRecentFiles = (input:gui.InputText, _:int, source:gui.ActionSource) {
 		local ok, n = stringToInt(input.value)
 		if not ok {
 			setErrorText("Bad value format: "..input.value)
@@ -3880,7 +3919,7 @@ export setupGuiCallbacks :: () {
 	guiState.onRefresh.preferences_maxRecentFolders = (input:gui.InputText) {
 		input.value = format("%.0f", app.maxRecentFolders)
 	}
-	guiState.onAction.preferences_maxRecentFolders = (input:gui.InputText, _:int) {
+	guiState.onAction.preferences_maxRecentFolders = (input:gui.InputText, _:int, source:gui.ActionSource) {
 		local ok, n = stringToInt(input.value)
 		if not ok {
 			setErrorText("Bad value format: "..input.value)
@@ -3895,7 +3934,7 @@ export setupGuiCallbacks :: () {
 	guiState.onRefresh.preferences_maxChanges = (input:gui.InputText) {
 		input.value = format("%.0f", app.maxChanges)
 	}
-	guiState.onAction.preferences_maxChanges = (input:gui.InputText, _:int) {
+	guiState.onAction.preferences_maxChanges = (input:gui.InputText, _:int, source:gui.ActionSource) {
 		local ok, n = stringToInt(input.value)
 		if not ok {
 			setErrorText("Bad value format: "..input.value)
@@ -3910,7 +3949,7 @@ export setupGuiCallbacks :: () {
 	guiState.onRefresh.preferences_initializeSystemInNewProjects = (checkbox:gui.Checkbox) {
 		checkbox.checked = app.initializeSystemInNewProjects
 	}
-	guiState.onAction.preferences_initializeSystemInNewProjects = (checkbox:gui.Checkbox, _:int) {
+	guiState.onAction.preferences_initializeSystemInNewProjects = (checkbox:gui.Checkbox, _:int, source:gui.ActionSource) {
 		app.initializeSystemInNewProjects = checkbox.checked
 		scheduleSaveWorkspace()
 	}
@@ -3933,10 +3972,10 @@ export setupGuiCallbacks :: () {
 	--= Utils
 	--==============================================================
 
-	guiState.onAction.util_pushPanel = (el:gui.Element, _:int) {
+	guiState.onAction.util_pushPanel = (el:gui.Element, _:int, source:gui.ActionSource) {
 		pushPanel(cast(string) el.data)
 	}
-	guiState.onAction.util_popPanel = (el:gui.Element, _:int) {
+	guiState.onAction.util_popPanel = (el:gui.Element, _:int, source:gui.ActionSource) {
 		popPanel()
 	}
 }
