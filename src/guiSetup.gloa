@@ -722,19 +722,75 @@ export setupGuiCallbacks :: () {
 	guiState.onOption.projects = (tabs:gui.Tabs, projectIndex:int) {
 		if projectIndex == #tabs.buttons  return
 
-		guiState.showContextMenu!({"Close\t"..ctrlText.."+W","Duplicate"}, [projectIndex] (choice:int) {
-			if choice == {
-				case 1:
-					confirmCloseProject(projectIndex)
+		local project      = app.projects[projectIndex]
+		local ok, filename = Path(project.path).getFilename!()
+		if not ok  filename = ""
 
-				case 2:
-					local project = app.projects[projectIndex].clone!()
-					insert(app.projects, projectIndex+1, project)
+		guiState.showContextMenuWithInput!(filename, inputTooltip="Filename (change to rename)", {"Close\t"..ctrlText.."+W","Duplicate"},
+			cb = [projectIndex] (choice:int) {
+				if choice == {
+					case 1:
+						confirmCloseProject(projectIndex)
 
-					guiState.refreshRecursively!("projects")
-					setCurrentProject(projectIndex+1, force=true)
+					case 2:
+						local project = app.projects[projectIndex].clone!()
+						insert(app.projects, projectIndex+1, project)
+
+						guiState.refreshRecursively!("projects")
+						setCurrentProject(projectIndex+1, force=true)
+				}
+			},
+			cbInput = [projectIndex] (filenameNew:string) {
+				if not filenameNew  return
+
+				local project = app.projects[projectIndex]
+				if not project.fileIsSaved  return
+
+				if not findPattern(filenameNew, "%.hotparticles$") {
+					filenameNew = filenameNew..".hotparticles"
+				}
+
+				-- @UX: Confirm rename? (May actually be annoying.)
+
+				local pathObj = Path(project.path)
+
+				local _, dir, filenameOld = pathObj.getDirectoryAndFilename!()
+				if not connectToRemoteDirectory(dir)  return
+				defer disconnectFromRemoteDirectory()
+
+				if getFileInfo(filenameNew) {
+					setErrorText("Rename: File '"..filenameNew.."' already exists") -- @UX: Ask if the user wants to overwrite the file.
+					return
+				}
+
+				local contents, err = LF.read(filenameOld)
+				if contents == nil {
+					setErrorText("Rename: Failed reading '"..filenameOld.."': "..cast(string)err)
+					return
+				}
+
+				local ok, ^err = LF.write(filenameNew, cast(string)contents)
+				if not ok {
+					setErrorText("Rename: Failed writing '"..filenameNew.."': "..cast(string)err)
+					return
+				}
+
+				setMessageText("Renamed '"..filenameOld.."' to '"..filenameNew.."'")
+
+				ok = LF.remove(filenameOld)
+				if not ok {
+					setErrorText("Rename: Failed deleting old file '"..filenameNew.."'")
+					-- Don't return! Just leave the old file and let the user take care of it.
+				}
+
+				pathObj.setFilename!(filenameNew)
+				project.path          = pathObj.toString!()
+				project.displayedName = filenameNew
+
+				guiState.refreshRecursively!("projects")
+				updateWindowTitle()
 			}
-		})
+		)
 	}
 	guiState.onClose.projects = (tabs:gui.Tabs, buttonIndex:int) {
 		if buttonIndex < #tabs.buttons  confirmCloseProject(buttonIndex)
@@ -1349,7 +1405,7 @@ export setupGuiCallbacks :: () {
 		static hasClipboardSystem      = false
 
 		guiState.showContextMenuWithInput!(system.title, inputTooltip="Particle system title", items,
-			[system, systemIndex] (choice:int) {
+			cb = [system, systemIndex] (choice:int) {
 				if choice == {
 					case 1:
 						confirmDeleteSystem(systemIndex)
@@ -1387,7 +1443,7 @@ export setupGuiCallbacks :: () {
 						system.visible = not system.visible
 				}
 			},
-			[system] (valueNew:string) {
+			cbInput = [system] (valueNew:string) {
 				local valueOld = system.title
 				if valueNew == valueOld  return
 

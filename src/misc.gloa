@@ -15,6 +15,7 @@
 	addRecent, removeRecent
 	compareFilenames
 	getAppDirectory, getSaveDirectory, getCwd
+	getFileInfo
 	getModifierKey
 	isInside
 	limitArray
@@ -471,6 +472,14 @@ export readEntireFileAnywhere :: (fullPath:string) -> (success:bool, data:string
 
 	if data == NULL  return false, "", cast(string)err
 	return true, cast(string)data, ""
+}
+
+
+
+export getFileInfo :: (path:string) -> (exists:bool, fileType:LF.FileType) {
+	static info: LF.FileInfo
+	if LF.getInfo(path, info) == nil  return false, NULL
+	return true, info.type
 }
 
 

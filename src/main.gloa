@@ -3587,8 +3587,6 @@ export tryExportFiles :: (quick=false) {
 	local filesToConfirmOverwrite: []string
 
 	do {
-		static info: LF.FileInfo
-
 		if project.exportParticles and not project.exportParticlesOverwrite {
 			local _, dir, filename = Path(particlesPath).getDirectoryAndFilename!()
 
@@ -3598,7 +3596,7 @@ export tryExportFiles :: (quick=false) {
 			}
 			defer disconnectFromRemoteDirectory()
 
-			if LF.getInfo(filename, info) ~= NULL  insert(filesToConfirmOverwrite, particlesPath)
+			if getFileInfo(filename)  insert(filesToConfirmOverwrite, particlesPath)
 		}
 
 		local texturePathSet: struct { !key:string, !value:bool }
@@ -3619,7 +3617,7 @@ export tryExportFiles :: (quick=false) {
 			}
 			defer disconnectFromRemoteDirectory()
 
-			if LF.getInfo(filename, info) ~= NULL  insert(filesToConfirmOverwrite, path)
+			if getFileInfo(filename)  insert(filesToConfirmOverwrite, path)
 		}
 	}
 
