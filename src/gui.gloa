@@ -1174,39 +1174,41 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int, can
 		}
 
 		if widget ~= NULL and not triggerOptionEvent(state, widget, name, state.hoveredSubid) {
+			local maybeInsertContextMenuItem :: (items:[]string, choiceCount:int, label:string, doInsert:bool) -> (choiceCount:int, choice:int) {
+				if not doInsert  return choiceCount, -1
+				choiceCount += 1
+				insert(items, label)
+				return choiceCount, choiceCount
+			}
+
 			if widget.type == {
 				case Direction:
 					local direction = cast(Direction) widget
 					local items: []string
+					local choiceCount = 0
 
-					insert(items, "Reset angle")
-					local iReset = #items
-
-					insert(items, "Copy angle")
-					local iCopy = #items
-
-					insert(items, "Paste angle")
-					local iPaste = #items
-
-					if direction.canDisable  insert(items, (direction.enabled ? "Disable" : "Enable"))
-					local iToggle = direction.canDisable ? #items : -1
+					local ^choiceCount, choiceReset  = maybeInsertContextMenuItem(items, choiceCount, "Reset angle", true)
+					local ^choiceCount, choiceCopy   = maybeInsertContextMenuItem(items, choiceCount, "Copy angle",  true)
+					local ^choiceCount, choicePaste  = maybeInsertContextMenuItem(items, choiceCount, "Paste angle", true)
+					if direction.canDisable  insert(items, "-")
+					local ^choiceCount, choiceToggle = maybeInsertContextMenuItem(items, choiceCount, (direction.enabled ? "Disable" : "Enable"), direction.canDisable)
 
 					state.showContextMenuWithInput!(toString(direction.angle*360/math.TAU), items,
 						[*] (choice:int) {
-							if choice == iReset {
+							if choice == choiceReset {
 								triggerBeginEvent(state, direction, "", 0, alsoEnsureEnabled=true)
 								direction.angle = 0
 								triggerActionEvent(state, direction, "", 0, .MOUSE, alsoEnd=true)
 
-							} elseif choice == iToggle {
+							} elseif choice == choiceToggle {
 								direction.enabled = not direction.enabled
 								triggerToggleEvent(state, direction, "", 0)
 
-							} elseif choice == iCopy {
+							} elseif choice == choiceCopy {
 								clipboardAngle    = direction.angle
 								hasClipboardAngle = true
 
-							} elseif choice == iPaste {
+							} elseif choice == choicePaste {
 								if not hasClipboardAngle  return
 
 								triggerBeginEvent(state, direction, "", 0, alsoEnsureEnabled=true)
@@ -1222,45 +1224,39 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int, can
 				case Slider:
 					local slider = cast(Slider) widget
 					local items: []string
+					local choiceCount = 0
 
-					insert(items, "Reset value")
-					local iReset = #items
-
-					insert(items, "Copy value")
-					local iCopy = #items
-
-					insert(items, "Paste value")
-					local iPaste = #items
-
-					insert(items, "Reset min/max limits")
-					local iResetLimits = #items
-
-					if slider.canDisable  insert(items, (slider.enabled ? "Disable" : "Enable"))
-					local iToggle = slider.canDisable ? #items : -1
+					local ^choiceCount, choiceReset       = maybeInsertContextMenuItem(items, choiceCount, "Reset value", true)
+					local ^choiceCount, choiceCopy        = maybeInsertContextMenuItem(items, choiceCount, "Copy value",  true)
+					local ^choiceCount, choicePaste       = maybeInsertContextMenuItem(items, choiceCount, "Paste value", true)
+					insert(items, "-")
+					local ^choiceCount, choiceResetLimits = maybeInsertContextMenuItem(items, choiceCount, "Reset min/max limits", true)
+					if slider.canDisable  insert(items, "-")
+					local ^choiceCount, choiceToggle      = maybeInsertContextMenuItem(items, choiceCount, (slider.enabled ? "Disable" : "Enable"), slider.canDisable)
 
 					state.showContextMenuWithInput!(toString(slider.value*slider.readoutMulti), items,
 						[*] (choice:int) {
-							if choice == iReset {
+							if choice == choiceReset {
 								triggerBeginEvent(state, slider, "", 0, alsoEnsureEnabled=true)
 								slider.value = slider.defaultValue
 								triggerActionEvent(state, slider, "", 0, .MOUSE, alsoEnd=true)
 
-							} elseif choice == iToggle {
+							} elseif choice == choiceToggle {
 								slider.enabled = not slider.enabled
 								triggerToggleEvent(state, slider, "", 0)
 
-							} elseif choice == iCopy {
+							} elseif choice == choiceCopy {
 								clipboardScalar    = slider.value
 								hasClipboardScalar = true
 
-							} elseif choice == iPaste {
+							} elseif choice == choicePaste {
 								if not hasClipboardScalar  return
 
 								triggerBeginEvent(state, slider, "", 0, alsoEnsureEnabled=true)
 								slider.value = clipboardScalar
 								triggerActionEvent(state, slider, "", 0, .MOUSE, alsoEnd=true)
 
-							} elseif choice == iResetLimits {
+							} elseif choice == choiceResetLimits {
 								forgetLimitMultiplier(slider)
 							}
 						},
@@ -1283,47 +1279,39 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int, can
 
 					-- @Incomplete: Handle canDisable.
 					local items: []string
+					local choiceCount = 0
 
-					insert(items, "Reset color")
-					local iResetColor = #items
-
-					insert(items, "Copy "..COMPONENT_TITLES[component])
-					local iCopyComponent = #items
-
-					insert(items, "Copy color")
-					local iCopyColor = #items
-
-					insert(items, "Paste "..COMPONENT_TITLES[component])
-					local iPasteComponent = #items
-
-					insert(items, "Paste color")
-					local iPasteColor = #items
+					local ^choiceCount, choiceResetColor     = maybeInsertContextMenuItem(items, choiceCount, "Reset color",                         true)
+					local ^choiceCount, choiceCopyComponent  = maybeInsertContextMenuItem(items, choiceCount, "Copy "..COMPONENT_TITLES[component],  true)
+					local ^choiceCount, choiceCopyColor      = maybeInsertContextMenuItem(items, choiceCount, "Copy color",                          true)
+					local ^choiceCount, choicePasteComponent = maybeInsertContextMenuItem(items, choiceCount, "Paste "..COMPONENT_TITLES[component], true)
+					local ^choiceCount, choicePasteColor     = maybeInsertContextMenuItem(items, choiceCount, "Paste color",                         true)
 
 					state.showContextMenuWithInput!(valueStr, items,
 						[*] (choice:int) {
-							if choice == iResetColor {
+							if choice == choiceResetColor {
 								for 1, 4 {
 									triggerBeginEvent(state, colorEl, "", it, alsoEnsureEnabled=true)
 									colorEl.color[it] = (it <= 2) ? 0 : 1
 									triggerActionEvent(state, colorEl, "", it, .MOUSE, alsoEnd=true)
 								}
 
-							} elseif choice == iCopyComponent {
+							} elseif choice == choiceCopyComponent {
 								clipboardScalar    = colorEl.color[component]
 								hasClipboardScalar = true
 
-							} elseif choice == iCopyColor {
+							} elseif choice == choiceCopyColor {
 								for 1, 4  clipboardColor[it] = colorEl.color[it]
 								hasClipboardColor = true
 
-							} elseif choice == iPasteComponent {
+							} elseif choice == choicePasteComponent {
 								if not hasClipboardScalar  return
 
 								triggerBeginEvent(state, colorEl, "", component, alsoEnsureEnabled=true)
 								colorEl.color[component] = clipboardScalar
 								triggerActionEvent(state, colorEl, "", component, .MOUSE, alsoEnd=true)
 
-							} elseif choice == iPasteColor {
+							} elseif choice == choicePasteColor {
 								if not hasClipboardColor  return
 
 								for 1, 4 {
@@ -2398,7 +2386,7 @@ local drawElement :: (state:State, el:Element) {
 				if app.showPanelNumbers {
 					local COLOR_TEXT:   love.Color: {1,1,1,1}
 					local COLOR_SHADOW: love.Color: {0,0,0,1}
-					drawSliderReadout(sliderX+sliderW, sliderY, sliderH, x, readout, 1, readoutFormat, "", COLOR_TEXT, COLOR_SHADOW, 1) -- @Incomplete: Opacity. asdf
+					drawSliderReadout(sliderX+sliderW, sliderY, sliderH, x, readout, 1, readoutFormat, "", COLOR_TEXT, COLOR_SHADOW, 1) -- @Incomplete: Opacity.
 				}
 
 				LG.setColor(0, 0, 0, a)
@@ -3323,20 +3311,24 @@ export showContextMenu :: (state:State, items:[]string, cb:(choice:int)) {
 export showContextMenu :: (state:State, x,y:int, items:[]string, cb:(choice:int)) {
 	state.hideContextMenu!()
 
-	local buttonList: []Button
+	local buttons     = state.buttons!({ name="__contextMenuButtons", vertical=true, align=.LEFT, style=.CONTEXT_MENU, buttonMinHeight=16 })
+	local contextMenu = state.frame  !({ data=cb, x=x, y=y, minWidth=CONTEXT_MENU_MIN_WIDTH, layout=.FLOATING, style=.CONTEXT_MENU, buttons })
+	local choice      = 0
+
 	for items {
 		local ok, label, shortcut = matchPattern(it, "^(.*)\t(.*)$")
-		if ok
-			insert(buttonList, cast(Button){ label=cast(string)label, shortcut=cast(string)shortcut })
-		else
-			insert(buttonList, cast(Button){ label=it })
+		if it == "-" {
+			insert(contextMenu, state.separator!({ thick=false }))
+			buttons = state.buttons!({ name="__contextMenuButtons", vertical=true, align=.LEFT, style=.CONTEXT_MENU, buttonMinHeight=16 })
+			insert(contextMenu, buttons)
+		} elseif ok {
+			choice += 1
+			insert(buttons.buttons, cast(Button){ value=choice, label=cast(string)label, shortcut=cast(string)shortcut })
+		} else {
+			choice += 1
+			insert(buttons.buttons, cast(Button){ value=choice, label=it })
+		}
 	}
-
-	local contextMenu = state.frame!({ data=cb, x=x, y=y, minWidth=CONTEXT_MENU_MIN_WIDTH, layout=.FLOATING, style=.CONTEXT_MENU,
-		state.buttons!({ name="__contextMenuButtons", vertical=true, align=.LEFT, style=.CONTEXT_MENU, buttonMinHeight=16,
-			buttons = {unpack(buttonList)},
-		}),
-	})
 
 	state.contextMenus = {contextMenu}
 	insert(state.frames, contextMenu)
@@ -3347,7 +3339,7 @@ export showContextMenu :: (state:State, x,y:int, items:[]string, cb:(choice:int)
 	state.onAction.__contextMenuButtons = [state,cb] (buttons:Buttons, buttonIndex:int, source:ActionSource) {
 		state.contextMenus[1].data = NULL -- So hideContextMenu() doesn't call the callback too!
 		state.hideContextMenu!()
-		cb(buttonIndex)
+		cb(cast(int) buttons.buttons[buttonIndex].value)
 		scheduleSaveWorkspace()
 	}
 }
@@ -3359,23 +3351,25 @@ export showContextMenuWithInput :: (state:State, value:string, items:[]string, c
 export showContextMenuWithInput :: (state:State, x,y:int, value:string, items:[]string, cb:(choice:int), cbInput:(text:string)=NULL, cbSubmit:(text:string)=NULL, cbOption:()=NULL, inputTooltip="", minWidth=0) {
 	state.hideContextMenu!()
 
-	local buttonList: []Button
+	local input       = state.inputText!({ name="__contextMenuInput", value=value, style=.CONTEXT_MENU, tooltip=inputTooltip })
+	local buttons     = state.buttons  !({ name="__contextMenuButtons", vertical=true, align=.LEFT, style=.CONTEXT_MENU, buttonMinHeight=16 })
+	local contextMenu = state.frame    !({ data=cb, x=x, y=y, minWidth=CONTEXT_MENU_MIN_WIDTH, layout=.FLOATING, style=.CONTEXT_MENU, input, buttons })
+	local choice      = 0
+
 	for items {
 		local ok, label, shortcut = matchPattern(it, "^(.*)\t(.*)$")
-		if ok
-			insert(buttonList, cast(Button){ label=cast(string)label, shortcut=cast(string)shortcut })
-		else
-			insert(buttonList, cast(Button){ label=it })
+		if it == "-" {
+			insert(contextMenu, state.separator!({ thick=false }))
+			buttons = state.buttons!({ name="__contextMenuButtons", vertical=true, align=.LEFT, style=.CONTEXT_MENU, buttonMinHeight=16 })
+			insert(contextMenu, buttons)
+		} elseif ok {
+			choice += 1
+			insert(buttons.buttons, cast(Button){ value=choice, label=cast(string)label, shortcut=cast(string)shortcut })
+		} else {
+			choice += 1
+			insert(buttons.buttons, cast(Button){ value=choice, label=it })
+		}
 	}
-
-	local input = state.inputText!({ name="__contextMenuInput", value=value, style=.CONTEXT_MENU, tooltip=inputTooltip })
-
-	local contextMenu = state.frame!({ data=cb, x=x, y=y, minWidth=math.max(minWidth, CONTEXT_MENU_MIN_WIDTH), layout=.FLOATING, style=.CONTEXT_MENU,
-		input,
-		state.buttons!({ name="__contextMenuButtons", vertical=true, align=.LEFT, style=.CONTEXT_MENU, buttonMinHeight=16,
-			buttons = {unpack(buttonList)},
-		}),
-	})
 
 	state.contextMenus = {contextMenu}
 	insert(state.frames, contextMenu)
@@ -3406,7 +3400,7 @@ export showContextMenuWithInput :: (state:State, x,y:int, value:string, items:[]
 	state.onAction.__contextMenuButtons = [state,cb] (buttons:Buttons, buttonIndex:int, source:ActionSource) {
 		state.contextMenus[1].data = NULL -- So hideContextMenu() doesn't call the callback too!
 		state.hideContextMenu!()
-		cb(buttonIndex)
+		cb(cast(int) buttons.buttons[buttonIndex].value)
 		scheduleSaveWorkspace()
 	}
 

@@ -17,13 +17,7 @@ export HOTLOADER_USE_WINAPI :: 1==1 -- Enabling this means faster file modificat
 
 export EXPORT_TEMPLATES_DIRECTORY :: "exportTemplates"
 
-
-
-local isDev :: () -> bool {
-	!import "utils"
-	return (indexOf(getProgramArguments(), "dev"))
-}
-export DEV :: !run isDev()
+export DEV :: !run (indexOf(!import"utils".getProgramArguments(), "dev"))
 
 
 
@@ -1556,7 +1550,9 @@ local onMousePressed :: (mx,my:int, mbutton:int, isTouch:bool, presses:int) {
 		onMouseMoved(mx,my, 0,0, false)
 
 	} elseif mbutton == 2 {
-		guiState.showContextMenu!({"Reset emitter position"}, (choice:int) {
+		local ITEMS :: {"Reset emitter position"}
+
+		guiState.showContextMenu!(ITEMS, (choice:int) {
 			if choice == {
 				case 1: moveEmittersTo(0, 0)
 			}
@@ -3315,10 +3311,11 @@ export showOpenProjectDialog :: () {
 
 
 export showRecentFilesContextMenu :: (title:string, recentPaths:[]string, onChoose:(path:string)) {
-	local items = {title..":"}
+	local items = {title..":","-"}
 
 	if recentPaths {
 		for recentPaths  insert(items, it)
+		insert(items, "-")
 		insert(items, "Clear history")
 	} else {
 		insert(items, "(no recent files)")
@@ -3327,10 +3324,10 @@ export showRecentFilesContextMenu :: (title:string, recentPaths:[]string, onChoo
 	guiState.showContextMenu!(items, [*] (choice:int) {
 		if choice <= 1 or not recentPaths {
 			-- void
-		} elseif choice == #items {
+		} elseif choice == #recentPaths+2 {
 			for recentPaths  recentPaths[itIndex] = NULL
 		} else {
-			onChoose(items[choice])
+			onChoose(recentPaths[choice-1])
 		}
 	})
 }

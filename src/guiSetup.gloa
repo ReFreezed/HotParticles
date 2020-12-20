@@ -726,7 +726,7 @@ export setupGuiCallbacks :: () {
 		local ok, filename = Path(project.path).getFilename!()
 		if not ok  filename = ""
 
-		guiState.showContextMenuWithInput!(filename, inputTooltip="Filename (change to rename)", {"Close\t"..ctrlText.."+W","Duplicate"},
+		guiState.showContextMenuWithInput!(filename, inputTooltip="Filename (Change to rename)", {"Close\t"..ctrlText.."+W","Duplicate"},
 			cb = [projectIndex] (choice:int) {
 				if choice == {
 					case 1:
@@ -1433,11 +1433,12 @@ export setupGuiCallbacks :: () {
 		local system  = project.systems[systemIndex]
 
 		local items = {
-			[1] = "Delete\t"..ctrlText.."+Delete",
-			[2] = "Duplicate\t"..ctrlText.."+D",
-			[3] = "Copy",
-			[4] = "Paste new",
-			[5] = (system.visible ? "Hide\tH" : "Show\tH"),
+			--[[1]] "Delete\t"..ctrlText.."+Delete",
+			--[[2]] "Duplicate\t"..ctrlText.."+D",
+			--[[3]] "Copy",
+			--[[4]] "Paste new",
+			"-",
+			--[[5]] (system.visible ? "Hide\tH" : "Show\tH"),
 		}
 
 		static clipboardSystem: System = NULL
@@ -2615,7 +2616,9 @@ export setupGuiCallbacks :: () {
 		}
 
 		guiState.onOption.fileDialog_bookmarks = (buttons:gui.Buttons, indexToRemove:int) {
-			guiState.showContextMenu!({"Remove bookmark"}, [indexToRemove] (choice:int) {
+			local ITEMS :: {"Remove bookmark"}
+
+			guiState.showContextMenu!(ITEMS, [indexToRemove] (choice:int) {
 				if choice == {
 					case 1:
 						remove(app.bookmarkedFolders, indexToRemove)
