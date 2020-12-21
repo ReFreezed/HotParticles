@@ -2810,6 +2810,69 @@ export setupGuiCallbacks :: () {
 			guiState.refreshRecursively!(buttons)
 		}
 
+		static autocompletePrefix = "" -- @Incomplete: Reset this on input blur.
+
+		guiState.onBeforeKeyPressed.fileDialog_filename = (input:gui.InputText, key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool) -> (ignore:bool) {
+			if key ~= "tab" {
+				autocompletePrefix = ""
+				return false
+			}
+
+			local currentPrefix = toLower(input.field.getText!())
+			if not currentPrefix  return true
+
+			autocompletePrefix = autocompletePrefix ?: currentPrefix
+
+			local filenames: []string
+			do {
+				if not connectToRemoteDirectory(dirCurrent)  return true
+				defer disconnectFromRemoteDirectory()
+
+				for LF.getDirectoryItems("")  insert(filenames, it)
+				if not filenames  return true
+
+				sort(filenames, compareFilenames)
+			}
+
+			local startIndex = 0
+
+			for filenames {
+				if toLower(it) == currentPrefix {
+					startIndex = itIndex
+					break
+				}
+			}
+
+			if startIndex == 0  for filenames {
+				local found, pos = find(toLower(it), currentPrefix)
+
+				if found and pos == 1 {
+					startIndex = itIndex
+					break
+				}
+			}
+
+			if startIndex == 0  return true -- No match.
+
+			for offset = 1, #filenames {
+				local i          = (startIndex + offset - 1) % #filenames + 1
+				local filename   = filenames[i]
+				local found, pos = find(toLower(filename), autocompletePrefix)
+
+				if found and pos == 1 {
+					input.field.setText!(filename)
+					input.field.selectAll!()
+					break
+				}
+			}
+
+			return true
+		}
+		guiState.onBeforeTextInput.fileDialog_filename = (input:gui.InputText, text:string) -> (ignore:bool) {
+			autocompletePrefix = ""
+			return false
+		}
+
 		guiState.onSubmit.fileDialog_filename = (input:gui.InputText)                                           {  choosePath()  }
 		guiState.onAction.fileDialog_choose   = (buttons:gui.Buttons, buttonIndex:int, source:gui.ActionSource) {  choosePath()  }
 

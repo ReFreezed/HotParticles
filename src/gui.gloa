@@ -129,23 +129,25 @@ export State :: struct {
 
 	scrollbarHandleDragOffset = 0,
 
-	onRefresh:      struct { !key:string, !value:any--[[ (el:Element) ]] },
-	onActive:       struct { !key:string, !value:any--[[ (el:Element) ]] },
-	onInactive:     struct { !key:string, !value:any--[[ (el:Element) ]] },
-	onSubmit:       struct { !key:string, !value:any--[[ (el:Element) ]] },
-	onBeforeAction: struct { !key:string, !value:any--[[ (widget:Widget, subid:int) -> (ignore:bool) ]] }, -- Only used for Radio and Tabs.
-	onBegin:        struct { !key:string, !value:any--[[ (widget:Widget, subid:int) ]] },
-	onAction:       struct { !key:string, !value:any--[[ (widget:Widget, subid:int, source:ActionSource) ]] },
-	onEnd:          struct { !key:string, !value:any--[[ (widget:Widget, subid:int) ]] },
-	onDouble:       struct { !key:string, !value:any--[[ (widget:Widget, subid:int) ]] },
-	onOption:       struct { !key:string, !value:any--[[ (widget:Widget, subid:int) ]] },
-	onClose:        struct { !key:string, !value:any--[[ (widget:Widget, subid:int) ]] },
-	onDragBegin:    struct { !key:string, !value:any--[[ (widget:Widget, subid:int) ]] },
-	onDrag:         struct { !key:string, !value:any--[[ (widget:Widget, subid:int, mx,my:int) ]] },
-	onDragEnd:      struct { !key:string, !value:any--[[ (widget:Widget, subid:int) ]] },
-	onMouseEnter:   struct { !key:string, !value:any--[[ (widget:Widget, subid:int) ]] },
-	onToggle:       struct { !key:string, !value:any--[[ (widget:Widget, subid:int) ]] }, -- For disable/enable. (Not for checkboxes!)
-	onDraw:         struct { !key:string, !value:any--[[ (canvas:Canvas, cw,ch:int) ]] },
+	onRefresh:          struct { !key:string, !value:any--[[ (el:Element) ]] },
+	onActive:           struct { !key:string, !value:any--[[ (el:Element) ]] },
+	onInactive:         struct { !key:string, !value:any--[[ (el:Element) ]] },
+	onSubmit:           struct { !key:string, !value:any--[[ (el:Element) ]] },
+	onBeforeAction:     struct { !key:string, !value:any--[[ (widget:Widget, subid:int) -> (ignore:bool) ]] }, -- Only used for Radio and Tabs.
+	onBegin:            struct { !key:string, !value:any--[[ (widget:Widget, subid:int) ]] },
+	onAction:           struct { !key:string, !value:any--[[ (widget:Widget, subid:int, source:ActionSource) ]] },
+	onEnd:              struct { !key:string, !value:any--[[ (widget:Widget, subid:int) ]] },
+	onDouble:           struct { !key:string, !value:any--[[ (widget:Widget, subid:int) ]] },
+	onOption:           struct { !key:string, !value:any--[[ (widget:Widget, subid:int) ]] },
+	onClose:            struct { !key:string, !value:any--[[ (widget:Widget, subid:int) ]] },
+	onDragBegin:        struct { !key:string, !value:any--[[ (widget:Widget, subid:int) ]] },
+	onDrag:             struct { !key:string, !value:any--[[ (widget:Widget, subid:int, mx,my:int) ]] },
+	onDragEnd:          struct { !key:string, !value:any--[[ (widget:Widget, subid:int) ]] },
+	onMouseEnter:       struct { !key:string, !value:any--[[ (widget:Widget, subid:int) ]] },
+	onToggle:           struct { !key:string, !value:any--[[ (widget:Widget, subid:int) ]] }, -- For disable/enable. (Not for checkboxes!)
+	onDraw:             struct { !key:string, !value:any--[[ (canvas:Canvas, cw,ch:int) ]] },
+	onBeforeKeyPressed: struct { !key:string, !value:(input:InputText, key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool) -> (ignore:bool) },
+	onBeforeTextInput:  struct { !key:string, !value:(input:InputText, text:string) -> (ignore:bool) },
 
 	buttons      :: (state:State, el:Buttons)      -> type_of(el) { return cast(type_of(el)) register(state, el, type_of(el)) },
 	canvas       :: (state:State, el:Canvas)       -> type_of(el) { return cast(type_of(el)) register(state, el, type_of(el)) },
@@ -558,7 +560,9 @@ export onKeyPressed :: (state:State, key:LK.KeyConstant, scancode:LK.Scancode, i
 			return true
 		}
 
-		if key == "escape" {
+		if triggerBeforeKeyPressedEvent(state, input, "", key, scancode, isRepeat) {
+			-- void
+		} elseif key == "escape" {
 			state.blurFocus!(abort=true)
 		} elseif key == "return" or key == "kpenter" {
 			state.blurFocus!(abort=false)
@@ -667,7 +671,11 @@ export onTextInput :: (state:State, text:string) -> (handled:bool) {
 			return true
 		}
 
-		input.field.textinput!(text)
+		if triggerBeforeTextInputEvent(state, input, "", text) {
+			-- void
+		} else {
+			input.field.textinput!(text)
+		}
 		return true
 	}
 
@@ -3059,6 +3067,19 @@ local triggerMouseEnterEvent :: (state:State, widget:Widget, name:string, subid:
 	if cb == NULL  return
 
 	cb(widget, subid)
+}
+
+local triggerBeforeKeyPressedEvent :: (state:State, input:InputText, name:string, key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool) -> (ignore:bool) {
+	local cb = state.onBeforeKeyPressed[name ?: input.name]
+	if cb == NULL  return false
+
+	return cb(input, key, scancode, isRepeat)
+}
+local triggerBeforeTextInputEvent :: (state:State, input:InputText, name:string, text:string) -> (ignore:bool) {
+	local cb = state.onBeforeTextInput[name ?: input.name]
+	if cb == NULL  return false
+
+	return cb(input, text)
 }
 
 local triggerToggleEvent :: (state:State, widget:Widget, name:string, subid:int) {
