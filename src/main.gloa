@@ -2582,7 +2582,7 @@ export scheduleSaveWorkspace :: () {
 
 
 
-export openProject :: (fullPath:string, asPreview=false) -> (success:bool, project:Project, isNew:bool) {
+export openProject :: (fullPath:string, asPreview=false, ignoreOpened=false) -> (success:bool, project:Project, isNew:bool) {
 	local pathObj = Path(fullPath)
 	fullPath      = pathObj.toString!()
 
@@ -2593,10 +2593,12 @@ export openProject :: (fullPath:string, asPreview=false) -> (success:bool, proje
 		return false, NULL, NULL
 	}
 
-	for app.projects  if it.path == fullPath {
-		setCurrentProject(itIndex)
-		if not asPreview  addRecent(app.recentProjects, fullPath, app.maxRecentFiles)
-		return true, it, false
+	if not ignoreOpened {
+		for app.projects  if it.path == fullPath {
+			setCurrentProject(itIndex)
+			if not asPreview  addRecent(app.recentProjects, fullPath, app.maxRecentFiles)
+			return true, it, false
+		}
 	}
 
 	if not connectToRemoteDirectory(dir) {
@@ -2642,6 +2644,26 @@ export openProject :: (fullPath:string, asPreview=false) -> (success:bool, proje
 	scheduleSaveWorkspace()
 
 	return true, project, true
+}
+
+export reopenCurrentProject :: () {
+	local projectIndex = app.currentProjectIndex
+	local projectOld   = app.projects[projectIndex]
+
+	if not projectOld.fileIsSaved  return -- @Incomplete: Replace the project with an empty one instead of doing nothing?
+
+	remove(app.projects, projectIndex)
+	local ok, projectNew = openProject(projectOld.path, ignoreOpened=true)
+
+	if ok {
+		remove(app.projects, #app.projects)
+		insert(app.projects, projectIndex, projectNew)
+	} else {
+		insert(app.projects, projectIndex, projectOld)
+	}
+
+	guiState.refreshRecursively!("projects")
+	setCurrentProject(projectIndex, force=true)
 }
 
 export openRecentProject :: () {
@@ -3137,6 +3159,7 @@ export showMainMenu :: () {
 		{label="-"},
 		{label="Open project...",     name="open",        shortcut=ctrlText.."+O"},
 		{label="Open recent",         submenu=recentItems},
+		{label="Reopen project",      name="reopen"},
 		{label="-"},
 		{label="Save project",        name="save",        shortcut=ctrlText.."+S"},
 		{label="Save new project...", name="saveAs",      shortcut=ctrlText.."+Shift+S"},
@@ -3158,6 +3181,7 @@ export showMainMenu :: () {
 			case "open":        showOpenProjectDialog()
 			case "openLast":    openRecentProject()
 			case "openRecent":  openProject(cast(string)data)
+			case "reopen":      reopenCurrentProject()
 			case "clearRecent": app.recentProjects = {}
 			case "save":        if project.fileIsSaved  saveProject(project, project.path, overwrite=true)  else  showSaveProjectAsDialog()
 			case "saveAs":      showSaveProjectAsDialog()
