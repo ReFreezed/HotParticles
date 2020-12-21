@@ -210,7 +210,7 @@ export App :: struct {
 
 	maxBufferSize    = 16000, -- Default buffer size for ParticleSystem is 1000.
 	maxRecentFiles   = 15,
-	maxRecentFolders = 4,
+	maxRecentFolders = 4, -- @Depricated
 	maxChanges       = 200,
 
 	preferRelativePaths           = false, -- For file browser.
@@ -2606,7 +2606,7 @@ export openProject :: (fullPath:string, asPreview=false) -> (success:bool, proje
 	}
 	defer disconnectFromRemoteDirectory()
 
-	if not asPreview  addRecent(app.recentFolders, dir, app.maxRecentFolders)
+	if not asPreview  addRecent(app.recentFolders, dir, app.maxRecentFiles)
 
 	local ^ok, gotError, _app = loadWorkspace(filename)
 	if not ok {
@@ -3290,7 +3290,7 @@ export showOpenProjectDialog :: () {
 			popPanel()
 
 			local _, dir = fullPathObj.getDirectory!()
-			addRecent(app.recentFolders,  dir,      app.maxRecentFolders)
+			addRecent(app.recentFolders,  dir,      app.maxRecentFiles)
 			addRecent(app.recentProjects, fullPath, app.maxRecentFiles)
 
 			-- Make sure the loaded project replaces any single empty project.
