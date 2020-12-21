@@ -2905,7 +2905,7 @@ export drawCheckerBox :: (x,y,w,h:int) {
 
 
 
-export drawBoxGradient :: (x,y,w,h:int, bw=10) {
+export drawBoxGradient :: (x,y,w,h:int, bw=10, drawCenter=true) {
 	static quad11: LG.Quad = NULL
 	static quad12: LG.Quad = NULL
 	static quad13: LG.Quad = NULL
@@ -2934,7 +2934,9 @@ export drawBoxGradient :: (x,y,w,h:int, bw=10) {
 	LG.draw(imageBoxGradient, quad12, x,    y-bw, 0, w,  bw)
 	LG.draw(imageBoxGradient, quad13, x+w,  y-bw, 0, bw, bw)
 	LG.draw(imageBoxGradient, quad21, x-bw, y,    0, bw, h)
+	if drawCenter {
 	LG.draw(imageBoxGradient, quad22, x,    y,    0, w,  h)
+	}
 	LG.draw(imageBoxGradient, quad23, x+w,  y,    0, bw, h)
 	LG.draw(imageBoxGradient, quad31, x-bw, y+h,  0, bw, bw)
 	LG.draw(imageBoxGradient, quad32, x,    y+h,  0, w,  bw)

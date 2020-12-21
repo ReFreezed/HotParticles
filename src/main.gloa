@@ -2185,6 +2185,9 @@ local onDraw :: () {
 			}
 
 			if showAnimationFrames {
+				LG.setColor(0, 0, 0, .2)
+				gui.drawBoxGradient(x0, y0, math.round(iw*scale), math.round(ih*scale), bw=20, drawCenter=false)
+
 				LG.setColor(1, 1, 1)
 				LG.draw(image, x0, y0, 0, scale)
 
