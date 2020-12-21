@@ -939,8 +939,7 @@ export updateImageFilters :: () {
 		particleImages[it].image.setFilter!(filter, filter)
 	}
 
-	local system = project.systems[project.systemIndex]
-	system.currentImage.image.setFilter!(filter, filter) -- In case this is a custom texture.
+	for project.systems  it.currentImage.image.setFilter!(filter, filter) -- In case systems use custom textures.
 }
 
 
