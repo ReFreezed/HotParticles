@@ -381,7 +381,7 @@ export setupGuiFrames :: () {
 			guiState.separator!({ thick=true }),
 			guiState.inputText!({ name="fileDialog_directory", tooltip="Current folder (Right-click for recent)" }),
 			guiState.scrollable!({ name="fileDialog_itemsSrollable",
-				guiState.buttons!({ name="fileDialog_items", vertical=true, align=.LEFT, style=.LIST, buttonMinHeight=MEDIUM_BUTTON_HEIGHT }),
+				guiState.buttons!({ name="fileDialog_items", vertical=true, align=.LEFT, style=.LIST, allowFocus=true, buttonMinHeight=MEDIUM_BUTTON_HEIGHT }),
 			}),
 
 			guiState.separator!({ thick=true }),
@@ -637,7 +637,7 @@ export popPanel :: (nameForAssert="") -> (success:bool) {
 
 
 
-export FileDialogType :: enum { OPEN, SAVE, CHOOSE }
+export FileDialogType :: enum string { OPEN, SAVE, CHOOSE }
 
 local fileDialog_type                : FileDialogType = NULL
 local fileDialog_dir                 : string         = NULL
@@ -742,6 +742,11 @@ export setupGuiCallbacks :: () {
 			},
 			cbInput = [projectIndex] (filenameNew:string) {
 				if not filenameNew  return
+
+				if filenameNew == "." or filenameNew == ".." or filenameNew == "~" or findPattern(filenameNew, "[/\\]") {
+					setErrorText("Rename: Invalid filename '"..filenameNew)
+					return
+				}
 
 				local project = app.projects[projectIndex]
 				if not project.fileIsSaved  return

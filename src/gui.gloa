@@ -74,14 +74,16 @@ local SPECIAL_TAB_WIDTH     :: 32
 
 local TAB_BOTTOM_LINE_WIDTH :: 2
 
+local DRAG_RADIUS :: 8 -- Distance moved before dragging starts for real.
+
+local CONTEXT_MENU_MIN_WIDTH :: 150
+
 export TEXT_OPACITY                 :: .85
 local  HOVER_OUTLINE_OPACITY        :: .3
 local  HOVER_OUTLINE_OPACITY_STRONG :: .7
 local  DISABLED_OPACITY             :: .4
 
-local DRAG_RADIUS :: 8 -- Distance moved before dragging starts for real.
-
-local CONTEXT_MENU_MIN_WIDTH :: 150
+local COLOR_FOCUS: love.Color : {1,.5,0,.6}
 
 
 
@@ -281,7 +283,7 @@ local unregisterTree :: (state:State, el:Element, updateInteractions:bool) {
 
 
 
-export Style :: enum { NORMAL, CONTEXT_MENU, LIST }
+export Style :: enum string { NORMAL, CONTEXT_MENU, LIST }
 
 export Element :: struct {
 	active         = true,
@@ -324,7 +326,7 @@ export Widget :: struct {
 
 
 
-export Layout :: enum { DOCKED, FLOATING }
+export Layout :: enum string { DOCKED, FLOATING }
 
 export Frame :: struct {
 	using Element,
@@ -401,6 +403,7 @@ export Button :: struct {
 	value: any,
 	draggable   = false,
 	submenuIcon = false,
+	selected    = false, -- Used if Buttons.allowFocus is set.
 	system: System = NULL,
 
 	imageScale = 1.0,
@@ -411,7 +414,7 @@ export Button :: struct {
 	contentWidth  = 0,
 }
 
-export Alignment :: enum { CENTER, LEFT, RIGHT, TOP, BOTTOM }
+export Alignment :: enum string { CENTER, LEFT, RIGHT, TOP, BOTTOM }
 
 export Buttons :: struct {
 	using Widget,
@@ -419,6 +422,7 @@ export Buttons :: struct {
 	buttons: []Button,
 	align           = Alignment.CENTER,
 	vertical        = false,
+	allowFocus      = false,
 	buttonMinHeight = 0,
 
 	buttonWidth:  float, -- Round when necessary!
@@ -550,26 +554,56 @@ export onKeyPressed :: (state:State, key:LK.KeyConstant, scancode:LK.Scancode, i
 	--   close  eat    context menu
 	-- * blur   input  context menu + inner input focused
 
-	-- Key events for inputs (which may be in a context menu).
+	-- Key events for inputs (which may be in a context menu) or other focusables.
 	if state.focusId {
-		local input = cast(InputText) state.elementsById[state.focusId]
+		local widget = cast(Widget) state.elementsById[state.focusId]
 
-		-- Input outside context menu.
-		if state.contextMenus and not indexOf(state.contextMenus, input.frame) {
-			if key == "escape"  state.hideContextMenu!(mayDeactivateSubmenu=true)
-			return true
-		}
-
-		if triggerBeforeKeyPressedEvent(state, input, "", key, scancode, isRepeat) {
-			-- void
-		} elseif key == "escape" {
+		if key == "escape" {
 			state.blurFocus!(abort=true)
-		} elseif key == "return" or key == "kpenter" {
-			state.blurFocus!(abort=false)
-			triggerSubmitEvent(state, input)
-		} else {
-			input.field.keypressed!(key, scancode, isRepeat)
+
+		} elseif widget.type == InputText {
+			local input = cast(InputText) widget
+
+			-- Input outside context menu.
+			if state.contextMenus and not indexOf(state.contextMenus, input.frame) {
+				if key == "escape"  state.hideContextMenu!(mayDeactivateSubmenu=true)
+				return true
+			}
+
+			if triggerBeforeKeyPressedEvent(state, input, "", key, scancode, isRepeat) {
+				-- void
+			} elseif key == "return" or key == "kpenter" {
+				state.blurFocus!(abort=false)
+				triggerSubmitEvent(state, input)
+			} else {
+				input.field.keypressed!(key, scancode, isRepeat)
+			}
+
+		} elseif widget.type == Buttons {
+			local buttons = cast(Buttons) widget
+
+			if key == "return" or key == "kpenter" {
+				local found, i = indexWith(buttons.buttons, "selected", true)
+				if found  triggerDoublePressEvent(state, buttons, buttons.buttons[i].name, i) -- @Cleanup: Rename double-press events to something better, or use the submit event.
+
+			} elseif key == "down" or key == "up" {
+				if buttons.buttons {
+					local dir      = (key == "down") ? 1 : -1
+					local found, i = indexWith(buttons.buttons, "selected", true)
+
+					i = found
+						? ((i-1+dir) % #buttons.buttons + 1)
+						: (dir < 0 ? #buttons.buttons : 1)
+
+					for buttons.buttons  it.selected = (itIndex == i)
+
+					-- @Incomplete: Scroll button into view if we're in a scrollable.
+					triggerBeginEvent (state, buttons, buttons.buttons[i].name, i)
+					triggerActionEvent(state, buttons, buttons.buttons[i].name, i, .KEYBOARD, alsoEnd=true)
+				}
+			}
 		}
+
 		return true
 	}
 
@@ -664,19 +698,23 @@ export onKeyReleased :: (state:State, key:LK.KeyConstant, scancode:LK.Scancode) 
 
 export onTextInput :: (state:State, text:string) -> (handled:bool) {
 	if state.focusId {
-		local input = cast(InputText) state.elementsById[state.focusId]
+		local widget = cast(Widget) state.elementsById[state.focusId]
 
-		-- Input outside context menu.
-		if state.contextMenus and not indexOf(state.contextMenus, input.frame) {
+		if widget.type == InputText {
+			local input = cast(InputText) widget
+
+			-- Input outside context menu.
+			if state.contextMenus and not indexOf(state.contextMenus, input.frame) {
+				return true
+			}
+
+			if triggerBeforeTextInputEvent(state, input, "", text) {
+				-- void
+			} else {
+				input.field.textinput!(text)
+			}
 			return true
 		}
-
-		if triggerBeforeTextInputEvent(state, input, "", text) {
-			-- void
-		} else {
-			input.field.textinput!(text)
-		}
-		return true
 	}
 
 	return false
@@ -685,29 +723,48 @@ export onTextInput :: (state:State, text:string) -> (handled:bool) {
 export onMousePressed :: (state:State, mx,my:int, mbutton:int, presses:int) -> (handled:bool) {
 	updateLayoutIfNeeded(state)
 
-	if state.focusId {
-		if state.hoveredId == state.focusId {
-			local input = cast(InputText) state.elementsById[state.focusId]
+	if not state.focusId {
+		-- void
+
+	} elseif state.hoveredId == state.focusId {
+		local widget = cast(Widget) state.elementsById[state.focusId]
+
+		if widget.type == InputText {
+			local input = cast(InputText) widget
 			input.field.mousepressed!(mx-(input.layoutX+SPACING), my-(input.layoutY+getScrollOffset(input)), mbutton, presses)
-		} else {
-			state.blurFocus!(abort=false)
 		}
+
+	} else {
+		state.blurFocus!(abort=false)
 	}
 
 	for < frame: state.frames  if state.isInsideElement!(mx, my, frame) {
+		-- Focus inputs.
 		if (mbutton == 1 or mbutton == 2) and state.hoveredId and not state.focusId {
-			local input = cast(InputText) state.elementsById[state.hoveredId]
-			if input.type == InputText {
+			local widget = cast(Widget) state.elementsById[state.hoveredId]
+
+			if widget.type == InputText {
+				local input = cast(InputText) widget
 				state.setFocus!(input)
 				input.field.mousepressed!(mx-(input.layoutX+SPACING), my-(input.layoutY+getScrollOffset(input)), mbutton, presses)
+
+			} elseif widget.type == Buttons and (cast(Buttons)widget).allowFocus {
+				local buttons = cast(Buttons) widget
+				state.setFocus!(buttons)
 			}
 		}
 
+		-- Handle press on widget.
 		if mbutton == 1 and state.hoveredId {
 			local el      = state.elementsById[state.hoveredId]
 			local buttons = cast(Buttons) el
 			local slider  = cast(Slider)  el
 
+			if el.type == Buttons and buttons.allowFocus {
+				for buttons.buttons  it.selected = (itIndex == state.hoveredSubid)
+			}
+
+			-- Buttons which allow double press.
 			if el.type == Buttons and (buttons.style == .CONTEXT_MENU or buttons.style == .LIST) {
 				local handled = false
 				if presses % 2 == 0 {
@@ -718,9 +775,11 @@ export onMousePressed :: (state:State, mx,my:int, mbutton:int, presses:int) -> (
 					triggerActionEvent(state, buttons, buttons.buttons[state.hoveredSubid].name, state.hoveredSubid, .MOUSE, alsoEnd=true)
 				}
 
+			-- Double press on sliders.
 			} elseif el.type == Slider and presses % 2 == 0 and triggerDoublePressEvent(state, slider, "", 0) {
 				-- void
 
+			-- Press that activates.
 			} else {
 				state.activeId      = state.hoveredId
 				state.activeSubid   = state.hoveredSubid
@@ -740,17 +799,24 @@ export onMousePressed :: (state:State, mx,my:int, mbutton:int, presses:int) -> (
 					} else {
 						state.scrollbarHandleDragOffset = - (handleLen // 2)
 					}
+
 				}
 
 				state.onMouseMoved!(mx, my, 0, 0, begin=true)
 			}
 		}
 
-		if state.contextMenus and not indexOf(state.contextMenus, frame)  state.hideContextMenu!()
-		return true
+		-- A press elsewhere in the frame close menus, unless the frame is a menu itself.
+		if state.contextMenus and not indexOf(state.contextMenus, frame) {
+			state.hideContextMenu!()
+		}
+
+		return true -- We only match the first frame under the mouse cursor.
 	}
 
+	-- A press outside any frame close menus.
 	state.hideContextMenu!()
+
 	return state.activeId > 0 or state.getTopmostActiveModal!() ~= NULL
 }
 
@@ -760,17 +826,14 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int, begin=false, end=fals
 	local updateMouseCursor :: (state:State) {
 		using currentCursor
 
-		if (
-			state.hoveredId
-			and (state.focusId == state.hoveredId or state.elementsById[state.hoveredId].type == InputText)
-		) {
+		if state.hoveredId and state.elementsById[state.hoveredId].type == InputText {
 			currentCursor = I_BEAM
 
 		} elseif (
 			(state.activeId or state.hoveredId)
 			and state.elementsById[math.max(state.activeId, state.hoveredId)].type == Slider
 			and (cast(Slider) state.elementsById[math.max(state.activeId, state.hoveredId)]).limitName
-			and ((state.activeId and state.activeMod == .A) or (not state.activeId and getModifierKey() == .A))
+			and (state.activeId ? state.activeMod : getModifierKey()) == .A
 		) {
 			currentCursor = SIZE_VERTICAL
 
@@ -783,7 +846,8 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int, begin=false, end=fals
 
 	if state.focusId {
 		local input = cast(InputText) state.elementsById[state.focusId]
-		if input.field.mousemoved!(mx-(input.layoutX+SPACING), my-(input.layoutY+getScrollOffset(input))) {
+
+		if input.type == InputText and input.field.mousemoved!(mx-(input.layoutX+SPACING), my-(input.layoutY+getScrollOffset(input))) {
 			updateMouseCursor(state)
 			return
 		}
@@ -1083,7 +1147,9 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int, begin=false, end=fals
 export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int, cancel=false) {
 	if state.focusId {
 		local input = cast(InputText) state.elementsById[state.focusId]
-		if input.field.mousereleased!(mx, my, mbutton)  state.onMouseMoved!(mx, my, 0, 0)
+		if input.type == InputText and input.field.mousereleased!(mx, my, mbutton) {
+			state.onMouseMoved!(mx, my, 0, 0)
+		}
 	}
 
 	-- LMB.
@@ -1822,8 +1888,12 @@ export update :: (state:State, dt:float) {
 	}
 
 	if state.focusId {
-		local input = cast(InputText) state.elementsById[state.focusId]
-		input.field.update!(dt)
+		local widget = cast(Widget) state.elementsById[state.focusId]
+
+		if widget.type == InputText {
+			local input = cast(InputText) widget
+			input.field.update!(dt)
+		}
 	}
 
 }
@@ -1940,6 +2010,13 @@ local drawElement :: (state:State, el:Element) {
 				LG.rectangle(LG.DrawMode.FILL, barX+1, barY+1, SCROLLBAR_WIDTH-2, handleLen-2, SCROLLBAR_WIDTH//2-1)
 			}
 
+			-- Single-child focus.
+			if #cast([]Element)cast(any)scrollable == 1 and (cast([]Element)cast(any)scrollable)[1].id == state.focusId {
+			-- if #scrollable == 1 and scrollable[1].id == state.focusId { -- @Compiler @Incomplete: Make '#' work on array-like structs. @Compiler @Bug: scrollable[1] should give us an Element!
+				LG.setColor(COLOR_FOCUS)
+				LG.rectangle(LG.DrawMode.LINE, x-SPACING+.5, y+.5, w+SPACING-1, h-1)
+			}
+
 		case Section:
 			local section = cast(Section) el
 			local hidden  = app.hiddenSections[section.name]
@@ -2023,6 +2100,8 @@ local drawElement :: (state:State, el:Element) {
 			local isRadio = el.type == Radio
 			local isTabs  = el.type == Tabs
 
+			local focused = (buttons.id == state.focusId)
+
 			local x = buttons.layoutX
 			local y = buttons.layoutY
 			local w = buttons.layoutWidth
@@ -2030,12 +2109,12 @@ local drawElement :: (state:State, el:Element) {
 
 			local paddingX = isTabs ? 9 : SPACING
 
-			local bx1:   []int : {}
-			local bx2:   []int : {}
-			local by1:   []int : {}
-			local by2:   []int : {}
-			local bw:    []int : {}
-			local bh:    []int : {}
+			local bx1:   []int  : {}
+			local bx2:   []int  : {}
+			local by1:   []int  : {}
+			local by2:   []int  : {}
+			local bw:    []int  : {}
+			local bh:    []int  : {}
 			local faded: []bool : {}
 
 			-- Backgrounds.
@@ -2056,6 +2135,16 @@ local drawElement :: (state:State, el:Element) {
 				bw[itIndex]    = bx2[itIndex] - bx1[itIndex]
 				bh[itIndex]    = by2[itIndex] - by1[itIndex]
 				faded[itIndex] = false
+
+				if it.selected {
+					if focused
+						LG.setColor(COLOR_FOCUS)
+					else
+						LG.setColor(1, 1, 1, .3)
+					local extraW = (not buttons.vertical and itIndex > 1) ? 1 : 0
+					local extraH = (    buttons.vertical and itIndex > 1) ? 1 : 0
+					LG.rectangle(LG.DrawMode.FILL, bx1[itIndex]+1-extraW, by1[itIndex]+1-extraH, bw[itIndex]-2+extraW, bh[itIndex]-2+extraH, BUTTON_RADIUS)
+				}
 
 				local showBg = true
 
@@ -2314,7 +2403,10 @@ local drawElement :: (state:State, el:Element) {
 
 			-- Hover/focus effect.
 			if input.id == state.hoveredId or focused {
-				LG.setColor(1, 1, 1, HOVER_OUTLINE_OPACITY)
+				if focused
+					LG.setColor(COLOR_FOCUS)
+				else
+					LG.setColor(1, 1, 1, HOVER_OUTLINE_OPACITY)
 				LG.rectangle(LG.DrawMode.LINE, x-.5, y-.5, w+1, h+1, BUTTON_RADIUS)
 			}
 
@@ -2709,7 +2801,7 @@ export isOverGui :: (state:State, x,y:int) -> bool {
 export getElement :: (state:State, name:string, $T:Type) -> T {
 	return cast(T) state.elementsByName[name]
 }
-export getElement :: (state:State, name:string) -> Element { -- @Compiler @Incomplete: Default values for baked arguments.
+export getElement :: (state:State, name:string) -> Element { -- @Compiler @Incomplete: Default values for baked arguments (so we can use the above function always).
 	return state.elementsByName[name]
 }
 
@@ -2980,7 +3072,7 @@ local triggerSubmitEvent :: (state:State, el:Element) {
 	cb(el)
 }
 
-export ActionSource :: enum { UNKNOWN::0, MOUSE, KEYBOARD }
+export ActionSource :: enum string { UNKNOWN, MOUSE, KEYBOARD }
 
 local triggerBeforeActionEvent :: (state:State, widget:Widget, name:string, subid:int) -> (ignore:bool) {
 	local cb = cast((widget:Widget, subid:int) -> (ignore:bool)) state.onBeforeAction[name ?: widget.name]
@@ -3168,37 +3260,46 @@ export setFocus :: (state:State, name:string) {
 
 	state.setFocus!(input)
 }
-export setFocus :: (state:State, input:InputText) {
-	if state.focusId == input.id  return
+export setFocus :: (state:State, widget:Widget) {
+	if state.focusId == widget.id  return
 
 	state.blurFocus!(abort=false)
-	state.focusId = input.id
+	state.focusId = widget.id
 
-	if input.field == NULL {
-		input.field = InputField()
-		input.field.setFont!(fontNormal)
-		input.field.setWidth!(input.layoutWidth - 2*SPACING)
+	if widget.type == InputText {
+		local input = cast(InputText) widget
+
+		if input.field == NULL {
+			input.field = InputField()
+			input.field.setFont!(fontNormal)
+			input.field.setWidth!(input.layoutWidth - 2*SPACING)
+		}
+
+		input.field.setText!(input.value)
+		input.field.setScroll!(0)
 	}
-
-	input.field.setText!(input.value)
-	input.field.setScroll!(0)
 }
 
 export blurFocus :: (state:State, abort=false) {
 	if not state.focusId  return
 
-	local input = cast(InputText) state.elementsById[state.focusId]
-	local field = input.field
-	field.release!()
+	local widget = cast(Widget) state.elementsById[state.focusId]
 
-	if field.getText!() == input.value {
-		-- void
-	} elseif abort {
-		field.setText!(input.value)
-	} else {
-		triggerBeginEvent(state, input, "", 0, alsoEnsureEnabled=false)
-		input.value = field.getText!()
-		triggerActionEvent(state, input, "", 0, .UNKNOWN, alsoEnd=true)
+	if widget.type == InputText {
+		local input = cast(InputText) widget
+		local field = input.field
+
+		field.release!()
+
+		if field.getText!() == input.value {
+			-- void
+		} elseif abort {
+			field.setText!(input.value)
+		} else {
+			triggerBeginEvent(state, input, "", 0, alsoEnsureEnabled=false)
+			input.value = field.getText!()
+			triggerActionEvent(state, input, "", 0, .UNKNOWN, alsoEnd=true)
+		}
 	}
 
 	state.focusId = 0

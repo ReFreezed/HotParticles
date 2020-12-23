@@ -219,7 +219,7 @@ export App :: struct {
 
 
 
-export Movement :: enum  { NONE::0, CIRCLE, EIGHT, IRREGULAR }
+export Movement :: enum { NONE::0, CIRCLE, EIGHT, IRREGULAR }
 
 export Project :: struct {
 	-- Saved:
