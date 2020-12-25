@@ -400,6 +400,7 @@ export Button :: struct {
 	shortcut = "", -- Appears on the right side. Requires the parent's Buttons.align to be LEFT to work properly.
 	image    = "",
 	tooltip  = "",
+	enabled  = true,
 	value: any,
 	draggable   = false,
 	submenuIcon = false,
@@ -880,10 +881,15 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int, begin=false, end=fals
 				case Radio: !through
 				case Buttons:
 					local buttons = cast(Buttons) widget
+
 					if buttons.vertical
 						hoveredSubid = math.clamp(math.floor(1 + (my-buttons.layoutY-getScrollOffset(buttons)) / buttons.buttonHeight), 1, #buttons.buttons)
 					else
 						hoveredSubid = math.clamp(math.floor(1 + (mx-buttons.layoutX                         ) / buttons.buttonWidth ), 1, #buttons.buttons)
+
+					if not (buttons.buttons and buttons.buttons[hoveredSubid].enabled) {
+						state.hoveredId = 0
+					}
 
 				case Color:
 					local colorEl = cast(Color) widget
@@ -2150,7 +2156,7 @@ local drawElement :: (state:State, el:Element) {
 
 				if not (buttons.id == state.hoveredId and itIndex == state.hoveredSubid) {
 					faded[itIndex] = (isRadio or isTabs) and radio.index ~= itIndex
-					if buttons.style ~= .NORMAL
+					if buttons.style ~= .NORMAL or not it.enabled
 						showBg = false
 					elseif faded[itIndex]
 						LG.setColor(1, 1, 1, .1)
@@ -2187,8 +2193,6 @@ local drawElement :: (state:State, el:Element) {
 			}
 
 			-- Images.
-			LG.setColor(1, 1, 1)
-
 			for buttons.buttons  if it.image {
 				local image  = guiImages[it.image]
 				local iw, ih = image.getDimensions!()
@@ -2200,6 +2204,11 @@ local drawElement :: (state:State, el:Element) {
 					case .RIGHT: imageX = bx1[itIndex] + math.max(math.round(bw[itIndex] - paddingX - it.contentWidth), paddingX)
 					case:        imageX = bx1[itIndex] + math.max((bw[itIndex] - it.contentWidth) // 2,                 paddingX)
 				}
+
+				if not it.enabled
+					LG.setColor(1, 1, 1, .6)
+				else
+					LG.setColor(1, 1, 1, 1)
 
 				LG.draw(image,
 					imageX,
@@ -2299,7 +2308,9 @@ local drawElement :: (state:State, el:Element) {
 					}
 
 					local grey, a: float
-					if faded[itIndex]
+					if not it.enabled
+						grey, a = 1, .6
+					elseif faded[itIndex]
 						grey, a = 1, .8
 					elseif buttons.style == .CONTEXT_MENU
 						grey, a = 0, 1

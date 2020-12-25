@@ -2550,6 +2550,7 @@ export setCurrentProject :: (i:int, force=false) {
 
 	guiState.refreshRecursively!("projectSettings")
 	guiState.refreshRecursively!("systems")
+	guiState.refreshRecursively!("undoRedo")
 	guiState.refreshRecursively!("undoRedoText")
 
 	scheduleRecreateCanvases = true
@@ -3039,6 +3040,7 @@ export recordChange :: (name:string, label:string, data:any, onDo:(project:Proje
 	-- }
 
 	markEdited(project)
+	guiState.refreshRecursively!("undoRedo")
 	guiState.refreshRecursively!("undoRedoText")
 	scheduleSaveWorkspace()
 
@@ -3076,6 +3078,7 @@ export undo :: (silent=false) {
 	}
 
 	markEdited(project)
+	guiState.refreshRecursively!("undoRedo")
 	guiState.refreshRecursively!("undoRedoText")
 	scheduleSaveWorkspace()
 }
@@ -3108,6 +3111,7 @@ export redo :: () {
 	setActionText("Redo:  "..concatinate(labels, ", "), clearMessage=false)
 
 	markEdited(project)
+	guiState.refreshRecursively!("undoRedo")
 	guiState.refreshRecursively!("undoRedoText")
 	scheduleSaveWorkspace()
 }

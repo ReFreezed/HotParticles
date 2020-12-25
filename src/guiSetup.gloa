@@ -27,7 +27,7 @@ export setupGuiFrames :: () {
 
 			guiState.hbox!({
 				guiState.buttons!({ name="menuAndSettingsButtons", buttons={{name="menu",label="File"},{name="toggleProjectSettings",label="Project",tooltip="Toggle project settings"}} }),
-				guiState.buttons!({ buttons={{name="undo",image="iconLeft",tooltip="Undo  ("..ctrlText.."+Z)"},{name="redo",image="iconRight",tooltip="Redo  ("..ctrlText.."+Shift+Z)"}} }),
+				guiState.buttons!({ name="undoRedo", buttons={{name="undo",image="iconLeft",tooltip="Undo  ("..ctrlText.."+Z)"},{name="redo",image="iconRight",tooltip="Redo  ("..ctrlText.."+Shift+Z)"}} }),
 				guiState.text!({ name="undoRedoText", text="0/0", size=1 }),
 			}),
 			guiState.separator!({ thick=true }),
@@ -379,7 +379,10 @@ export setupGuiFrames :: () {
 			}),
 
 			guiState.separator!({ thick=true }),
-			guiState.inputText!({ name="fileDialog_directory", tooltip="Current folder (Right-click for recent)" }),
+			guiState.hbox!({
+				guiState.buttons!({ name="fileDialog_go", buttons={{name="fileDialog_goBack",image="iconLeft",tooltip="Go back"},{name="fileDialog_goForward",image="iconRight",tooltip="Go forward"}} }),
+				guiState.inputText!({ name="fileDialog_directory", tooltip="Current folder (Right-click for recent)", weight=1 }),
+			}),
 			guiState.scrollable!({ name="fileDialog_itemsSrollable",
 				guiState.buttons!({ name="fileDialog_items", vertical=true, align=.LEFT, style=.LIST, allowFocus=true, buttonMinHeight=MEDIUM_BUTTON_HEIGHT }),
 			}),
@@ -830,9 +833,11 @@ export setupGuiCallbacks :: () {
 		button.image    = app.showProjectSettings ? "iconUp" : "iconDown"
 		guiState.setActive!("projectSettings", app.showProjectSettings)
 	}
+
 	guiState.onAction.menu = (buttons:gui.Buttons, buttonIndex:int, source:gui.ActionSource) {
 		showMainMenu()
 	}
+
 	guiState.onAction.toggleProjectSettings = (buttons:gui.Buttons, buttonIndex:int, source:gui.ActionSource) {
 		app.showProjectSettings = not app.showProjectSettings
 		local _, button         = itemWith(buttons.buttons, "name", "toggleProjectSettings")
@@ -841,12 +846,19 @@ export setupGuiCallbacks :: () {
 	}
 
 	-- Undo/redo.
+	guiState.onRefresh.undoRedo = (buttons:gui.Buttons) {
+		local project              = app.projects[app.currentProjectIndex]
+		buttons.buttons[1].enabled = project.changeIndex > 1
+		buttons.buttons[2].enabled = project.changeIndex <= #project.changes
+	}
+
 	guiState.onAction.undo = (buttons:gui.Buttons, buttonIndex:int, source:gui.ActionSource) {
 		undo()
 	}
 	guiState.onAction.redo = (buttons:gui.Buttons, buttonIndex:int, source:gui.ActionSource) {
 		redo()
 	}
+
 	guiState.onRefresh.undoRedoText = (textEl:gui.Text) {
 		local project = app.projects[app.currentProjectIndex]
 
@@ -1818,6 +1830,7 @@ export setupGuiCallbacks :: () {
 		onEnd = (project:Project, system:System) {
 			if lastContinuousChange ~= NULL {
 				lastContinuousChange.bundle = project.changes[#project.changes].bundle
+				guiState.refreshRecursively!("undoRedo")
 				guiState.refreshRecursively!("undoRedoText")
 			}
 		}
@@ -2558,8 +2571,12 @@ export setupGuiCallbacks :: () {
 	--==============================================================
 	do {
 		local Item :: struct { isDir=false, name="" }
+
 		static dirCurrent:  string = NULL
 		static dirFallback: string = NULL
+
+		static dirHistory: []string = NULL
+		static dirHistoryIndex: int = NULL
 
 		local setSelectionToBasename :: (input:gui.InputText, filename:string) {
 			local basename = splitBasenameAndExtension(filename)
@@ -2601,6 +2618,10 @@ export setupGuiCallbacks :: () {
 					break
 				}
 			}
+
+			dirHistory      = {dirCurrent}
+			dirHistoryIndex = 1
+			guiState.refreshRecursively!("fileDialog_go")
 		}
 
 		guiState.onInactive.fileDialog = (frame:gui.Frame) {
@@ -2618,6 +2639,7 @@ export setupGuiCallbacks :: () {
 		guiState.onAction.fileDialog_bookmarks = (buttons:gui.Buttons, buttonIndex:int, source:gui.ActionSource) {
 			dirCurrent = app.bookmarkedFolders[buttonIndex]
 			guiState.refreshRecursively!("fileDialog_items")
+			recordDirectoryHistory(dirCurrent)
 		}
 
 		guiState.onOption.fileDialog_bookmarks = (buttons:gui.Buttons, indexToRemove:int) {
@@ -2638,6 +2660,42 @@ export setupGuiCallbacks :: () {
 			guiState.refreshRecursively!("fileDialog_bookmarks")
 		}
 
+		-- Navigation.
+		local recordDirectoryHistory :: (dir:string) {
+			if dir == dirHistory[dirHistoryIndex]  return
+
+			for #dirHistory, dirHistoryIndex+1, -1  dirHistory[it] = NULL
+
+			insert(dirHistory, dirCurrent)
+			dirHistoryIndex = #dirHistory
+
+			guiState.refreshRecursively!("fileDialog_go")
+		}
+
+		guiState.onRefresh.fileDialog_go = (buttons:gui.Buttons) {
+			buttons.buttons[1].enabled = dirHistoryIndex > 1
+			buttons.buttons[2].enabled = dirHistoryIndex < #dirHistory
+		}
+
+		guiState.onAction.fileDialog_goBack = (buttons:gui.Buttons, buttonIndex:int, source:gui.ActionSource) {
+			if dirHistoryIndex == 1  return
+
+			dirHistoryIndex -= 1
+			dirCurrent       = dirHistory[dirHistoryIndex]
+
+			guiState.refreshRecursively!("fileDialog_items")
+			guiState.refreshRecursively!("fileDialog_go")
+		}
+		guiState.onAction.fileDialog_goForward = (buttons:gui.Buttons, buttonIndex:int, source:gui.ActionSource) {
+			if dirHistoryIndex == #dirHistory  return
+
+			dirHistoryIndex += 1
+			dirCurrent       = dirHistory[dirHistoryIndex]
+
+			guiState.refreshRecursively!("fileDialog_items")
+			guiState.refreshRecursively!("fileDialog_go")
+		}
+
 		-- Directory.
 		guiState.onRefresh.fileDialog_directory = (input:gui.InputText, _:int) {
 			input.value = dirCurrent
@@ -2649,12 +2707,14 @@ export setupGuiCallbacks :: () {
 
 			dirCurrent = dirObj.toString!()
 			guiState.refreshRecursively!("fileDialog_items")
+			recordDirectoryHistory(dirCurrent)
 		}
 
 		guiState.onOption.fileDialog_directory = (input:gui.InputText, _:int) {
 			showRecentFilesContextMenu("Recent folders", app.recentFolders, (dir:string) {
 				dirCurrent = dir
 				guiState.refreshRecursively!("fileDialog_items")
+				recordDirectoryHistory(dirCurrent)
 			})
 		}
 
@@ -2679,6 +2739,7 @@ export setupGuiCallbacks :: () {
 				}
 			}
 			defer disconnectFromRemoteDirectory()
+
 			dirCurrent  = dir
 			dirFallback = dir -- Last successfully connected directory.
 
@@ -2813,6 +2874,7 @@ export setupGuiCallbacks :: () {
 
 			dirCurrent = dirObj.toString!()
 			guiState.refreshRecursively!(buttons)
+			recordDirectoryHistory(dirCurrent)
 		}
 
 		static autocompletePrefix = "" -- @Incomplete: Reset this on input blur.
@@ -2916,6 +2978,8 @@ export setupGuiCallbacks :: () {
 				input.value = fileDialog_filename
 
 				guiState.refreshRecursively!("fileDialog_items")
+				recordDirectoryHistory(dirCurrent)
+
 				guiState.setFocus!(input)
 				input.field.selectAll!()--setSelectionToBasename(input, fileDialog_filename)
 
