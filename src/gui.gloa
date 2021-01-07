@@ -36,6 +36,7 @@
 	onMousePressed, onMouseMoved, onMouseReleased, onMouseWheel
 	pressButton
 	refresh, refreshRecursively, refreshAll
+	scrollTo, scrollIntoView
 	setActive
 	setFocus, blurFocus
 	showMenu, showContextMenu, showContextMenuWithInput, hideContextMenu
@@ -197,6 +198,7 @@ export State :: struct {
 	refresh :: _refresh,
 	refreshAll :: _refreshAll,
 	refreshRecursively :: _refreshRecursively,
+	scrollIntoView :: _scrollIntoView,
 	scrollTo :: _scrollTo,
 	setActive :: _setActive,
 	setFocus :: _setFocus,
@@ -234,6 +236,7 @@ local _pressButton :: pressButton
 local _refresh :: refresh
 local _refreshAll :: refreshAll
 local _refreshRecursively :: refreshRecursively
+local _scrollIntoView :: scrollIntoView
 local _scrollTo :: scrollTo
 local _setActive :: setActive
 local _setFocus :: setFocus
@@ -424,6 +427,7 @@ export Buttons :: struct {
 	align           = Alignment.CENTER,
 	vertical        = false,
 	allowFocus      = false,
+	selectMultiple  = false, -- Used if Buttons.allowFocus is set.
 	buttonMinHeight = 0,
 
 	buttonWidth:  float, -- Round when necessary!
@@ -588,20 +592,35 @@ export onKeyPressed :: (state:State, key:LK.KeyConstant, scancode:LK.Scancode, i
 				if found  triggerDoublePressEvent(state, buttons, buttons.buttons[i].name, i) -- @Cleanup: Rename double-press events to something better, or use the submit event.
 
 			} elseif key == "down" or key == "up" {
-				if buttons.buttons {
-					local dir      = (key == "down") ? 1 : -1
-					local found, i = indexWith(buttons.buttons, "selected", true)
+				if not buttons.buttons  return true
 
-					i = found
-						? ((i-1+dir) % #buttons.buttons + 1)
-						: (dir < 0 ? #buttons.buttons : 1)
+				local dir      = (key == "down") ? 1 : -1
+				local found, i = indexWith(buttons.buttons, "selected", true)
 
-					for buttons.buttons  it.selected = (itIndex == i)
+				i = found
+					? ((i-1+dir) % #buttons.buttons + 1)
+					: (dir < 0 ? #buttons.buttons : 1)
 
-					-- @Incomplete: Scroll button into view if we're in a scrollable.
-					triggerBeginEvent (state, buttons, buttons.buttons[i].name, i)
-					triggerActionEvent(state, buttons, buttons.buttons[i].name, i, .KEYBOARD, alsoEnd=true)
-				}
+				for buttons.buttons  it.selected = (itIndex == i)
+				state.scrollIntoView!(buttons, i)
+
+				triggerBeginEvent (state, buttons, buttons.buttons[i].name, i)
+				triggerActionEvent(state, buttons, buttons.buttons[i].name, i, .KEYBOARD, alsoEnd=true)
+
+			} elseif key == "pageup" or key == "pagedown" {
+				-- @Incomplete
+
+			} elseif key == "end" or key == "home" {
+				local iTarget  = (key == "end") ? #buttons.buttons : 1
+				local found, i = indexWith(buttons.buttons, "selected", true)
+
+				if found and i == iTarget  return true
+
+				for buttons.buttons  it.selected = (itIndex == iTarget)
+				state.scrollIntoView!(buttons, iTarget)
+
+				triggerBeginEvent (state, buttons, buttons.buttons[i].name, i)
+				triggerActionEvent(state, buttons, buttons.buttons[i].name, i, .KEYBOARD, alsoEnd=true)
 			}
 		}
 
@@ -761,14 +780,25 @@ export onMousePressed :: (state:State, mx,my:int, mbutton:int, presses:int) -> (
 			local buttons = cast(Buttons) el
 			local slider  = cast(Slider)  el
 
+			local mayDoublePress = (presses % 2 == 0)
+
 			if el.type == Buttons and buttons.allowFocus {
-				for buttons.buttons  it.selected = (itIndex == state.hoveredSubid)
+				if buttons.selectMultiple and LK.isDown(lctrl,rctrl) {
+					local button    = buttons.buttons[state.hoveredSubid]
+					button.selected = not button.selected
+					mayDoublePress  = false
+					-- @Incomplete: Maybe don't trigger action event like normal when deselecting?
+				} else {
+					for buttons.buttons {
+						it.selected = (itIndex == state.hoveredSubid)
+					}
+				}
 			}
 
 			-- Buttons which allow double press.
 			if el.type == Buttons and (buttons.style == .CONTEXT_MENU or buttons.style == .LIST) {
 				local handled = false
-				if presses % 2 == 0 {
+				if mayDoublePress {
 					handled = triggerDoublePressEvent(state, buttons, buttons.buttons[state.hoveredSubid].name, state.hoveredSubid)
 				}
 				if not handled {
@@ -777,7 +807,7 @@ export onMousePressed :: (state:State, mx,my:int, mbutton:int, presses:int) -> (
 				}
 
 			-- Double press on sliders.
-			} elseif el.type == Slider and presses % 2 == 0 and triggerDoublePressEvent(state, slider, "", 0) {
+			} elseif el.type == Slider and mayDoublePress and triggerDoublePressEvent(state, slider, "", 0) {
 				-- void
 
 			-- Press that activates.
@@ -3272,7 +3302,8 @@ export setFocus :: (state:State, name:string) {
 	state.setFocus!(input)
 }
 export setFocus :: (state:State, widget:Widget) {
-	if state.focusId == widget.id  return
+	if not state.isElementVisible!(widget)  return
+	if state.focusId == widget.id           return
 
 	state.blurFocus!(abort=false)
 	state.focusId = widget.id
@@ -3749,6 +3780,12 @@ export scrollTo :: (scrollable:Scrollable, scroll:int, limit=false) {
 
 export scrollTo :: (state:State, scrollable:Scrollable, scroll:int, limit=false) {
 	scrollTo(scrollable, scroll, limit)
+}
+
+
+
+export scrollIntoView :: (state:State, el:Element, subid:int) {
+	-- @Incomplete
 }
 
 

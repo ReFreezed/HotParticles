@@ -661,7 +661,7 @@ export showFileDialog :: (type:FileDialogType,
 	onHighlight: type_of(fileDialog_onHighlight) = NULL,
 	onChoose:    type_of(fileDialog_onChoose)    = NULL,
 	onClose:     type_of(fileDialog_onClose)     = NULL,
-	filenamePattern="", filenameHidePattern="", floating=false, chooseFolder=false, relativeTo=""
+	filenamePattern="", filenameHidePattern="", floating=false, chooseFolder=false, relativeTo="", multiple=false
 ) {
 	fileDialog_type                = type
 	fileDialog_dir                 = dir
@@ -676,7 +676,8 @@ export showFileDialog :: (type:FileDialogType,
 
 	fileDialog_lastDirectory = dir ?: fileDialog_lastDirectory
 
-	guiState.getElement!("fileDialog_title", gui.Text).text = title
+	guiState.getElement!("fileDialog_title", gui.Text).text              = title
+	guiState.getElement!("fileDialog_items", gui.Buttons).selectMultiple = multiple
 
 	local frame = guiState.getElement!("fileDialog", gui.Frame)
 	if floating {
@@ -2843,8 +2844,22 @@ export setupGuiCallbacks :: () {
 
 			if item.isDir and (item.name == ".." or not fileDialog_chooseFolder)  return
 
-			local input = guiState.getElement!("fileDialog_filename", gui.InputText)
-			input.value = item.name
+			do {
+				local itemNames: []string
+
+				for buttons.buttons  if it.selected {
+					local item = cast(Item) it.value !shadow
+					if item.isDir and (item.name == ".." or not fileDialog_chooseFolder)  continue
+					insert(itemNames, item.name)
+				}
+
+				local input = guiState.getElement!("fileDialog_filename", gui.InputText)
+				input.value = (
+					#itemNames == 0 ? ""           :
+					#itemNames == 1 ? itemNames[1] :
+					concatinate(itemNames, '"', '" "', '"')
+				)
+			}
 
 			if fileDialog_onHighlight ~= NULL {
 				local pathObj = Path(dirCurrent)
@@ -2947,24 +2962,74 @@ export setupGuiCallbacks :: () {
 			local input = guiState.getElement!("fileDialog_filename", gui.InputText)
 			input.value = trim(input.value)
 
-			if input.value == "." and fileDialog_chooseFolder {
-				if fileDialog_onChoose ~= NULL {
-					local pathObj = Path(dirCurrent)
-					fileDialog_onChoose(makeRelativeOrClone(pathObj), pathObj)
+			local paths: []string
+
+			if find(input.value, '"') {
+				local ptr = 1
+
+				while ptr <= #input.value {
+					if input.value[ptr] == !char '"' {
+						local found, i1, i2 = findPattern(input.value, '"%s*', ptr+1)
+						if not found {
+							guiState.setFocus!(input)
+							input.field.selectAll!()
+							return -- @UX: Show error message?
+						}
+						insert(paths, getSubstring(input.value, ptr+1, i1-1))
+						ptr = i2 + 1
+					} else {
+						local found, i1, i2, filename = findPattern(input.value, '^([^%s"]+)%s*', ptr)
+						if not found {
+							guiState.setFocus!(input)
+							input.field.selectAll!()
+							return -- @UX: Show error message?
+						}
+						insert(paths, cast(string)filename)
+						ptr = i2 + 1
+					}
 				}
-				return
+
+			} else {
+				insert(paths, input.value)
 			}
 
-			local dotdot  = (input.value == ".." or findPattern(input.value, "[/\\]%.%.$"))
-			local pathObj = Path(input.value)
-			input.value   = pathObj.toString!()
-
-			if pathObj.isEmpty!() {
-				guiState.setFocus!("fileDialog_filename")
-				return
+			if #paths > 1 and not guiState.getElement!("fileDialog_items", gui.Buttons).selectMultiple {
+				guiState.setFocus!(input)
+				input.field.selectAll!()
+				return -- @UX: Show error message?
 			}
 
-			pathObj.prepend!(dirCurrent) -- Fails if pathObj is absolute.
+			local gotDotdot = false
+			local pathObjs: []Path
+
+			for paths {
+				if it == "." {
+					if not fileDialog_chooseFolder {
+						guiState.setFocus!(input)
+						input.field.selectAll!()
+						return -- @UX: Show error message?
+					}
+					insert(pathObjs, Path(dirCurrent))
+
+				} else {
+					if it == ".." or findPattern(it, "[/\\]%.%.$") {
+						gotDotdot = true
+					}
+
+					local pathObj = Path(it)
+
+					if pathObj.isEmpty!() {
+						guiState.setFocus!(input)
+						input.field.selectAll!()
+						return -- @UX: Show error message?
+					}
+
+					pathObj.prepend!(dirCurrent) -- Fails if pathObj is absolute.
+					insert(pathObjs, pathObj)
+				}
+			}
+
+			if not pathObjs  return
 
 			local tryNavigate :: (pathObj:Path) -> (success:bool) {
 				local path = pathObj.toString!()
@@ -2986,21 +3051,27 @@ export setupGuiCallbacks :: () {
 				return true
 			}
 
-			if not fileDialog_chooseFolder or dotdot {
-				if tryNavigate(pathObj)  return
-				if dotdot                return -- Never trigger onChoose with ".."!
+			if #pathObjs == 1 and (not fileDialog_chooseFolder or gotDotdot) and tryNavigate(pathObjs[1]) {
+				return
 			}
 
-			if fileDialog_type ~= .OPEN {
-				local ok, filename = pathObj.getFilename!()
+			if gotDotdot {
+				-- Never trigger onChoose with ".."!
+				guiState.setFocus!(input)
+				input.field.selectAll!()
+				return -- @UX: Show error message?
+			}
+
+			if fileDialog_type ~= .OPEN  for pathObjs {
+				local ok, filename = it.getFilename!()
 				if not ok {
-					guiState.setFocus!("fileDialog_filename")
+					guiState.setFocus!(input)
 					return
 				}
 			}
 
-			if fileDialog_onChoose ~= NULL {
-				fileDialog_onChoose(makeRelativeOrClone(pathObj), pathObj)
+			if fileDialog_onChoose ~= NULL  for pathObjs {
+				fileDialog_onChoose(makeRelativeOrClone(it), it)
 			}
 		}
 	}

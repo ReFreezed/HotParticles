@@ -2383,7 +2383,8 @@ local onDraw :: () {
 		local dist = fontLarge.getHeight!() + 5
 
 		if project.preview {
-			drawGuiText("PREVIEW", 0, math.HUGE, 10)
+			local _, filename = Path(project.path).getFilename!()
+			drawGuiText("Preview of "..filename, 0, math.HUGE, 10)
 		}
 		if anyFiniteEmitter and anyInfiniteEmitter {
 			drawGuiText("Warning: Mixing infinite and finite emitters", 0, math.HUGE, 10+1*dist)
@@ -3303,21 +3304,28 @@ export showOpenProjectDialog :: () {
 	local ok, dir = fullPathObj.getDirectoryAndFilename!()
 	if not ok  dir = fileDialog_lastDirectory ?: getSaveDirectory().."/projects"
 
-	showFileDialog(.OPEN, "Open project", dir, "", filenamePattern="%.hotparticles$",
+	local popped = false
+
+	showFileDialog(.OPEN, "Open project", dir, "", filenamePattern="%.hotparticles$", multiple=true,
 		onHighlight = (pathObj:Path, fullPathObj:Path) {
 			loadPreview(fullPathObj.toString!())
 		},
-		onChoose = (pathObj:Path, fullPathObj:Path) {
+		onChoose = [popped] (pathObj:Path, fullPathObj:Path) {
 			local fullPath    = fullPathObj.toString!()
 			local ok, project = openProject(fullPath)
+
 			if not ok {
 				local input = guiState.getElement!("fileDialog_filename", gui.InputText)
 				guiState.setFocus!(input)
 				return
 			}
 
-			project.preview = false -- In case the project was already opened as a preview (which it probably always is).
-			popPanel()
+			project.preview = false -- In case the project was already opened as a preview (which it probably always is, at least if only one project was chosen).
+
+			if not popped {
+				popped = true
+				popPanel() -- @Robustness: Preferably we'd like to process all paths, if multiple were chosen, before popping the panel.
+			}
 
 			local _, dir = fullPathObj.getDirectory!()
 			addRecent(app.recentFolders,  dir,      app.maxRecentFiles)
@@ -3333,7 +3341,6 @@ export showOpenProjectDialog :: () {
 		},
 		onClose = () {
 			unloadPreview()
-			projectBeingSaved = NULL
 		}
 	)
 }
