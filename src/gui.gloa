@@ -2090,8 +2090,7 @@ local drawElement :: (state:State, el:Element) {
 			}
 
 			-- Single-child focus.
-			if #cast([]Element)cast(any)scrollable == 1 and (cast([]Element)cast(any)scrollable)[1].id == state.focusId {
-			-- if #scrollable == 1 and scrollable[1].id == state.focusId { -- @Compiler @Incomplete: Make '#' work on array-like structs. @Compiler @Bug: scrollable[1] should give us an Element!
+			if #scrollable == 1 and scrollable[1].id == state.focusId {
 				LG.setColor(COLOR_FOCUS)
 				LG.rectangle(LG.DrawMode.LINE, x-SPACING+.5, y+.5, w+SPACING-1, h-1)
 			}
