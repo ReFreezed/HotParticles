@@ -601,8 +601,8 @@ export onKeyPressed :: (state:State, key:LK.KeyConstant, scancode:LK.Scancode, i
 				local found, i = indexWith(buttons.buttons, "selected", true)
 
 				i = found
-					? ((i-1+dir) % #buttons.buttons + 1)
-					: (dir < 0 ? #buttons.buttons : 1)
+					? math.clamp(i+dir, 1, #buttons.buttons)--((i-1+dir) % #buttons.buttons + 1)
+					: 1--(dir < 0 ? #buttons.buttons : 1)
 
 				local anyChange = false
 
@@ -3825,15 +3825,54 @@ export scrollTo :: (state:State, scrollable:Scrollable, scroll:int, limit=false)
 	scrollTo(scrollable, scroll, limit)
 }
 
-
-
 export scrollIntoView :: (state:State, el:Element, subid:int) {
-	-- @Incomplete
+	updateLayoutIfNeeded(state)
+
+	local scrollCurrent = getScrollOffset(el)
+	local targetY1      = el.layoutY + scrollCurrent
+	local targetY2      = targetY1 + el.layoutHeight
+
+	if el.type == Buttons {
+		local buttons = cast(Buttons) el
+		if buttons.vertical {
+			targetY2 = math.round(targetY1+(subid  )*buttons.buttonHeight) -- Note: We change targetY1 on the next line!
+			targetY1 = math.round(targetY1+(subid-1)*buttons.buttonHeight)
+		}
+	}
+
+	while true {
+		el = el.parent
+		if el == NULL  break
+
+		if el.type == Scrollable {
+			local scrollable = cast(Scrollable) el
+			local scrollOld  = scrollable.scrollTarget
+			scrollCurrent    = scrollCurrent - scrollOld
+
+			local scrollDelta = 0
+			local y1          = scrollable.layoutY + scrollCurrent                           + (SCROLLABLE_PADDING + SPACING) -- @UX: The top of the target element is partially behind the scrollable's shadow. Not great!
+			local y2          = scrollable.layoutY + scrollCurrent + scrollable.layoutHeight - (SCROLLABLE_PADDING + SPACING)
+
+			if targetY2 > y2  scrollDelta = y2 - targetY2
+			if targetY1 < y1  scrollDelta = y1 - targetY1
+
+			if scrollDelta {
+				scrollTo(scrollable, scrollable.scrollTarget+scrollDelta, limit=true)
+				scrollDelta = scrollable.scrollTarget - scrollOld
+
+				scrollCurrent = scrollCurrent + scrollDelta
+				targetY1      = targetY1      + scrollDelta
+				targetY2      = targetY2      + scrollDelta
+			}
+		}
+	}
 }
 
 
 
 local getVisibleAreaInLocalSpace :: (state:State, el0:Element) -> (x,y,w,h:int) {
+	updateLayoutIfNeeded(state)
+
 	-- @Incomplete: Check isElementVisible().
 	local el     = el0
 	local x1     = el.layoutX
@@ -3852,7 +3891,7 @@ local getVisibleAreaInLocalSpace :: (state:State, el0:Element) -> (x,y,w,h:int) 
 			y1                = math.max(y1, scrollable.layoutY)
 			x2                = math.min(x2, scrollable.layoutX+scrollable.layoutWidth)
 			y2                = math.min(y2, scrollable.layoutY+scrollable.layoutHeight)
-			offset           += math.round(scrollable.scroll)
+			offset           += scrollable.scrollTarget
 		}
 	}
 

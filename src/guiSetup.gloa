@@ -2613,9 +2613,12 @@ export setupGuiCallbacks :: () {
 					local item = cast(Item) button.value
 					if item.name ~= fileDialog_filename  continue
 
+					button.selected = true
+
 					local x, y, w, h      = guiState.getButtonLayout!(itemsButtons, itIndex)
 					local itemsScrollable = guiState.getElement!("fileDialog_itemsSrollable", gui.Scrollable)
 					guiState.scrollTo!(itemsScrollable, -math.round(y-itemsScrollable.layoutY-(itemsScrollable.layoutHeight-h)/2), limit=true)
+
 					break
 				}
 			}

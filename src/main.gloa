@@ -3249,6 +3249,7 @@ export showSaveProjectAsDialog :: () {
 		onHighlight = (pathObj:Path, fullPathObj:Path) {
 			loadPreview(pathObj.toString!())
 
+			--[[
 			local ok, filename = pathObj.getFilename!()
 			if ok {
 				local basename, ext = splitBasenameAndExtension(filename)
@@ -3256,6 +3257,7 @@ export showSaveProjectAsDialog :: () {
 				guiState.setFocus!(input)
 				input.field.setSelection!(0, utf8.getLength(basename))
 			}
+			--]]
 		},
 		onChoose = (pathObj:Path, fullPathObj:Path) {
 			local _, filename = fullPathObj.getFilename!()
