@@ -30,6 +30,7 @@
 	drawChecker, drawCheckerBox
 	getElement, getElementAt, getWidgetAt, findParent
 	getTopmostActiveModal
+	getVisibleAreaInLocalSpace
 	isElementVisible
 	isInsideElement, isOverGui
 	onKeyPressed, onKeyReleased, onTextInput
@@ -181,6 +182,7 @@ export State :: struct {
 	getElementAt :: _getElementAt,
 	getScrollOffset :: _getScrollOffset,
 	getTopmostActiveModal :: _getTopmostActiveModal,
+	getVisibleAreaInLocalSpace :: _getVisibleAreaInLocalSpace,
 	getWidgetAt :: _getWidgetAt,
 	hideContextMenu :: _hideContextMenu,
 	isElementVisible :: _isElementVisible,
@@ -219,6 +221,7 @@ local _getElement :: getElement
 local _getElementAt :: getElementAt
 local _getScrollOffset :: getScrollOffset
 local _getTopmostActiveModal :: getTopmostActiveModal
+local _getVisibleAreaInLocalSpace :: getVisibleAreaInLocalSpace
 local _getWidgetAt :: getWidgetAt
 local _hideContextMenu :: hideContextMenu
 local _isElementVisible :: isElementVisible
@@ -601,26 +604,66 @@ export onKeyPressed :: (state:State, key:LK.KeyConstant, scancode:LK.Scancode, i
 					? ((i-1+dir) % #buttons.buttons + 1)
 					: (dir < 0 ? #buttons.buttons : 1)
 
-				for buttons.buttons  it.selected = (itIndex == i)
+				local anyChange = false
+
+				for buttons.buttons {
+					local isSelected = (itIndex == i)
+
+					if it.selected ~= isSelected {
+						it.selected = isSelected
+						anyChange   = true
+					}
+				}
 				state.scrollIntoView!(buttons, i)
+
+				if not anyChange  return true
 
 				triggerBeginEvent (state, buttons, buttons.buttons[i].name, i)
 				triggerActionEvent(state, buttons, buttons.buttons[i].name, i, .KEYBOARD, alsoEnd=true)
 
 			} elseif key == "pageup" or key == "pagedown" {
-				-- @Incomplete
+				if not buttons.buttons  return true
+
+				local dir          = (key == "pagedown") ? 1 : -1
+				local x, y, w, h   = state.getVisibleAreaInLocalSpace!(buttons)
+				local visibleCount = math.max(math.floor(h/buttons.buttonHeight), 1)
+				local step         = math.max(visibleCount-1, 1)
+				local found, i     = indexWith(buttons.buttons, "selected", true)
+
+				i = found
+					? math.clamp(i+step*dir, 1, #buttons.buttons)
+					: 1
+
+				local anyChange = false
+
+				for buttons.buttons {
+					local isSelected = (itIndex == i)
+
+					if it.selected ~= isSelected {
+						it.selected = isSelected
+						anyChange   = true
+					}
+				}
+				state.scrollIntoView!(buttons, i)
+
+				if not anyChange  return true
+
+				triggerBeginEvent (state, buttons, buttons.buttons[i].name, i)
+				triggerActionEvent(state, buttons, buttons.buttons[i].name, i, .KEYBOARD, alsoEnd=true)
 
 			} elseif key == "end" or key == "home" {
+				if not buttons.buttons  return true
+
 				local iTarget  = (key == "end") ? #buttons.buttons : 1
 				local found, i = indexWith(buttons.buttons, "selected", true)
 
-				if found and i == iTarget  return true
+				if found and i == iTarget  return true -- @Incomplete: Don't return if the target button is selected, but there are also others selected.
 
 				for buttons.buttons  it.selected = (itIndex == iTarget)
 				state.scrollIntoView!(buttons, iTarget)
 
-				triggerBeginEvent (state, buttons, buttons.buttons[i].name, i)
-				triggerActionEvent(state, buttons, buttons.buttons[i].name, i, .KEYBOARD, alsoEnd=true)
+				triggerBeginEvent (state, buttons, buttons.buttons[iTarget].name, iTarget)
+				triggerActionEvent(state, buttons, buttons.buttons[iTarget].name, iTarget, .KEYBOARD, alsoEnd=true)
 			}
 		}
 
@@ -3786,6 +3829,34 @@ export scrollTo :: (state:State, scrollable:Scrollable, scroll:int, limit=false)
 
 export scrollIntoView :: (state:State, el:Element, subid:int) {
 	-- @Incomplete
+}
+
+
+
+local getVisibleAreaInLocalSpace :: (state:State, el0:Element) -> (x,y,w,h:int) {
+	-- @Incomplete: Check isElementVisible().
+	local el     = el0
+	local x1     = el.layoutX
+	local y1     = el.layoutY
+	local x2     = x1 + el.layoutWidth
+	local y2     = y1 + el.layoutHeight
+	local offset = 0
+
+	while true {
+		el = el.parent
+		if el == NULL  break
+
+		if el.type == Scrollable {
+			local scrollable  = cast(Scrollable) el
+			x1                = math.max(x1, scrollable.layoutX)
+			y1                = math.max(y1, scrollable.layoutY)
+			x2                = math.min(x2, scrollable.layoutX+scrollable.layoutWidth)
+			y2                = math.min(y2, scrollable.layoutY+scrollable.layoutHeight)
+			offset           += math.round(scrollable.scroll)
+		}
+	}
+
+	return x1-el0.layoutX, y1-el0.layoutY+offset, x2-x1, y2-y1
 }
 
 
