@@ -1,6 +1,20 @@
 Changelog
 Hot Particles
 
+v1.7 (2021-01-10)
+- Project files can be renamed from the tab context menu.
+- Added menu button for reopening the current project.
+- Added shortcuts for reordering systems and projects.
+- Less undo history entries are created for sliders when nudging with the arrow keys.
+- Fixed 'pixelate textures' visually only updating the current system's texture if custom textures are used.
+- Animation editor: Frame size being 0 now means full image length.
+- Animation editor: Showing image borders.
+- File browser: Keyboard navigation for file list.
+- File browser: Press tab to auto-complete filename.
+- File browser: Hold ctrl to select multiple project files to open.
+- File browser: Showing a better initial folder in some cases.
+- File browser: Folder back/forward buttons.
+
 v1.6 (2020-08-22)
 - Added custom visual rectangular regions.
 - Added preference for the initial system in new projects to be completely empty.

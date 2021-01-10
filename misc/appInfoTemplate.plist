@@ -18,8 +18,9 @@
 	<key>NSHumanReadableCopyright</key><string>${copyright}</string>
 
 	<!-- Bundle icon. -->
-	<key>CFBundleIconFile</key><string>AppIcon</string>
-	<key>CFBundleIconName</key><string>AppIcon</string>
+	<key>CFBundleIconFile</key><string>AppIcon</string><!-- Legacy. -->
+	<key>CFBundleIconName</key><string>AppIcon</string><!-- Legacy. -->
+	<key>CFBundleIconFiles</key><array><string>AppIcon</string></array>
 
 	<!-- Bundle creator ID. -->
 	<key>CFBundleSignature</key><string>????</string>

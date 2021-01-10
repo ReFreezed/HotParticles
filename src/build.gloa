@@ -244,13 +244,14 @@ local doRelease :: () {
 		os.execute("ROBOCOPY", {values.loveAppPath.."/Contents/MacOS",      contentsDir.."/MacOS",      "/E", "/LOG+:"..PATH_RC_LOG})
 
 		-- Create .icns.
-		!import"macos/icns".create("temp/appIcon.icns", {
+		local ok, err = !import"macos/icns".create("temp/appIcon.icns", {
 			{path="gfx/appIcon16.png",  size=16},
 			{path="gfx/appIcon32.png",  size=32},
 			{path="gfx/appIcon64.png",  size=64},
 			{path="gfx/appIcon128.png", size=128},
 			{path="gfx/appIcon256.png", size=256},
 		})
+		if not ok  error(err)
 
 		-- Create other files.
 		local infoPlist = readFile("misc/appInfoTemplate.plist")
@@ -273,7 +274,7 @@ local doRelease :: () {
 
 		-- Add remaining files.
 		do {
-			copyFilesInDirectory("exportTemplates", outputDir.."/exportTemplates", "%.lua$")
+			copyFilesInDirectory("exportTemplates", contentsDir.."/Resources/exportTemplates", "%.lua$")
 			copyFile(values.lovePath,      contentsDir.."/Resources/Game.love")
 			copyFile("temp/appIcon.icns",  contentsDir.."/Resources/AppIcon.icns")
 			copyFile("misc/Changelog.txt", outputDir.."/_Changelog.txt")

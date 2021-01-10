@@ -269,9 +269,9 @@ files are copied). You can export to files or to the clipboard.
 In the export dialog, any question marks ("?") in the file/folder paths will
 be replaced with the name of the project file (without the file extension).
 
-Exporting happens using Lua scripts in the "exportTemplates" folder. You can
-edit existing scripts or make completely new ones to fit your game (see the
-"Template API" section).
+Exporting happens using Lua scripts in the "exportTemplates" folder (in macOS
+see HotParticles.app/Contents/Resources). You can edit existing scripts or
+make completely new ones to fit your game (see the "Template API" section).
 
 The base folder, if specified, should usually point to the folder containing
 the game's main.lua. Note that textures that are somewhere in the base folder
@@ -282,9 +282,10 @@ will not be copied.
 8. Template API
 ==============================================================================
 
-Templates are normal Lua scripts in the "exportTemplates" folder. Some of the
-standard Lua globals and modules are available, but not all. Note that trying
-to set globals will result in an error.
+Templates are normal Lua scripts in the "exportTemplates" folder (in macOS see
+HotParticles.app/Contents/Resources). Some of the standard Lua globals and
+modules are available, but not all. Note that trying to set globals will
+result in an error.
 
 Functions:
 
