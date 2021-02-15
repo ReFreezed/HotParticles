@@ -3,3 +3,4 @@
 
 Visit the [forum thread](https://love2d.org/forums/viewtopic.php?f=5&t=88860) for more info,
 or download the [latest release](https://github.com/ReFreezed/HotParticles/releases/latest).
+Also see the [examples repository](https://github.com/ReFreezed/HotParticlesExamples).

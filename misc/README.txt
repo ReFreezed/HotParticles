@@ -1,6 +1,10 @@
 Hot Particles - a particle editor for LÖVE
 Developed by Marcus 'ReFreezed' Thunström
 
+Website: https://love2d.org/forums/viewtopic.php?f=5&t=88860
+Code repository: https://github.com/ReFreezed/HotParticles
+Examples: https://github.com/ReFreezed/HotParticlesExamples
+
 1. Disclaimer
 2. Intro
 3. Controls
