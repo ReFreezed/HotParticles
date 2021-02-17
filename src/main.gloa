@@ -1955,8 +1955,6 @@ local onDraw :: () {
 				local dy     = system.psEmissionAreaDyEnabled    ? system.psEmissionAreaDy * system.scaleSpace : 0
 				local angle  = system.psEmissionAreaAngleEnabled ? system.psEmissionAreaAngle                  : 0
 
-				using system.psEmissionAreaDistribution
-
 				LG.pushAll()
 				LG.translate(x, y)
 				LG.rotate(angle)
@@ -1964,22 +1962,22 @@ local onDraw :: () {
 				LG.setColor(1, 0, 0, .6)
 
 				if !complete system.psEmissionAreaDistribution == {
-					case NONE:
+					case .NONE:
 						-- void
 
-					case ELLIPSE:
+					case .ELLIPSE:
 						LG.ellipse(LG.DrawMode.FILL, 0,0, dx,dy, 64)
 
-					case UNIFORM:
+					case .UNIFORM:
 						LG.rectangle(LG.DrawMode.FILL, -dx,-dy, 2*dx, 2*dy)
 
-					case BORDER_ELLIPSE:
+					case .BORDER_ELLIPSE:
 						LG.ellipse(LG.DrawMode.LINE, 0,0, dx,dy, 64)
 
-					case BORDER_RECTANGLE:
+					case .BORDER_RECTANGLE:
 						LG.rectangle(LG.DrawMode.LINE, -dx,-dy, 2*dx,2*dy)
 
-					case NORMAL:
+					case .NORMAL:
 						local STDDEV_IN_IMAGE :: .1411132813
 						local iw, ih = imageNormal.getDimensions!()
 						local sx     = dx / (iw * STDDEV_IN_IMAGE)
@@ -2003,8 +2001,9 @@ local onDraw :: () {
 			}
 
 			if showParticlePath {
+				-- Some code here is ported from LÖVE.
 				local MAX_SEGMENTS       :: 1000
-				local RANDOM_LINES       :: 8
+				local RANDOM_LINES       :: 8 -- @Incomplete: Add a @Setting for how long these are visible as one frame may possibly be too short?
 				local RATE_WHEN_NO_VSYNC :: 250
 
 				local system = project.systems[project.systemIndex]
@@ -2021,7 +2020,7 @@ local onDraw :: () {
 
 				local accXmin, accYmin, accXmax, accYmax = ps.getLinearAcceleration!()
 
-				-- local distribution, dx, dy, angle, relative = ps.getEmissionArea!() -- @Incomplete: Use distribution for initial coords.
+				local areaDistribution, areaDx, areaDy, areaAngle, areaRelative = ps.getEmissionArea!()
 
 				local _, _, flags = LW.getMode()
 
@@ -2050,10 +2049,11 @@ local onDraw :: () {
 						direction  = direction0 + spread * math.getRandom(-.5, +.5)
 					}
 
-					local dt
-						= app.showStats == STATS_ALL
+					local dt = (
+						app.showStats == STATS_ALL
 						? 1 / RATE_WHEN_NO_VSYNC
 						: 1 / (flags.refreshrate ?: 60)
+					)
 
 					local segments = math.round(life / dt)
 
@@ -2061,10 +2061,97 @@ local onDraw :: () {
 					dt       = life / segments
 
 					local x0, y0 = ps.getPosition!()
-					local points = {x0, y0}
 
-					local x      = x0
-					local y      = y0
+					local x = x0
+					local y = y0
+
+					if showParticlePath == 2 {
+						if !complete areaDistribution == {
+							case .NONE:
+								-- void
+
+							case .ELLIPSE:
+								local c      = math.cos(areaAngle)
+								local s      = math.sin(areaAngle)
+								local randX  = math.getRandom(-1.0, 1.0)
+								local randY  = math.getRandom(-1.0, 1.0)
+								local min    = areaDx * randX * math.sqrt(1 - (randY^2)/2)
+								local max    = areaDy * randY * math.sqrt(1 - (randX^2)/2)
+								x           += c*min - s*max
+								y           += s*min + c*max
+
+							case .UNIFORM:
+								local c      = math.cos(areaAngle)
+								local s      = math.sin(areaAngle)
+								local randX  = math.getRandom(-areaDx, areaDx)
+								local randY  = math.getRandom(-areaDy, areaDy)
+								x           += c*randX - s*randY
+								y           += s*randX + c*randY
+
+							case .BORDER_ELLIPSE:
+								local c     = math.cos(areaAngle)
+								local s     = math.sin(areaAngle)
+								local rand  = math.getRandom(0, math.TAU)
+								local min   = math.cos(rand) * areaDx
+								local max   = math.sin(rand) * areaDy
+								x          += c*min - s*max
+								y          += s*min + c*max
+
+							case .BORDER_RECTANGLE:
+								local c     = math.cos(areaAngle)
+								local s     = math.sin(areaAngle)
+								local range = 2 * (areaDx + areaDy)
+								local randX = math.getRandom(-range, range)
+								local randY = areaDy * 2
+
+								if randX < -randY {
+									local min  = randX + randY + areaDx
+									x         += c*min - s*-areaDy
+									y         += s*min + c*-areaDy
+								} elseif randX < 0 {
+									local max  = randX + areaDy
+									x         += c*-areaDx - s*max
+									y         += s*-areaDx + c*max
+								} elseif randX < randY {
+									local max  = randX - areaDy
+									x         += c*areaDx - s*max
+									y         += s*areaDx + c*max
+								} else {
+									local min  = randX - randY - areaDx
+									x         += c*min - s*areaDy
+									y         += s*min + c*areaDy
+								}
+
+							case .NORMAL:
+								local getRandomNormal :: (stddev:float) -> float {
+									static lastRandomNormal: float = NULL
+
+									if lastRandomNormal ~= NULL {
+										local r          = lastRandomNormal
+										lastRandomNormal = NULL
+										return r * stddev
+									}
+
+									local r   = math.sqrt(-2 * math.log(1-math.getRandom()))
+									local phi = math.TAU * (1-math.getRandom())
+
+									lastRandomNormal = r * math.cos(phi)
+									return r * math.sin(phi) * stddev
+								}
+
+								local c      = math.cos(areaAngle)
+								local s      = math.sin(areaAngle)
+								local randX  = getRandomNormal(areaDx)
+								local randY  = getRandomNormal(areaDy)
+								x           += c*randX - s*randY
+								y           += s*randX + c*randY
+						}
+
+						if areaRelative  direction += math.atan(y-y0, x-x0)
+					}
+
+					local points = {x, y} -- @Memory
+
 					local speedX = speed * math.cos(direction)
 					local speedY = speed * math.sin(direction)
 
