@@ -2994,6 +2994,7 @@ export setupGuiCallbacks :: () {
 
 		guiState.onSubmit.fileDialog_filename = (input:gui.InputText)                                           {  choosePath()  }
 		guiState.onAction.fileDialog_choose   = (buttons:gui.Buttons, buttonIndex:int, source:gui.ActionSource) {  choosePath()  }
+		guiState.onSubmit.fileDialog          = (frame:gui.Frame)                                               {  choosePath()  } -- @Incomplete: This doesn't work for non-modal dialogs.
 
 		local choosePath :: () {
 			local input = guiState.getElement!("fileDialog_filename", gui.InputText)
@@ -3119,6 +3120,9 @@ export setupGuiCallbacks :: () {
 
 	guiState.onActive.exportProject = (frame:gui.Frame) {
 		guiState.refreshRecursively!("exportProject")
+	}
+	guiState.onSubmit.exportProject = (frame:gui.Frame) {
+		tryExportFiles()
 	}
 
 	-- Files.
