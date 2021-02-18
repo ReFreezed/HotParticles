@@ -1,20 +1,26 @@
 Text [=[
 --[[
 module = {
+	x=emitterPositionX, y=emitterPositionY,
 	{
 		system=particleSystem1,
 		kickStartSteps=steps1, kickStartDt=dt1, emitAtStart=count1,
 		blendMode=blendMode1, shader=shader1,
 		texturePreset=preset1, texturePath=path1,
-		shaderPath=path1, shaderFilename=filename1
+		shaderPath=path1, shaderFilename=filename1,
+		x=emitterOffsetX, y=emitterOffsetY
 	},
-	{ system=particleSystem2, ... },
+	{
+		system=particleSystem2,
+		...
+	},
 	...
 }
 ]]
 ]=]
+
 Text"local LG        = love.graphics\n"
-Text"local particles = {}\n"
+Text"local particles = {x=" Lua(emitterPosition.x) Text", y=" Lua(emitterPosition.y) Text"}\n"
 Text"\n"
 
 -- Define images. Some may be shared between multiple particle systems.
@@ -36,7 +42,7 @@ for _, ps in ipairs(particleSystems) do
 		if ps.texturePath == "" then
 			Text"local " Text(imageIdent) Text" = ? -- Preset: " Text(ps.texturePreset) Text"\n"
 		else
-			Text"local " Text(imageIdent) Text" = LG.newImage(" LuaCsv(ps.texturePath) Text")\n"
+			Text"local " Text(imageIdent) Text" = LG.newImage(" Lua(ps.texturePath) Text")\n"
 		end
 
 		if pixelateTextures then
@@ -71,7 +77,7 @@ for _, ps in ipairs(particleSystems) do
 			if ps.shaderPath == "" then
 				Text"local " Text(shaderIdent) Text" = ? -- Filename: " Text(ps.shaderFilename) Text"\n"
 			else
-				Text"local " Text(shaderIdent) Text" = LG.newShader(" LuaCsv(ps.shaderPath) Text")\n"
+				Text"local " Text(shaderIdent) Text" = LG.newShader(" Lua(ps.shaderPath) Text")\n"
 			end
 		end
 
@@ -85,7 +91,7 @@ end
 -- Define particle systems.
 for _, ps in ipairs(particleSystems) do
 	Text"\n"
-	Text"local ps = LG.newParticleSystem(" Text(imageIdentBySystem[ps]) Text", " LuaCsv(ps.bufferSize) Text")\n"
+	Text"local ps = LG.newParticleSystem(" Text(imageIdentBySystem[ps]) Text", " Lua(ps.bufferSize) Text")\n"
 
 	Text"ps:setColors("                 LuaCsv(ps.colors)                 Text")\n"
 	Text"ps:setDirection("              LuaCsv(ps.direction)              Text")\n"
@@ -95,7 +101,7 @@ for _, ps in ipairs(particleSystems) do
 	Text"ps:setInsertMode("             LuaCsv(ps.insertMode)             Text")\n"
 	Text"ps:setLinearAcceleration("     LuaCsv(ps.linearAcceleration)     Text")\n"
 	Text"ps:setLinearDamping("          LuaCsv(ps.linearDamping)          Text")\n"
-	Text"ps:setOffset("                 LuaCsv(ps.offset)                 Text")\n"
+	Text"ps:setOffset("                 LuaCsv(ps.textureOffset)          Text")\n"
 	Text"ps:setParticleLifetime("       LuaCsv(ps.particleLifetime)       Text")\n"
 	Text"ps:setRadialAcceleration("     LuaCsv(ps.radialAcceleration)     Text")\n"
 	Text"ps:setRelativeRotation("       LuaCsv(ps.relativeRotation)       Text")\n"
@@ -118,15 +124,17 @@ for _, ps in ipairs(particleSystems) do
 	end
 
 	Text"table.insert(particles, {system=ps"
-	Text", kickStartSteps=" LuaCsv(ps.kickStartSteps)
-	Text", kickStartDt="    LuaCsv(ps.kickStartDt)
-	Text", emitAtStart="    LuaCsv(ps.emitAtStart)
-	Text", blendMode="      LuaCsv(ps.blendMode)
+	Text", kickStartSteps=" Lua(ps.kickStartSteps)
+	Text", kickStartDt="    Lua(ps.kickStartDt)
+	Text", emitAtStart="    Lua(ps.emitAtStart)
+	Text", blendMode="      Lua(ps.blendMode)
 	Text", shader="         Text(shaderIdentBySystem[ps])
-	Text", texturePath="    LuaCsv(ps.texturePath)
-	Text", texturePreset="  LuaCsv(ps.texturePreset)
-	Text", shaderPath="     LuaCsv(ps.shaderPath)
-	Text", shaderFilename=" LuaCsv(ps.shaderFilename)
+	Text", texturePath="    Lua(ps.texturePath)
+	Text", texturePreset="  Lua(ps.texturePreset)
+	Text", shaderPath="     Lua(ps.shaderPath)
+	Text", shaderFilename=" Lua(ps.shaderFilename)
+	Text", x="              Lua(ps.emitterOffset.x)
+	Text", y="              Lua(ps.emitterOffset.y)
 	Text"})\n"
 end
 

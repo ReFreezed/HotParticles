@@ -156,6 +156,10 @@ export setupGuiFrames :: () {
 						guiState.slider!({ name="emissionRate",   labelLeft="rate",                              defaultValue=1, min=0, max=512,  exponential=true,             limitName="emissionRate",   readout="%.1f / sec" }),
 						guiState.slider!({ name="kickStartEmit",  labelLeft="emit at start",    canDisable=true, defaultValue=0, min=0, max=1024, exponential=true, isInt=true, limitName="kickStartEmit",  readout="%.0f" }),
 						guiState.slider!({ name="kickStartSteps", labelLeft="kick-start steps", canDisable=true, defaultValue=0, min=0, max=128,  exponential=true, isInt=true, limitName="kickStartSteps", readout="%.0f", readoutZero="no kick-start" }),
+						guiState.hbox!({
+							guiState.slider!({ name="emitterOffsetX", canDisable=true, defaultValue=0, min=-200, max=200, limitName="emitterOffset", readout="%.0f", weight=1, labelLeft="offset pos x/y" }),
+							guiState.slider!({ name="emitterOffsetY", canDisable=true, defaultValue=0, min=-200, max=200, limitName="emitterOffset", readout="%.0f", weight=1 }),
+						}),
 					}),
 
 					guiState.separator!({ thick=true }),
@@ -488,7 +492,7 @@ export setupGuiFrames :: () {
 
 			guiState.separator!({ thick=true }),
 			guiState.section!({ label="Max buffer size",
-				guiState.inputText!({ name="preferences_maxBufferSize", tooltip="Default: 16000" }),
+				guiState.inputText!({ name="preferences_maxBufferSize", tooltip="Max particle buffer size. Default: 16000" }),
 			}),
 
 			guiState.separator!({ thick=true }),
@@ -499,15 +503,15 @@ export setupGuiFrames :: () {
 			guiState.separator!({ thick=false }),
 			guiState.section!({ label="Max recent",
 				guiState.hbox!({
-					guiState.inputText!({ name="preferences_maxRecentFiles"--[[, labelLeft="files"]], tooltip="Default: 15", weight=1 }),
+					guiState.inputText!({ name="preferences_maxRecentFiles"--[[, labelLeft="files"]], tooltip="Max recent files/folders. Default: 15", weight=1 }),
 					-- guiState.inputText!({ name="preferences_maxRecentFolders", labelLeft="folders", tooltip="Default: 4", weight=1, inset=45 }),
 				}),
 			}),
 
 			guiState.separator!({ thick=true }),
 			guiState.section!({ label="Projects",
-				guiState.checkbox!({ name="preferences_initializeSystemInNewProjects", label="Start with default particle system", tooltip="If this is unchecked, the initial particle system in new projects will be completely empty" }),
-				guiState.inputText!({ name="preferences_maxChanges", labelLeft="Undo history", tooltip="Default: 200" }),
+				guiState.checkbox!({ name="preferences_initializeSystemInNewProjects", label="Start with default particle system", tooltip="If unchecked, the initial particle system in new projects will be completely empty" }),
+				guiState.inputText!({ name="preferences_maxChanges", labelLeft="Undo history", tooltip="Max undo history entries. Default: 200" }),
 			}),
 
 			guiState.separator!({ thick=true }),
@@ -1268,7 +1272,10 @@ export setupGuiCallbacks :: () {
 			radio.index = i
 		}
 		addEventHandlersForRadio("emitterMovement", Movement, "Emitter movement",
-			(project:Project, __:System, value:Movement) {  project.movementPreset = value  }
+			(project:Project, __:System, value:Movement) {
+				project.movementPreset = value
+				if value == .NONE  moveEmittersTo(project, project.emitterX, project.emitterY, commit=false, instant=true)
+			}
 		)
 
 		guiState.onRefresh.emitterMovementSx = (slider:gui.Slider) {
@@ -1671,18 +1678,18 @@ export setupGuiCallbacks :: () {
 
 	guiState.onRefresh.textureOffsetX = (slider:gui.Slider) {
 		local project, system = getCurrentProjectAndSystem()
-		slider.value          = system.offsetX
+		slider.value          = system.textureOffsetX
 	}
 	addEventHandlersForSlider(forSystem=true, "textureOffsetX", "Texture offset",
-		(project:Project, system:System, value:float) {  system.offsetX = value ; updateParticleTextureOffset(system)  }
+		(project:Project, system:System, value:float) {  system.textureOffsetX = value ; updateParticleTextureOffset(system)  }
 	)
 
 	guiState.onRefresh.textureOffsetY = (slider:gui.Slider) {
 		local project, system = getCurrentProjectAndSystem()
-		slider.value          = system.offsetY
+		slider.value          = system.textureOffsetY
 	}
 	addEventHandlersForSlider(forSystem=true, "textureOffsetY", "Texture offset",
-		(project:Project, system:System, value:float) {  system.offsetY = value ; updateParticleTextureOffset(system)  }
+		(project:Project, system:System, value:float) {  system.textureOffsetY = value ; updateParticleTextureOffset(system)  }
 	)
 
 	do {
@@ -1881,6 +1888,33 @@ export setupGuiCallbacks :: () {
 		)
 		addToggleEventHandler(forSystem=true, "kickStartSteps", "Kick-start steps",
 			onToggle = (project:Project, system:System, enabled:bool) {  system.kickStartStepsEnabled = enabled --[[; updateParticleParams(project, system)]]  }
+		)
+	}
+
+	do {
+		guiState.onRefresh.emitterOffsetX = (slider:gui.Slider) {
+			local project, system = getCurrentProjectAndSystem()
+			slider.enabled        = system.emitterOffsetEnabled
+			slider.value          = system.emitterOffsetX
+		}
+		guiState.onRefresh.emitterOffsetY = (slider:gui.Slider) {
+			local project, system = getCurrentProjectAndSystem()
+			slider.enabled        = system.emitterOffsetEnabled
+			slider.value          = system.emitterOffsetY
+		}
+		addEventHandlersForSlider(forSystem=true, "emitterOffsetX", "Emitter offset",
+			(project:Project, system:System, value:float) {  system.emitterOffsetX = value ; moveEmittersTo(project, project.emitterPlacementX, project.emitterPlacementY, commit=false, instant=true)  }
+		)
+		addEventHandlersForSlider(forSystem=true, "emitterOffsetY", "Emitter offset",
+			(project:Project, system:System, value:float) {  system.emitterOffsetY = value ; moveEmittersTo(project, project.emitterPlacementX, project.emitterPlacementY, commit=false, instant=true)  }
+		)
+		addToggleEventHandler(forSystem=true, "emitterOffsetX", "Emitter offset",
+			onToggle = (project:Project, system:System, enabled:bool) {  system.emitterOffsetEnabled = enabled  },
+			finalize = (project:Project, system:System              ) {  moveEmittersTo(project, project.emitterPlacementX, project.emitterPlacementY, commit=false, instant=true) ; guiState.refreshRecursively!("emitterOffsetY")  }
+		)
+		addToggleEventHandler(forSystem=true, "emitterOffsetY", "Emitter offset",
+			onToggle = (project:Project, system:System, enabled:bool) {  system.emitterOffsetEnabled = enabled  },
+			finalize = (project:Project, system:System              ) {  moveEmittersTo(project, project.emitterPlacementX, project.emitterPlacementY, commit=false, instant=true) ; guiState.refreshRecursively!("emitterOffsetX")  }
 		)
 	}
 

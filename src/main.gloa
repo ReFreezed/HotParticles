@@ -210,7 +210,7 @@ export App :: struct {
 
 	maxBufferSize    = 16000, -- Default buffer size for ParticleSystem is 1000.
 	maxRecentFiles   = 15,
-	maxRecentFolders = 4, -- @Depricated
+	maxRecentFolders = 4, -- @Deprecated
 	maxChanges       = 200,
 
 	preferRelativePaths           = false, -- For file browser.
@@ -268,12 +268,12 @@ export Project :: struct {
 	regionWidth   = 0,
 	regionHeight  = 0,
 
+	emitterX: float,
+	emitterY: float,
+
 	customData = "",
 
 	guiLimits: struct { !key:string, !value:float },
-
-	emitterX: int, -- Load-time only.
-	emitterY: int, -- Load-time only.
 
 	edited = false, -- Only saved in workspace.
 	path   = "",    -- Only saved in workspace.
@@ -307,6 +307,9 @@ export Project :: struct {
 
 	changes: []Change,
 	changeIndex = 1, -- Should point at the next slot in 'changes'.
+
+	emitterPlacementX = 0.0,
+	emitterPlacementY = 0.0,
 
 	_init :: (project:Project) {
 		static n = 0 ; n += 1
@@ -357,12 +360,17 @@ export Project :: struct {
 			regionEnabled               = source.regionEnabled,
 			regionWidth                 = source.regionWidth,
 			regionHeight                = source.regionHeight,
+			emitterX                    = source.emitterX,
+			emitterY                    = source.emitterY,
 			customData                  = source.customData,
 			guiLimits                   = copyTable(source.guiLimits),
 			edited                      = true,
 
 			zoom       = source.zoom,
 			zoomTarget = source.zoomTarget,
+
+			emitterPlacementX = source.emitterX,
+			emitterPlacementY = source.emitterY,
 		}
 		_init(project)
 
@@ -428,10 +436,10 @@ export System :: struct {
 	colors: []float = {0,0,1,1}, -- {h1,s1,v1,a1,...}
 	blendMode = LG.BlendMode.ADD,
 
-	texturePath = "",
-	textureName = "light", -- Preset fallback to texturePath.
-	offsetX     = .5,
-	offsetY     = .5,
+	texturePath    = "",
+	textureName    = "light", -- Preset fallback to texturePath.
+	textureOffsetX = .5,
+	textureOffsetY = .5,
 
 	shaderPath = "",
 
@@ -449,6 +457,10 @@ export System :: struct {
 
 	title      = "",
 	customData = "",
+
+	emitterOffsetEnabled = true,
+	emitterOffsetX       = 0.0,
+	emitterOffsetY       = 0.0,
 
 	frames: []AnimationFrame,
 
@@ -528,8 +540,8 @@ export System :: struct {
 			blendMode                       = source.blendMode,
 			texturePath                     = source.texturePath,
 			textureName                     = source.textureName,
-			offsetX                         = source.offsetX,
-			offsetY                         = source.offsetY,
+			textureOffsetX                  = source.textureOffsetX,
+			textureOffsetY                  = source.textureOffsetY,
 			shaderPath                      = source.shaderPath,
 			scaleTimeEnabled                = source.scaleTimeEnabled,
 			scaleTime                       = source.scaleTime,
@@ -543,6 +555,9 @@ export System :: struct {
 			kickStartSteps                  = source.kickStartSteps,
 			title                           = source.title,
 			customData                      = source.customData,
+			emitterOffsetEnabled            = source.emitterOffsetEnabled,
+			emitterOffsetX                  = source.emitterOffsetX,
+			emitterOffsetY                  = source.emitterOffsetY,
 			gui                             = copyTable(source.gui),
 
 			particles    = source.particles.clone!(),
@@ -701,10 +716,10 @@ export updateParticleAnimation :: (system:System) {
 export updateParticleTextureOffset :: (system:System) {
 	if system.frames {
 		local animFrame1 = system.frames[1]
-		system.particles.setOffset!(animFrame1.w*system.offsetX, animFrame1.h*system.offsetY)
+		system.particles.setOffset!(animFrame1.w*system.textureOffsetX, animFrame1.h*system.textureOffsetY)
 	} else {
 		local iw, ih = system.currentImage.image.getDimensions!()
-		system.particles.setOffset!(iw*system.offsetX, ih*system.offsetY)
+		system.particles.setOffset!(iw*system.textureOffsetX, ih*system.textureOffsetY)
 	}
 }
 
@@ -928,18 +943,18 @@ export updateParticleShader :: (project:Project, system:System, saveRecent=false
 
 
 export updateImageFilters :: () {
-	local project = app.projects[app.currentProjectIndex]
-	local filter  = (project.pixelateTextures or forcePixelatedTextures) ? LG.FilterMode.NEAREST : .LINEAR
+	local currentProject = app.projects[app.currentProjectIndex]
+	local filter         = (currentProject.pixelateTextures or forcePixelatedTextures) ? LG.FilterMode.NEAREST : .LINEAR
 
-	if project.currentBgImage ~= NULL {
-		project.currentBgImage.image.setFilter!(filter, filter)
+	if currentProject.currentBgImage ~= NULL {
+		currentProject.currentBgImage.image.setFilter!(filter, filter)
 	}
 
 	for particleImageNames {
 		particleImages[it].image.setFilter!(filter, filter)
 	}
 
-	for project.systems  it.currentImage.image.setFilter!(filter, filter) -- In case systems use custom textures.
+	for currentProject.systems  it.currentImage.image.setFilter!(filter, filter) -- In case systems use custom textures.
 }
 
 
@@ -961,10 +976,7 @@ export newSystem :: (project:Project, showcase=false) -> System {
 	updateParticleParams(project, system)
 	updateParticleColors(system)
 
-	if project.systems[1] ~= NULL {
-		local x, y = project.systems[1].particles.getPosition!()
-		system.particles.setPosition!(x, y)
-	}
+	moveEmittersTo(project, project.emitterPlacementX, project.emitterPlacementY, commit=false, instant=true)
 
 	return system
 }
@@ -1006,8 +1018,31 @@ export createCanvases :: () {
 
 
 
-export moveEmittersTo :: (x,y:float) {
-	for app.projects[app.currentProjectIndex].systems  it.particles.moveTo!(x, y)
+export moveEmittersTo :: (project:Project, x,y:float, commit:bool, instant=false) {
+	project.emitterPlacementX = x
+	project.emitterPlacementY = y
+
+	for project.systems {
+		local targetX = x
+		local targetY = y
+
+		if it.emitterOffsetEnabled {
+			targetX += it.emitterOffsetX
+			targetY += it.emitterOffsetY
+		}
+
+		if instant
+			it.particles.setPosition!(targetX, targetY)
+		else
+			it.particles.moveTo!(targetX, targetY)
+	}
+
+	if commit and not (project.emitterX == x and project.emitterY == y) {
+		project.emitterX = x -- @UX: Should we record this change? Leaning towards no. 2021-02-18
+		project.emitterY = y
+		markEdited(project)
+		scheduleSaveWorkspace()
+	}
 }
 
 
@@ -1296,17 +1331,17 @@ local onFileDropped :: (file:LF.DroppedFile) {
 		return
 	}
 
-	local project, system = getCurrentProjectAndSystem()
-	setTexturePath(project, system, fullPath)
+	local currentProject, system = getCurrentProjectAndSystem()
+	setTexturePath(currentProject, system, fullPath)
 }
 
 
 
 local onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool) {
-	local mod       = getModifierKey()
-	local modAndKey = combineKeyAndModifier(mod, key)
-	local project   = app.projects[app.currentProjectIndex]
-	local system    = project.systems[project.systemIndex]
+	local mod            = getModifierKey()
+	local modAndKey      = combineKeyAndModifier(mod, key)
+	local currentProject = app.projects[app.currentProjectIndex]
+	local system         = currentProject.systems[currentProject.systemIndex]
 
 	-- Global keys.
 	if not LM.isGrabbed()  if modAndKey == {
@@ -1400,7 +1435,7 @@ local onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool) 
 
 	if modAndKey == {
 		case "r":
-			for project.systems {
+			for currentProject.systems {
 				it.particles.stop!()
 				it.particles.reset!()
 			}
@@ -1417,7 +1452,7 @@ local onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool) 
 			return
 
 		case "space":
-			for project.systems {
+			for currentProject.systems {
 				local ps     = it.particles
 				local active = ps.isActive!()
 				if not active  ps.start!() -- Needed for emit() to work.
@@ -1436,7 +1471,7 @@ local onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool) 
 
 	-- Keys in normal view.
 	if modAndKey == {
-		case "c-s":      if project.fileIsSaved  saveProject(project, project.path, overwrite=true)  else  showSaveProjectAsDialog()
+		case "c-s":      if currentProject.fileIsSaved  saveProject(currentProject, currentProject.path, overwrite=true)  else  showSaveProjectAsDialog()
 		case "c-s-s":    showSaveProjectAsDialog()
 		case "c-e":      pushPanel("exportProject")
 		case "c-s-e":    tryExportFiles(quick=true)
@@ -1445,17 +1480,17 @@ local onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool) 
 		case "c-n":      addNewProject() ; guiState.refreshRecursively!("projects") ; setCurrentProject(#app.projects) ; scheduleSaveWorkspace()
 		case "c-w":      if not (#app.projects == 1 and not (app.projects[1].path or app.projects[1].edited))  confirmCloseProject(app.currentProjectIndex)
 
-		case "tab":      setCurrentSystem ((project.systemIndex     - 0) % #project.systems + 1)
-		case "s-tab":    setCurrentSystem ((project.systemIndex     - 2) % #project.systems + 1)
-		case "c-tab":    setCurrentProject((app.currentProjectIndex - 0) % #app.projects    + 1)
-		case "c-s-tab":  setCurrentProject((app.currentProjectIndex - 2) % #app.projects    + 1)
+		case "tab":      setCurrentSystem ((currentProject.systemIndex - 0) % #currentProject.systems + 1)
+		case "s-tab":    setCurrentSystem ((currentProject.systemIndex - 2) % #currentProject.systems + 1)
+		case "c-tab":    setCurrentProject((app.currentProjectIndex    - 0) % #app.projects    + 1)
+		case "c-s-tab":  setCurrentProject((app.currentProjectIndex    - 2) % #app.projects    + 1)
 
 		case "h":        system.visible = not system.visible
 
 		case "c-p":      !if DEV  guiState.setActive!("main", not guiState.getElement!("main").active)
 
-		case "c-delete": confirmDeleteSystem(project.systemIndex)
-		case "c-d":      duplicateSystem(project.systemIndex)
+		case "c-delete": confirmDeleteSystem(currentProject.systemIndex)
+		case "c-d":      duplicateSystem(currentProject.systemIndex)
 
 		case "c-z":      undo()
 		case "c-s-z":    redo()
@@ -1465,9 +1500,9 @@ local onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool) 
 		case "f10":      showMainMenu()
 
 		case "c-pagedown":
-			if project.systems[project.systemIndex+1] ~= NULL {
-				local i1 = project.systemIndex
-				local i2 = project.systemIndex + 1
+			if currentProject.systems[currentProject.systemIndex+1] ~= NULL {
+				local i1 = currentProject.systemIndex
+				local i2 = currentProject.systemIndex + 1
 
 				recordChange("", "Reorder particle systems", nil,
 					[i1, i2] (project:Project) {  project.systems[i1], project.systems[i2] = project.systems[i2], project.systems[i1] ; project.systemIndex = i2  },
@@ -1476,9 +1511,9 @@ local onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool) 
 				)
 			}
 		case "c-pageup":
-			if project.systemIndex > 1 {
-				local i1 = project.systemIndex
-				local i2 = project.systemIndex - 1
+			if currentProject.systemIndex > 1 {
+				local i1 = currentProject.systemIndex
+				local i2 = currentProject.systemIndex - 1
 
 				recordChange("", "Reorder particle systems", nil,
 					[i1, i2] (project:Project) {  project.systems[i1], project.systems[i2] = project.systems[i2], project.systems[i1] ; project.systemIndex = i2  },
@@ -1493,7 +1528,7 @@ local onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool) 
 				local i2 = app.currentProjectIndex + 1
 
 				app.projects[i1], app.projects[i2] = app.projects[i2], app.projects[i1]
-				app.currentProjectIndex                  = i2
+				app.currentProjectIndex            = i2
 
 				guiState.refreshRecursively!("projects")
 			}
@@ -1503,7 +1538,7 @@ local onKeyPressed :: (key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool) 
 				local i2 = app.currentProjectIndex - 1
 
 				app.projects[i1], app.projects[i2] = app.projects[i2], app.projects[i1]
-				app.currentProjectIndex                  = i2
+				app.currentProjectIndex            = i2
 
 				guiState.refreshRecursively!("projects")
 			}
@@ -1553,7 +1588,7 @@ local onMousePressed :: (mx,my:int, mbutton:int, isTouch:bool, presses:int) {
 
 		guiState.showContextMenu!(ITEMS, (choice:int) {
 			if choice == {
-				case 1: moveEmittersTo(0, 0)
+				case 1: moveEmittersTo(app.projects[app.currentProjectIndex], 0, 0, commit=true, instant=true)
 			}
 		})
 	}
@@ -1563,12 +1598,12 @@ local onMouseMoved :: (mx,my:int, dx,dy:int, isTouch:bool) {
 	if isTouch  return
 
 	if isPositioningParticles {
-		local project = app.projects[app.currentProjectIndex]
+		local currentProject = app.projects[app.currentProjectIndex]
 
-		local x = (mx - (LG.getWidth()+MAIN_PANEL_WIDTH)/2) / project.zoom
-		local y = (my - (LG.getHeight()                )/2) / project.zoom
+		local x = (mx - (LG.getWidth()+MAIN_PANEL_WIDTH)/2) / currentProject.zoom
+		local y = (my - (LG.getHeight()                )/2) / currentProject.zoom
 
-		moveEmittersTo(x, y)
+		moveEmittersTo(currentProject, x, y, commit=false)
 		return
 	}
 
@@ -1585,9 +1620,15 @@ local onMouseReleased :: (mx,my:int, mbutton:int, isTouch:bool, presses:int) {
 
 	if isPositioningParticles and mbutton == 1 {
 		isPositioningParticles = false
+
+		local currentProject = app.projects[app.currentProjectIndex]
+		moveEmittersTo(currentProject, currentProject.emitterPlacementX, currentProject.emitterPlacementY, commit=true)
+
 		LM.setGrabbed(false)
 		LK.setKeyRepeat(true)
+
 		guiState.onMouseMoved!(mx, my, 0, 0)
+
 		return
 	}
 
@@ -1608,25 +1649,25 @@ local onMouseWheel :: (dx,dy:int) {
 	local mod = getModifierKey()
 	if mod ~= .NONE  return
 
-	local project   = app.projects[app.currentProjectIndex]
-	local zoomLevel = project.zoomLevel
-	local now       = LT.getTime()
+	local currentProject = app.projects[app.currentProjectIndex]
+	local zoomLevel      = currentProject.zoomLevel
+	local now            = LT.getTime()
 
 	for 1, math.abs(dy) {
 		-- Stick slightly to 100% zoom.
 		if zoomLevel == 0 and now-zoomTime < 0.15  break
 
-		zoomLevel = clampZoomLevel(project, zoomLevel+math.getSign(dy))
+		zoomLevel = clampZoomLevel(currentProject, zoomLevel+math.getSign(dy))
 	}
 
 	zoomTime = now
 
-	if zoomLevel == project.zoomLevel  return
+	if zoomLevel == currentProject.zoomLevel  return
 
-	project.zoomLevel = zoomLevel
-	limitZoomLevel(project)
+	currentProject.zoomLevel = zoomLevel
+	limitZoomLevel(currentProject)
 
-	setActionText("Zoom: %d%%", project.zoomTarget * 100)
+	setActionText("Zoom: %d%%", currentProject.zoomTarget * 100)
 }
 
 
@@ -1731,15 +1772,19 @@ local onUpdate :: (dt:float) {
 			case CIRCLE:
 				local angle = project.movementPhase*math.TAU/5.00
 				moveEmittersTo(
+					project,
 					MOVEMENT_BASE * (project.movementScaleXEnabled ? project.movementScaleX : 0) * math.cos(angle),
-					MOVEMENT_BASE * (project.movementScaleYEnabled ? project.movementScaleY : 0) * math.sin(angle)
+					MOVEMENT_BASE * (project.movementScaleYEnabled ? project.movementScaleY : 0) * math.sin(angle),
+					commit = false
 				)
 
 			case EIGHT:
 				local angle = project.movementPhase*math.TAU/5.00
 				moveEmittersTo(
+					project,
 					MOVEMENT_BASE   * (project.movementScaleXEnabled ? project.movementScaleX : 0) * math.cos(angle),
-					MOVEMENT_BASE/2 * (project.movementScaleYEnabled ? project.movementScaleY : 0) * math.sin(angle*2)
+					MOVEMENT_BASE/2 * (project.movementScaleYEnabled ? project.movementScaleY : 0) * math.sin(angle*2),
+					commit = false
 				)
 
 			case IRREGULAR:
@@ -1774,6 +1819,7 @@ local onUpdate :: (dt:float) {
 				local phaseMid = 1 - math.cos01(phase * math.TAU/2)
 
 				moveEmittersTo(
+					project,
 					(project.movementScaleXEnabled ? project.movementScaleX : 0) * math.lerp(
 						math.lerp(project.movementPoint1X, project.movementPoint2X, phaseOld),
 						math.lerp(project.movementPoint3X, project.movementPoint4X, phaseNew),
@@ -1783,7 +1829,8 @@ local onUpdate :: (dt:float) {
 						math.lerp(project.movementPoint1Y, project.movementPoint2Y, phaseOld),
 						math.lerp(project.movementPoint3Y, project.movementPoint4Y, phaseNew),
 						phaseMid
-					)
+					),
+					commit = false
 				)
 		}
 	}
@@ -1989,7 +2036,7 @@ local onDraw :: () {
 			}
 
 			if showEmitterPosition {
-				local x, y = project.systems[1].particles.getPosition!()
+				local x, y = project.systems[project.systemIndex].particles.getPosition!()
 				local lw   = math.max(2/project.zoom, (project.pixelateWorld ? 1 : 0))
 				local len  = 6 * lw
 
@@ -2260,8 +2307,8 @@ local onDraw :: () {
 				if showTextureOffset {
 					local HALF_WIDTH  :: 3
 					local HALF_LENGTH :: 20
-					local x = math.round(x0 + w*scale*system.offsetX)
-					local y = math.round(y0 + h*scale*system.offsetY)
+					local x = math.round(x0 + w*scale*system.textureOffsetX)
+					local y = math.round(y0 + h*scale*system.textureOffsetY)
 					LG.setColor(0, 0, 0, .9)
 					LG.rectangle(LG.DrawMode.FILL, x-HALF_WIDTH-1, y-HALF_LENGTH-1, 2*HALF_WIDTH+2, 2*HALF_LENGTH+2)
 					LG.rectangle(LG.DrawMode.FILL, x-HALF_LENGTH-1, y-HALF_WIDTH-1, 2*HALF_LENGTH+2, 2*HALF_WIDTH+2)
@@ -2330,7 +2377,7 @@ local onDraw :: () {
 						math.clamp(math.floor((my-y0)/scale), 0, ih)
 					)
 					local x = math.min(mx, ww-fontNormal.getWidth!(text)-2)
-					local y = my+20
+					local y = my + 20
 					if y+fontNormal.getHeight!() > wh-2  y = my-10-fontNormal.getHeight!()
 					LG.setColor(0, 0, 0)
 					LG.print(text, x+1, y+1)
@@ -2650,18 +2697,18 @@ export setCurrentProject :: (i:int, force=false) {
 }
 
 export setCurrentSystem :: (i:int, force=true) {
-	local project = app.projects[app.currentProjectIndex]
-	if project.systemIndex == i and not force  return
+	local currentProject = app.projects[app.currentProjectIndex]
+	if currentProject.systemIndex == i and not force  return
 
-	project.systemIndex = i
+	currentProject.systemIndex = i
 	guiState.getElement!("systems", gui.Tabs).index = i
 
 	guiState.refreshRecursively!("system")
 }
 
 export isSystemCurrent :: (system:System) -> bool {
-	local project = app.projects[app.currentProjectIndex]
-	return system == project.systems[project.systemIndex]
+	local currentProject = app.projects[app.currentProjectIndex]
+	return system == currentProject.systems[currentProject.systemIndex]
 }
 
 
@@ -2806,13 +2853,13 @@ export confirmDeleteSystem :: (systemIndexToDelete:int) {
 	local psCanvas = guiState.canvas!({ name="temp_deleteSystemPreview", width=DIALOG_WIDTH-40, height=200 })
 
 	guiState.onDraw.temp_deleteSystemPreview = [systemIndexToDelete] (canvasEl:gui.Canvas, cw,ch:int) {
-		local project = app.projects[app.currentProjectIndex]
-		local system  = project.systems[systemIndexToDelete]
-		local scale   = ch / LG.getHeight() * project.zoom
-		local r, g, b = hsvToRgb(project.bgColor)
+		local currentProject = app.projects[app.currentProjectIndex]
+		local system         = currentProject.systems[systemIndexToDelete]
+		local scale          = ch / LG.getHeight() * currentProject.zoom
+		local r, g, b        = hsvToRgb(currentProject.bgColor)
 		local emitterX, emitterY: float
 
-		if project.movementPreset == .NONE {
+		if currentProject.movementPreset == .NONE {
 			emitterX, emitterY = system.particles.getPosition!()
 		}
 
@@ -2840,11 +2887,11 @@ export confirmDeleteSystem :: (systemIndexToDelete:int) {
 
 		if choice ~= 1  return
 
-		local project = app.projects[app.currentProjectIndex]
-		local system  = project.systems[systemIndexToDelete]
+		local currentProject = app.projects[app.currentProjectIndex]
+		local system         = currentProject.systems[systemIndexToDelete]
 
-		if #project.systems == 1 {
-			local emptySystem = newSystem(project)
+		if #currentProject.systems == 1 {
+			local emptySystem = newSystem(currentProject)
 			recordChange("", "Delete particle system", nil,
 				[emptySystem] (project:Project) {  project.systems[1] = emptySystem  },
 				[system     ] (project:Project) {  project.systems[1] = system       },
@@ -2861,8 +2908,8 @@ export confirmDeleteSystem :: (systemIndexToDelete:int) {
 }
 
 export duplicateSystem :: (systemIndex:int) {
-	local project = app.projects[app.currentProjectIndex]
-	local system  = project.systems[systemIndex].clone!()
+	local currentProject = app.projects[app.currentProjectIndex]
+	local system         = currentProject.systems[systemIndex].clone!()
 
 	recordChange("", "Duplicate particle system", nil,
 		[systemIndex, system] (project:Project) {  insert(project.systems, systemIndex+1, system) ; project.systemIndex = systemIndex+1  },
@@ -3066,16 +3113,21 @@ export getOptimalBufferSize :: (system:System, moreExact=false) -> int {
 
 
 export updateWindowTitle :: () {
-	local project = app.projects[app.currentProjectIndex]
-	LW.setTitle(format("%s - %s%s", WINDOW_TITLE, (project.path ?: project.displayedName), (project.edited ? " •" : "")))
+	local currentProject = app.projects[app.currentProjectIndex]
+	LW.setTitle(format(
+		"%s - %s%s",
+		WINDOW_TITLE,
+		(currentProject.path ?: currentProject.displayedName),
+		(currentProject.edited ? " •" : "")
+	))
 }
 
 
 
 export getCurrentProjectAndSystem :: () -> Project, System {
-	local project = app.projects[app.currentProjectIndex]
-	local system  = project.systems[project.systemIndex]
-	return project, system
+	local currentProject = app.projects[app.currentProjectIndex]
+	local system         = currentProject.systems[currentProject.systemIndex]
+	return currentProject, system
 }
 
 
@@ -3102,13 +3154,13 @@ export isProjectEmpty :: (project:Project) -> bool {
 
 
 export recordChange :: (name:string, label:string, data:any, onDo:(project:Project), onUndo:(project:Project), finalize:(project:Project)=NULL--[[, trigger=true]]) -> Change {
-	-- @Polish: Reset project.edited if all changes since the last save has been undone/redone.
-	local project = app.projects[app.currentProjectIndex]
+	-- @Polish: Reset currentProject.edited if all changes since the last save has been undone/redone. (Beware of changed emitter position though!)
+	local currentProject = app.projects[app.currentProjectIndex]
 
 	-- Discard undone changes.
-	for project.changeIndex, #project.changes  project.changes[it] = NULL
+	for #currentProject.changes, currentProject.changeIndex, -1  currentProject.changes[it] = NULL
 
-	while project.changes[app.maxChanges] ~= NULL  remove(project.changes, 1) -- This may remove more than one if app.maxChanges changed.
+	while currentProject.changes[app.maxChanges] ~= NULL  remove(currentProject.changes, 1) -- This may remove more than one if app.maxChanges changed.
 
 	local change: Change = {
 		bundle   = updateEventCount,
@@ -3119,15 +3171,15 @@ export recordChange :: (name:string, label:string, data:any, onDo:(project:Proje
 		onUndo   = onUndo,
 		finalize = finalize,
 	}
-	insert(project.changes, change)
-	project.changeIndex = #project.changes + 1
+	insert(currentProject.changes, change)
+	currentProject.changeIndex = #currentProject.changes + 1
 
 	-- if trigger {
-		onDo(project)
-		if finalize ~= NULL  finalize(project)
+		onDo(currentProject)
+		if finalize ~= NULL  finalize(currentProject)
 	-- }
 
-	markEdited(project)
+	markEdited(currentProject)
 	guiState.refreshRecursively!("undoRedo")
 	guiState.refreshRecursively!("undoRedoText")
 	scheduleSaveWorkspace()
@@ -3136,12 +3188,12 @@ export recordChange :: (name:string, label:string, data:any, onDo:(project:Proje
 }
 
 export undo :: (silent=false) {
-	local project = app.projects[app.currentProjectIndex]
-	if project.changeIndex == 1  return
+	local currentProject = app.projects[app.currentProjectIndex]
+	if currentProject.changeIndex == 1  return
 
-	project.changeIndex -= 1
+	currentProject.changeIndex -= 1
 
-	local change = project.changes[project.changeIndex]
+	local change = currentProject.changes[currentProject.changeIndex]
 	local bundle = change.bundle
 	local labels: []string
 	local labelsAdded: struct { !key:string, !value:bool }
@@ -3151,13 +3203,13 @@ export undo :: (silent=false) {
 			labelsAdded[change.label] = true
 			insert(labels, change.label)
 		}
-		change.onUndo(project)
-		if change.finalize ~= NULL  change.finalize(project)
+		change.onUndo(currentProject)
+		if change.finalize ~= NULL  change.finalize(currentProject)
 
-		change = project.changes[project.changeIndex-1]
+		change = currentProject.changes[currentProject.changeIndex-1]
 		if not (change ~= NULL and change.bundle == bundle)  break
 
-		project.changeIndex -= 1
+		currentProject.changeIndex -= 1
 	}
 
 	if not silent {
@@ -3165,17 +3217,17 @@ export undo :: (silent=false) {
 		setActionText("Undo:  "..concatinate(labels, ", "), clearMessage=false)
 	}
 
-	markEdited(project)
+	markEdited(currentProject)
 	guiState.refreshRecursively!("undoRedo")
 	guiState.refreshRecursively!("undoRedoText")
 	scheduleSaveWorkspace()
 }
 
 export redo :: () {
-	local project = app.projects[app.currentProjectIndex]
-	if project.changeIndex > #project.changes  return
+	local currentProject = app.projects[app.currentProjectIndex]
+	if currentProject.changeIndex > #currentProject.changes  return
 
-	local change = project.changes[project.changeIndex]
+	local change = currentProject.changes[currentProject.changeIndex]
 	local bundle = change.bundle
 	local labels: []string
 	local labelsAdded: struct { !key:string, !value:bool }
@@ -3185,20 +3237,20 @@ export redo :: () {
 			labelsAdded[change.label] = true
 			insert(labels, change.label)
 		}
-		change.onDo(project)
-		if change.finalize ~= NULL  change.finalize(project)
+		change.onDo(currentProject)
+		if change.finalize ~= NULL  change.finalize(currentProject)
 
-		change = project.changes[project.changeIndex+1]
+		change = currentProject.changes[currentProject.changeIndex+1]
 		if not (change ~= NULL and change.bundle == bundle)  break
 
-		project.changeIndex += 1
+		currentProject.changeIndex += 1
 	}
 
-	project.changeIndex += 1
+	currentProject.changeIndex += 1
 
 	setActionText("Redo:  "..concatinate(labels, ", "), clearMessage=false)
 
-	markEdited(project)
+	markEdited(currentProject)
 	guiState.refreshRecursively!("undoRedo")
 	guiState.refreshRecursively!("undoRedoText")
 	scheduleSaveWorkspace()
@@ -3269,7 +3321,7 @@ export showMainMenu :: () {
 	local buttons = guiState.getElement!("menuAndSettingsButtons", gui.Buttons)
 
 	guiState.showMenu!(buttons.layoutX, buttons.layoutY+buttons.layoutHeight, items, (choice:string, data:any) {
-		local project = app.projects[app.currentProjectIndex]
+		local currentProject = app.projects[app.currentProjectIndex]
 		if choice == {
 			case "new":         addNewProject() ; guiState.refreshRecursively!("projects") ; setCurrentProject(#app.projects) ; scheduleSaveWorkspace()
 			case "open":        showOpenProjectDialog()
@@ -3277,7 +3329,7 @@ export showMainMenu :: () {
 			case "openRecent":  openProject(cast(string)data)
 			case "reopen":      reopenCurrentProject()
 			case "clearRecent": app.recentProjects = {}
-			case "save":        if project.fileIsSaved  saveProject(project, project.path, overwrite=true)  else  showSaveProjectAsDialog()
+			case "save":        if currentProject.fileIsSaved  saveProject(currentProject, currentProject.path, overwrite=true)  else  showSaveProjectAsDialog()
 			case "saveAs":      showSaveProjectAsDialog()
 			case "export":      pushPanel("exportProject")
 			case "exportQuick": tryExportFiles(quick=true)
@@ -3321,8 +3373,8 @@ local unloadPreview :: () {
 }
 
 export showSaveProjectAsDialog :: () {
-	local project = app.projects[app.currentProjectIndex]
-	local pathObj = Path(project.path)
+	local currentProject = app.projects[app.currentProjectIndex]
+	local pathObj        = Path(currentProject.path)
 
 	local ok, dir, filename = pathObj.getDirectoryAndFilename!()
 	if not ok {
@@ -3330,7 +3382,7 @@ export showSaveProjectAsDialog :: () {
 		filename = "untitled.hotparticles"
 	}
 
-	projectBeingSaved = project -- Needed as we load previews even in the save dialog, which means app.currentProjectIndex may change.
+	projectBeingSaved = currentProject -- Needed as we load previews even in the save dialog, which means app.currentProjectIndex may change.
 
 	showFileDialog(.SAVE, "Save project", dir, filename, filenamePattern="%.hotparticles$",
 		onHighlight = (pathObj:Path, fullPathObj:Path) {
@@ -3387,8 +3439,8 @@ export showSaveProjectAsDialog :: () {
 }
 
 export showOpenProjectDialog :: () {
-	local project     = app.projects[app.currentProjectIndex]
-	local fullPathObj = Path(project.path)
+	local currentProject = app.projects[app.currentProjectIndex]
+	local fullPathObj    = Path(currentProject.path)
 
 	local ok, dir = fullPathObj.getDirectoryAndFilename!()
 	if not ok  dir = fileDialog_lastDirectory ?: getSaveDirectory().."/projects"
@@ -3681,9 +3733,9 @@ export resolveTextureOutputPath :: (project:Project, system:System) -> (success:
 
 
 export tryExportFiles :: (quick=false) {
-	local project = app.projects[app.currentProjectIndex]
+	local currentProject = app.projects[app.currentProjectIndex]
 
-	if not (project.exportParticles or project.exportTextures) {
+	if not (currentProject.exportParticles or currentProject.exportTextures) {
 		setErrorText("Nothing to export")
 		return
 	}
@@ -3692,12 +3744,12 @@ export tryExportFiles :: (quick=false) {
 	local particlesData = ""
 	local particlesPath = ""
 
-	if project.exportParticles {
-		if project.exportParticlesTemplate {
-			local ok, ^particlesData = generateDataToExportFromTemplate(project.exportParticlesTemplate, "")
+	if currentProject.exportParticles {
+		if currentProject.exportParticlesTemplate {
+			local ok, ^particlesData = generateDataToExportFromTemplate(currentProject.exportParticlesTemplate, "")
 			if not ok  return -- Error already reported.
 		} else {
-			local ok, fullPath = getFullPathToCustomParticlesTemplate(project)
+			local ok, fullPath = getFullPathToCustomParticlesTemplate(currentProject)
 			if not ok {
 				setErrorText("Possibly invalid template path")
 				return
@@ -3706,7 +3758,7 @@ export tryExportFiles :: (quick=false) {
 			if not ok  return -- Error already reported.
 		}
 
-		local ok, ^particlesPath = resolveParticlesOuputPath(project)
+		local ok, ^particlesPath = resolveParticlesOuputPath(currentProject)
 		if not ok {
 			setErrorText("No particle system output path")
 			return
@@ -3716,8 +3768,8 @@ export tryExportFiles :: (quick=false) {
 	local texturePaths: []string
 	local texturePathSameAsInput: []bool -- We don't copy these ones.
 
-	if project.exportTextures  for project.systems {
-		local ok, path, sameAsInput = resolveTextureOutputPath(project, it)
+	if currentProject.exportTextures  for currentProject.systems {
+		local ok, path, sameAsInput = resolveTextureOutputPath(currentProject, it)
 
 		if not ok {
 			setErrorText("Missing texture output path(s)")
@@ -3732,7 +3784,7 @@ export tryExportFiles :: (quick=false) {
 	local filesToConfirmOverwrite: []string
 
 	do {
-		if project.exportParticles and not project.exportParticlesOverwrite {
+		if currentProject.exportParticles and not currentProject.exportParticlesOverwrite {
 			local _, dir, filename = Path(particlesPath).getDirectoryAndFilename!()
 
 			if not connectToRemoteDirectory(dir) {
@@ -3746,7 +3798,7 @@ export tryExportFiles :: (quick=false) {
 
 		local texturePathSet: struct { !key:string, !value:bool }
 
-		if project.exportTextures and not project.exportTexturesOverwrite  for project.systems {
+		if currentProject.exportTextures and not currentProject.exportTexturesOverwrite  for currentProject.systems {
 			local path = texturePaths[itIndex]
 
 			if texturePathSet[path]  continue
@@ -3767,8 +3819,8 @@ export tryExportFiles :: (quick=false) {
 	}
 
 	-- Write files.
-	local writeExportFiles = [project,particlesData,particlesPath,texturePaths,texturePathSameAsInput] () {
-		if project.exportParticles {
+	local writeExportFiles = [currentProject, particlesData, particlesPath, texturePaths, texturePathSameAsInput] () {
+		if currentProject.exportParticles {
 			local _, dir, filename = Path(particlesPath).getDirectoryAndFilename!()
 
 			if not connectToRemoteDirectory(dir) {
@@ -3787,7 +3839,7 @@ export tryExportFiles :: (quick=false) {
 
 		local texturePathSet: struct { !key:string, !value:bool }
 
-		if project.exportTextures  for system: project.systems {
+		if currentProject.exportTextures  for system: currentProject.systems {
 			local path = texturePaths[itIndex]
 
 			if texturePathSet[path] continue
@@ -3874,10 +3926,10 @@ export generateDataToExportFromTemplate :: (templateName:string, templateFullPat
 	}
 
 	-- Prepare data for template.
-	local project = app.projects[app.currentProjectIndex]
+	local currentProject = app.projects[app.currentProjectIndex]
 	local publicParticleSystems: []table
 
-	for system: project.systems {
+	for system: currentProject.systems {
 		-- Note: We use values from the ParticleSystem instead of the System object
 		-- whenever possible when exporting as those values are more representable
 		-- of what the user expects.
@@ -3887,10 +3939,10 @@ export generateDataToExportFromTemplate :: (templateName:string, templateFullPat
 		insert(publicParticleSystems, publicParticleSystem)
 
 		do {
-			local ^ok, texturePath = resolveTextureOutputPath(project, system)
+			local ^ok, texturePath = resolveTextureOutputPath(currentProject, system)
 
 			if ok {
-				local ^ok, basePath = resolveBaseOuputPath(project)
+				local ^ok, basePath = resolveBaseOuputPath(currentProject)
 				if ok {
 					local ^ok, texturePathObj = Path.getRelativeTo(texturePath, basePath)
 					if ok and texturePathObj.path[1] ~= ".."  texturePath = texturePathObj.toString!()
@@ -3906,14 +3958,14 @@ export generateDataToExportFromTemplate :: (templateName:string, templateFullPat
 			local shaderPath     = ""
 			local shaderFilename = ""
 
-			local ^ok, shaderPathFull = getFullPathToShader(project, system)
+			local ^ok, shaderPathFull = getFullPathToShader(currentProject, system)
 			if ok {
 				ok, shaderFilename = Path(system.shaderPath).getFilename!()
 				if not ok  shaderFilename = ""
 
 				shaderPath = shaderFilename
 
-				local ^ok, basePath = resolveBaseOuputPath(project)
+				local ^ok, basePath = resolveBaseOuputPath(currentProject)
 				if ok {
 					local ^ok, shaderPathObj = Path.getRelativeTo(shaderPathFull, basePath)
 					if ok and shaderPathObj.path[1] ~= ".."  shaderPath = shaderPathObj.toString!()
@@ -3939,7 +3991,7 @@ export generateDataToExportFromTemplate :: (templateName:string, templateFullPat
 		publicParticleSystem.sizeVariation    = ps.getSizeVariation!()
 		publicParticleSystem.spinVariation    = ps.getSpinVariation!()
 		publicParticleSystem.spread           = ps.getSpread!()
-		publicParticleSystem.texturePreset    = system.textureName
+		publicParticleSystem.texturePreset    = (publicParticleSystem.texturePath == "") ? system.textureName : ""
 		publicParticleSystem.title            = system.title
 
 		do { local min,max   = ps.getLinearDamping!()          ; publicParticleSystem.linearDamping          = cast(table) {min,max, min=min,max=max} }
@@ -3949,7 +4001,7 @@ export generateDataToExportFromTemplate :: (templateName:string, templateFullPat
 		do { local min,max   = ps.getSpeed!()                  ; publicParticleSystem.speed                  = cast(table) {min,max, min=min,max=max} }
 		do { local min,max   = ps.getTangentialAcceleration!() ; publicParticleSystem.tangentialAcceleration = cast(table) {min,max, min=min,max=max} }
 		do { local start,end = ps.getSpin!()                   ; publicParticleSystem.spin                   = cast(table) {start,end, atStart=start,atEnd=end} }
-		do { local x,y       = ps.getOffset!()                 ; publicParticleSystem.offset                 = cast(table) {x,y, x=x,y=y} }
+		do { local x,y       = ps.getOffset!()                 ; publicParticleSystem.textureOffset          = cast(table) {x,y, x=x,y=y} }
 
 		do {
 			local xmin, ymin, xmax, ymax = ps.getLinearAcceleration!()
@@ -3996,6 +4048,21 @@ export generateDataToExportFromTemplate :: (templateName:string, templateFullPat
 			publicParticleSystem.textureHeight = ih
 			publicParticleSystem.quads         = publicQuads
 		}
+
+		do {
+			local x = 0.0
+			local y = 0.0
+
+			if system.emitterOffsetEnabled {
+				x = system.emitterOffsetX
+				y = system.emitterOffsetY
+			}
+
+			publicParticleSystem.emitterOffset = cast(table) {x,y, x=x,y=y}
+		}
+
+		-- Deprecated stuff:
+		publicParticleSystem.offset = publicParticleSystem.textureOffset
 	}
 
 	-- Run template.
@@ -4061,9 +4128,10 @@ export generateDataToExportFromTemplate :: (templateName:string, templateFullPat
 				writeLuaValue(buffer, 2, v)
 		},
 
-		customData       = project.customData,
+		customData       = currentProject.customData,
+		emitterPosition  = {x=currentProject.emitterX, y=currentProject.emitterY, currentProject.emitterX, currentProject.emitterY},
 		particleSystems  = publicParticleSystems,
-		pixelateTextures = project.pixelateTextures,
+		pixelateTextures = currentProject.pixelateTextures,
 	})
 
 	setEnvironment(chunk, templateEnv)

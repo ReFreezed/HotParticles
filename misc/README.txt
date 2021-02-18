@@ -180,6 +180,8 @@ Spawn:
     particle system starts. (The delta time for each update is calculated
     automatically using the particles lifetime.) A higher value will look
     nicer but takes longer to execute.
+- Offset pos: The emitter's offset from the base position. You can use this to
+    offset multiple particle systems from each other.
 
 Lifetime:
 - Emitter: For how long the emitter should emit. Continuous emitters run
@@ -305,14 +307,19 @@ Functions:
         function).
 
     Text( string )
-        Output a raw string. This function can be used to output anything,
-        including binary data.
+        Output the contents of a string. This function can be used to output
+        anything, including binary data.
 
 Values:
 
     customData
         String. Custom data for the project. Is empty by default. (Note that
         particle systems can have their own custom data too.)
+
+    emitterPosition
+        Table with these numeric fields: x, y. Is also an array. (Note that
+        particle systems can specify an offset from this position with the
+        'emitterOffset' field.)
 
     particleSystems
         Array of tables with these fields:
@@ -326,18 +333,19 @@ Values:
         emissionRate            number   Particle spawning rate.
         emitAtStart             number   How many particles should emit when the particle system starts.
         emitterLifetime         number   Lifetime of the emitter. Is -1 if the emitter is continuous.
+        emitterOffset           table    Position offset for the particle emitter relative to the 'emitterPosition' value. It's a table with these numeric fields: x, y. Is also an array.
         insertMode              string   Particle insert mode.
         kickStartDt             number   Delta time for when updating the emitter when the particle system starts.
         kickStartSteps          number   How many times the emitter should update when the particle system starts. May be 0.
         linearAcceleration      table    Table with these numeric fields: xmin, ymin, xmax, ymax. Is also an array.
         linearDamping           table    Table with these numeric fields: min, max. Is also an array.
-        offset                  table    Texture offset for the particles. It's a table with these numeric fields: x, y. Is also an array.
+        offset                  table    [Deprecated: Use 'textureOffset' instead!] Alias for the 'textureOffset' field.
         particleLifetime        table    Table with these numeric fields: min, max. Is also an array.
-        quads                   table    Sequence of frames used for particle animation. Is empty if there's no animation. Each item is a table with these fields: x, y, width, height. The items are also arrays with additional values for texture width and height.
+        quads                   table    Sequence of frames used for particle animation. Is empty if there's no animation. Each item is a table with these fields: x, y, width, height. The items are also arrays (with two additional values for texture width and height).
         radialAcceleration      table    Table with these numeric fields: min, max. Is also an array.
         relativeRotation        boolean  True if relative rotation is enabled, false otherwise
         rotation                table    Table with these numeric fields: min, max. Is also an array.
-        shaderFilename          string   Filename of the shader. Is empty if no shader has been specified. This could be used as a fallback for when shaderPath is empty.
+        shaderFilename          string   Filename of the shader. Is empty if no shader has been specified. This could be used as a fallback for when 'shaderPath' is empty.
         shaderPath              string   Path to the shader relative to the specified base folder. Is empty if no shader has been specified or no path is available.
         sizes                   table    Sequence of sizes.
         sizeVariation           number   How varied the sizes are. The value is between 0 and 1.
@@ -347,13 +355,14 @@ Values:
         spread                  number   Angle. How spread out the particles are from their initial direction.
         tangentialAcceleration  table    Table with these numeric fields: min, max. Is also an array.
         textureHeight           number   Height of the particle texture.
+        textureOffset           table    Texture offset for the particles. It's a table with these numeric fields: x, y. Is also an array.
         texturePath             string   Path to the texture relative to the specified base folder. Is empty if no path value is available.
-        texturePreset           string   Fallback for when texturePath is empty.
+        texturePreset           string   Fallback for when 'texturePath' is empty - is empty otherwise.
         textureWidth            number   Width of the particle texture.
         title                   string   Title of the particle system. Is empty by default.
 
     pixelateTextures
-        Boolean. True if textures are set to be pixelated (i.e. use nearest
+        Boolean. True if textures are set to be pixelated (i.e. use nearest-
         neighbor filtering), false otherwise (linear filtering).
 
 

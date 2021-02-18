@@ -84,8 +84,9 @@ local writeProject :: (buffer:[]string, project:Project, isSavingWorkspace:bool)
 	insert(buffer, "scaleGlobalSizeEnabled")  ; writeValue(buffer, eol=true, project.scaleGlobalSizeEnabled)
 	insert(buffer, "scaleGlobalSize")         ; writeValue(buffer, eol=true, project.scaleGlobalSize)
 
-	insert(buffer, "zoom")       ; writeValue (buffer, eol=true, project.zoomLevel)
-	insert(buffer, "customData") ; writeValue (buffer, eol=true, project.customData)
+	insert(buffer, "zoom")            ; writeValue (buffer, eol=true, project.zoomLevel)
+	insert(buffer, "customData")      ; writeValue (buffer, eol=true, project.customData)
+	insert(buffer, "emitterPosition") ; writeValues(buffer, eol=true, project.emitterX, project.emitterY)
 
 	insert(buffer, "movementScaleEnabled") ; writeValues(buffer, eol=true, project.movementScaleXEnabled, project.movementScaleYEnabled)
 	insert(buffer, "movement")
@@ -100,11 +101,6 @@ local writeProject :: (buffer:[]string, project:Project, isSavingWorkspace:bool)
 	writeValue(buffer, project.regionWidth)
 	writeValue(buffer, project.regionHeight)
 	insert(buffer, "\n")
-
-	do {
-		local x, y = project.systems[1].particles.getPosition!()
-		insert(buffer, "emitterPosition") ; writeValues(buffer, eol=true, x, y)
-	}
 
 	for cast(table) project.guiLimits {
 		insert(buffer, "guiLimit")
@@ -124,6 +120,8 @@ local writeProject :: (buffer:[]string, project:Project, isSavingWorkspace:bool)
 		insert(buffer, "emissionRate")                  ; writeValue (buffer, eol=true, system.psEmissionRate)
 		insert(buffer, "emitterContinuous")             ; writeValue (buffer, eol=true, system.psEmitterContinuous)
 		insert(buffer, "emitterLifetime")               ; writeValue (buffer, eol=true, system.psEmitterLifetime)
+		insert(buffer, "emitterOffsetEnabled")          ; writeValue (buffer, eol=true, system.emitterOffsetEnabled)
+		insert(buffer, "emitterOffset")                 ; writeValues(buffer, eol=true, system.emitterOffsetX, system.emitterOffsetY)
 		insert(buffer, "insertMode")                    ; writeValue (buffer, eol=true, cast(string) system.psInsertMode)
 		insert(buffer, "kickStartEmitEnabled")          ; writeValue (buffer, eol=true, system.kickStartEmitEnabled)
 		insert(buffer, "kickStartEmit")                 ; writeValue (buffer, eol=true, system.kickStartEmit)
@@ -131,7 +129,7 @@ local writeProject :: (buffer:[]string, project:Project, isSavingWorkspace:bool)
 		insert(buffer, "kickStartSteps")                ; writeValue (buffer, eol=true, system.kickStartSteps)
 		insert(buffer, "linearDampingEnabled")          ; writeValue (buffer, eol=true, system.psLinearDampingEnabled)
 		insert(buffer, "linearDamping")                 ; writeValues(buffer, eol=true, system.psLinearDampingMin, system.psLinearDampingMax)
-		insert(buffer, "offset")                        ; writeValues(buffer, eol=true, system.offsetX, system.offsetY)
+		insert(buffer, "offset")                        ; writeValues(buffer, eol=true, system.textureOffsetX, system.textureOffsetY)
 		insert(buffer, "particleLifetime")              ; writeValues(buffer, eol=true, system.psParticleLifetimeMin, system.psParticleLifetimeMax)
 		insert(buffer, "radialAccelerationEnabled")     ; writeValue (buffer, eol=true, system.psRadialAccelerationEnabled)
 		insert(buffer, "radialAcceleration")            ; writeValues(buffer, eol=true, system.psRadialAccelerationMin, system.psRadialAccelerationMax)
@@ -457,10 +455,6 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 		local project: Project = NULL
 		local system:  System  = NULL
 
-		local gotEmitterPosition = false
-		local emitterX: float
-		local emitterY: float
-
 		for line in iter, nil, nil {
 			ln += 1
 			if line == ""  continue
@@ -472,15 +466,11 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 					case "project":
 						project = Project()
 						system  = NULL
-
-						gotEmitterPosition = false
-
 						insert(projects, project)
 
 					case "system":
 						if project == NULL  return parsingError(path, ln, "Unexpected 'system' label.")
 						system = System()
-						if gotEmitterPosition  system.particles.setPosition!(emitterX, emitterY)
 						insert(project.systems, system)
 
 					case:
@@ -749,9 +739,10 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 						local ^ok, ^ptr, x = readFloat(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 						local ^ok, ^ptr, y = readFloat(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
-						gotEmitterPosition = true
-						emitterX           = x
-						emitterY           = y
+						project.emitterX          = x
+						project.emitterY          = y
+						project.emitterPlacementX = x
+						project.emitterPlacementY = y
 
 					case "customData":
 						local ^ok, ^ptr, data = readString(version, line, cast(int)ptr)
@@ -1024,8 +1015,8 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 						local ^ok, ^ptr, x = readFloat(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 						local ^ok, ^ptr, y = readFloat(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
 						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
-						system.offsetX = x
-						system.offsetY = y
+						system.textureOffsetX = x
+						system.textureOffsetY = y
 
 					case "emissionAreaAngleEnabled":
 						local ^ok, ^ptr, enabled = readBool(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
@@ -1066,6 +1057,17 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 						system.psLinearAccelerationYmin = ymin
 						system.psLinearAccelerationXmax = xmax
 						system.psLinearAccelerationYmax = ymax
+
+					case "emitterOffsetEnabled":
+						local ^ok, ^ptr, enabled = readBool(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
+						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
+						system.emitterOffsetEnabled = enabled
+					case "emitterOffset":
+						local ^ok, ^ptr, x = readFloat(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
+						local ^ok, ^ptr, y = readFloat(version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)
+						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
+						system.emitterOffsetX = x
+						system.emitterOffsetY = y
 
 					case "frames":
 						local ^ok, ^ptr, values = readIntArray(version, line, cast(int)ptr)
@@ -1121,6 +1123,8 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 			updateParticleParams(project, it) -- Needed for updateBufferSize() to work properly.
 			updateBufferSize(it)
 		}
+
+		moveEmittersTo(project, project.emitterX, project.emitterY, commit=false, instant=true)
 	}
 
 	return true, false, app
