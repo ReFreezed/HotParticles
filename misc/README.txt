@@ -293,6 +293,10 @@ HotParticles.app/Contents/Resources). Some of the standard Lua globals and
 modules are available, but not all. Note that trying to set globals will
 result in an error.
 
+The values are available both in the 'exported' table and directly (for
+example, 'exported.particleSystems' and 'particleSystems' refer to the same
+value).
+
 Functions:
 
     Lua( value )
@@ -357,7 +361,7 @@ Values:
         textureHeight           number   Height of the particle texture.
         textureOffset           table    Texture offset for the particles. It's a table with these numeric fields: x, y. Is also an array.
         texturePath             string   Path to the texture relative to the specified base folder. Is empty if no path value is available.
-        texturePreset           string   Fallback for when 'texturePath' is empty - is empty otherwise.
+        texturePreset           string   Name of used built-in texture if no custom texture is specified - is empty otherwise.
         textureWidth            number   Width of the particle texture.
         title                   string   Title of the particle system. Is empty by default.
 
@@ -366,3 +370,5 @@ Values:
         neighbor filtering), false otherwise (linear filtering).
 
 
+
+==============================================================================

@@ -3107,7 +3107,7 @@ export getOptimalBufferSize :: (system:System, moreExact=false) -> int {
 	local rate             = ps.getEmissionRate!()               -- n/s
 	local relevantTime     = emitterLifetime < 0 ? particleLifetime : math.min(particleLifetime, emitterLifetime)
 	local bufferSize       = math.ceil((system.kickStartEmitEnabled ? system.kickStartEmit : 0) + rate * relevantTime * (moreExact ? 1 : 1.05)) -- n/s * s  =  n
-	return math.min(bufferSize, app.maxBufferSize)
+	return math.max(math.min(bufferSize, app.maxBufferSize), 1)
 }
 
 
@@ -3939,16 +3939,15 @@ export generateDataToExportFromTemplate :: (templateName:string, templateFullPat
 		insert(publicParticleSystems, publicParticleSystem)
 
 		do {
-			local ^ok, texturePath = resolveTextureOutputPath(currentProject, system)
+			local texturePath       = ""
+			local ^ok, _texturePath = resolveTextureOutputPath(currentProject, system)
 
 			if ok {
 				local ^ok, basePath = resolveBaseOuputPath(currentProject)
 				if ok {
-					local ^ok, texturePathObj = Path.getRelativeTo(texturePath, basePath)
+					local ^ok, texturePathObj = Path.getRelativeTo(_texturePath, basePath)
 					if ok and texturePathObj.path[1] ~= ".."  texturePath = texturePathObj.toString!()
 				}
-			} else {
-				texturePath = ""
 			}
 
 			publicParticleSystem.texturePath = texturePath
@@ -3991,7 +3990,7 @@ export generateDataToExportFromTemplate :: (templateName:string, templateFullPat
 		publicParticleSystem.sizeVariation    = ps.getSizeVariation!()
 		publicParticleSystem.spinVariation    = ps.getSpinVariation!()
 		publicParticleSystem.spread           = ps.getSpread!()
-		publicParticleSystem.texturePreset    = (publicParticleSystem.texturePath == "") ? system.textureName : ""
+		publicParticleSystem.texturePreset    = (system.texturePath == "" or publicParticleSystem.texturePath == "") ? system.textureName : ""
 		publicParticleSystem.title            = system.title
 
 		do { local min,max   = ps.getLinearDamping!()          ; publicParticleSystem.linearDamping          = cast(table) {min,max, min=min,max=max} }
@@ -4067,31 +4066,30 @@ export generateDataToExportFromTemplate :: (templateName:string, templateFullPat
 
 	-- Run template.
 	local writeLuaValue :: (buffer:[]string, level:int, v:any) {
-		using lua.LuaType
 		level += 1
 
 		if !complete lua.getType(v) == {
-			case BOOLEAN: !through
-			case NIL:     !through
-			case NUMBER:
+			case .BOOLEAN: !through
+			case .NIL:     !through
+			case .NUMBER:
 				if     v == 0           insert(buffer, "0") -- Avoid writing "-0".
 				elseif v == +math.HUGE  insert(buffer, "math.huge")
 				elseif v == -math.HUGE  insert(buffer, "(-math.huge)")
 				elseif v ~= v           insert(buffer, "(0/0)")
 				else                    insert(buffer, format("%s", cast(string)v)) -- The type we cast to doesn't matter here.
 
-			case STRING:
+			case .STRING:
 				local s = replace(format("%q", cast(string)v), "\\\n", "\\n")
 				insert(buffer, s)
 
-			case TABLE: -- Assume it's an array.
+			case .TABLE: -- Assume it's an array.
 				insert(buffer, "{")
 				writeLuaCsv(buffer, level, cast([]any)v)
 				insert(buffer, "}")
 
-			case FUNCTION: !through
-			case THREAD:   !through
-			case USERDATA:
+			case .FUNCTION: !through
+			case .THREAD:   !through
+			case .USERDATA:
 				errorf(level, "cannot serialize values of type '%s'", cast(string)lua.getType(v))
 
 			case:
@@ -4109,7 +4107,14 @@ export generateDataToExportFromTemplate :: (templateName:string, templateFullPat
 
 	local buffer: []string
 
-	local templateEnv = prepareSandbox({
+	local exportedValues: table = {
+		customData       = currentProject.customData,
+		emitterPosition  = {x=currentProject.emitterX, y=currentProject.emitterY, currentProject.emitterX, currentProject.emitterY},
+		particleSystems  = publicParticleSystems,
+		pixelateTextures = currentProject.pixelateTextures,
+	}
+
+	local globals: table = {
 		Text = [buffer] (s:string) {
 			if lua.getType(s) ~= .STRING {
 				errorf(2, "bad argument #1 to 'Text'. (string expected, got %s)", cast(string)lua.getType(s))
@@ -4128,13 +4133,13 @@ export generateDataToExportFromTemplate :: (templateName:string, templateFullPat
 				writeLuaValue(buffer, 2, v)
 		},
 
-		customData       = currentProject.customData,
-		emitterPosition  = {x=currentProject.emitterX, y=currentProject.emitterY, currentProject.emitterX, currentProject.emitterY},
-		particleSystems  = publicParticleSystems,
-		pixelateTextures = currentProject.pixelateTextures,
-	})
+		exported = exportedValues,
+	}
 
-	setEnvironment(chunk, templateEnv)
+	for exportedValues  globals[itIndex] = it
+
+	local env = prepareSandbox(globals)
+	setEnvironment(chunk, env)
 
 	ok, err = pcall(chunk)
 	if not ok {

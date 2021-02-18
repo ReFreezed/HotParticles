@@ -2,7 +2,7 @@ Text [=[
 --[[
 module = {
 	x=emitterPositionX, y=emitterPositionY,
-	{
+	[1] = {
 		system=particleSystem1,
 		kickStartSteps=steps1, kickStartDt=dt1, emitAtStart=count1,
 		blendMode=blendMode1, shader=shader1,
@@ -10,7 +10,7 @@ module = {
 		shaderPath=path1, shaderFilename=filename1,
 		x=emitterOffsetX, y=emitterOffsetY
 	},
-	{
+	[2] = {
 		system=particleSystem2,
 		...
 	},
@@ -20,7 +20,7 @@ module = {
 ]=]
 
 Text"local LG        = love.graphics\n"
-Text"local particles = {x=" Lua(emitterPosition.x) Text", y=" Lua(emitterPosition.y) Text"}\n"
+Text"local particles = {x=" Lua(exported.emitterPosition.x) Text", y=" Lua(exported.emitterPosition.y) Text"}\n"
 Text"\n"
 
 -- Define images. Some may be shared between multiple particle systems.
@@ -29,7 +29,7 @@ local imageIdentByTexturePath   = {}
 local imageIdentByTexturePreset = {}
 local imageN                    = 0
 
-for _, ps in ipairs(particleSystems) do
+for _, ps in ipairs(exported.particleSystems) do
 	local imageIdentByKey = ps.texturePath ~= "" and imageIdentByTexturePath or imageIdentByTexturePreset
 	local key             = ps.texturePath ~= "" and ps.texturePath          or ps.texturePreset
 	local imageIdent      = imageIdentByKey[key]
@@ -45,7 +45,7 @@ for _, ps in ipairs(particleSystems) do
 			Text"local " Text(imageIdent) Text" = LG.newImage(" Lua(ps.texturePath) Text")\n"
 		end
 
-		if pixelateTextures then
+		if exported.pixelateTextures then
 			Text(imageIdent) Text":setFilter(\"nearest\", \"nearest\")\n"
 		else
 			Text(imageIdent) Text":setFilter(\"linear\", \"linear\")\n"
@@ -61,7 +61,7 @@ local shaderIdentByPath     = {}
 local shaderIdentByFilename = {}
 local shaderN               = 0
 
-for _, ps in ipairs(particleSystems) do
+for _, ps in ipairs(exported.particleSystems) do
 	if ps.shaderFilename ~= "" then
 		local shaderIdentByKey = ps.shaderPath ~= "" and shaderIdentByPath or shaderIdentByFilename
 		local key              = ps.shaderPath ~= "" and ps.shaderPath     or ps.shaderFilename
@@ -89,7 +89,7 @@ for _, ps in ipairs(particleSystems) do
 end
 
 -- Define particle systems.
-for _, ps in ipairs(particleSystems) do
+for _, ps in ipairs(exported.particleSystems) do
 	Text"\n"
 	Text"local ps = LG.newParticleSystem(" Text(imageIdentBySystem[ps]) Text", " Lua(ps.bufferSize) Text")\n"
 

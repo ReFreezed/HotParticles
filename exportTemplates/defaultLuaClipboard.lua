@@ -4,7 +4,7 @@ local imageIdentByTexturePath   = {}
 local imageIdentByTexturePreset = {}
 local imageN                    = 0
 
-for _, ps in ipairs(particleSystems) do
+for _, ps in ipairs(exported.particleSystems) do
 	local imageIdentByKey = ps.texturePath ~= "" and imageIdentByTexturePath or imageIdentByTexturePreset
 	local key             = ps.texturePath ~= "" and ps.texturePath          or ps.texturePreset
 	local imageIdent      = imageIdentByKey[key]
@@ -20,7 +20,7 @@ for _, ps in ipairs(particleSystems) do
 			Text"local " Text(imageIdent) Text" = love.graphics.newImage(" Lua(ps.texturePath) Text")\n"
 		end
 
-		if pixelateTextures then
+		if exported.pixelateTextures then
 			Text(imageIdent) Text":setFilter(\"nearest\", \"nearest\")\n"
 		else
 			Text(imageIdent) Text":setFilter(\"linear\", \"linear\")\n"
@@ -31,7 +31,7 @@ for _, ps in ipairs(particleSystems) do
 end
 
 -- Define particle systems.
-for _, ps in ipairs(particleSystems) do
+for _, ps in ipairs(exported.particleSystems) do
 	Text"\n"
 	Text"local ps = love.graphics.newParticleSystem(" Text(imageIdentBySystem[ps]) Text", " Lua(ps.bufferSize) Text")\n"
 
@@ -82,7 +82,7 @@ for _, ps in ipairs(particleSystems) do
 	end
 	Text"-- love.graphics.setBlendMode(" Lua(ps.blendMode) Text")\n"
 	Text"-- love.graphics.draw(ps, "
-	Lua(emitterPosition.x) Text(ps.emitterOffset.x >= 0 and "+" or "") Lua(ps.emitterOffset.x) Text", "
-	Lua(emitterPosition.y) Text(ps.emitterOffset.y >= 0 and "+" or "") Lua(ps.emitterOffset.y)
+	Lua(exported.emitterPosition.x) Text(ps.emitterOffset.x >= 0 and "+" or "") Lua(ps.emitterOffset.x) Text", "
+	Lua(exported.emitterPosition.y) Text(ps.emitterOffset.y >= 0 and "+" or "") Lua(ps.emitterOffset.y)
 	Text")\n"
 end
