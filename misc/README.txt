@@ -180,8 +180,6 @@ Spawn:
     particle system starts. (The delta time for each update is calculated
     automatically using the particles lifetime.) A higher value will look
     nicer but takes longer to execute.
-- Offset pos: The emitter's offset from the base position. You can use this to
-    offset multiple particle systems from each other.
 
 Lifetime:
 - Emitter: For how long the emitter should emit. Continuous emitters run
@@ -189,6 +187,8 @@ Lifetime:
 - Particle: The lifetime of each individual particle.
 
 Area: Distribution of the particles when they spawn.
+- Offset pos: The area/emitter's offset from the base position. You can use
+    this to offset multiple particle systems from each other.
 - Angle: Angle of the distribution area.
 - dx/dy: The size of the distribution area.
 - Direction relative to area center: Enabling this will make the Direction

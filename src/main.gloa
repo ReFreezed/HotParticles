@@ -249,7 +249,7 @@ export Project :: struct {
 	exportParticles             = true,
 	exportParticlesOverwrite    = false,
 	exportParticlesPath         = "",
-	exportParticlesTemplate     = "defaultLuaModule",
+	exportParticlesTemplate     = "defaultLuaModule", -- If this is empty then exportParticlesTemplatePath is used.
 	exportParticlesTemplatePath = "",
 	exportTextures              = false,
 	exportTexturesOverwrite     = false,
@@ -1866,6 +1866,8 @@ local getVisibilityFlags :: () -> bool, bool, bool, bool, bool, bool {
 		or math.max(guiState.activeId, guiState.hoveredId) == guiState.getElement!("areaAngle").id
 		or math.max(guiState.activeId, guiState.hoveredId) == guiState.getElement!("areaDx").id
 		or math.max(guiState.activeId, guiState.hoveredId) == guiState.getElement!("areaDy").id
+		or math.max(guiState.activeId, guiState.hoveredId) == guiState.getElement!("emitterOffsetX").id
+		or math.max(guiState.activeId, guiState.hoveredId) == guiState.getElement!("emitterOffsetY").id
 
 	local isHoveringEmitterRelated
 		=  isHoveringAreaDistribution

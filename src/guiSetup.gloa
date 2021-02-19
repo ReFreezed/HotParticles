@@ -156,10 +156,6 @@ export setupGuiFrames :: () {
 						guiState.slider!({ name="emissionRate",   labelLeft="rate",                              defaultValue=1, min=0, max=512,  exponential=true,             limitName="emissionRate",   readout="%.1f / sec" }),
 						guiState.slider!({ name="kickStartEmit",  labelLeft="emit at start",    canDisable=true, defaultValue=0, min=0, max=1024, exponential=true, isInt=true, limitName="kickStartEmit",  readout="%.0f" }),
 						guiState.slider!({ name="kickStartSteps", labelLeft="kick-start steps", canDisable=true, defaultValue=0, min=0, max=128,  exponential=true, isInt=true, limitName="kickStartSteps", readout="%.0f", readoutZero="no kick-start" }),
-						guiState.hbox!({
-							guiState.slider!({ name="emitterOffsetX", canDisable=true, defaultValue=0, min=-200, max=200, limitName="emitterOffset", readout="%.0f", weight=1, labelLeft="offset pos x/y" }),
-							guiState.slider!({ name="emitterOffsetY", canDisable=true, defaultValue=0, min=-200, max=200, limitName="emitterOffset", readout="%.0f", weight=1 }),
-						}),
 					}),
 
 					guiState.separator!({ thick=true }),
@@ -176,6 +172,10 @@ export setupGuiFrames :: () {
 					guiState.separator!({ thick=true }),
 
 					guiState.section!({ name="areaSection", label="Area", tooltip="Spawning area", icon16="areaSize",
+						guiState.hbox!({
+							guiState.slider!({ name="emitterOffsetX", canDisable=true, defaultValue=0, min=-200, max=200, limitName="emitterOffset", readout="%.0f", weight=1, labelLeft="offset pos x/y" }),
+							guiState.slider!({ name="emitterOffsetY", canDisable=true, defaultValue=0, min=-200, max=200, limitName="emitterOffset", readout="%.0f", weight=1 }),
+						}),
 						guiState.radio!({ name="areaDistribution", labelLeft="distribution", buttons={
 							{value=LG.AreaSpreadDistribution.NONE,             label="none",    tooltip="None"},
 							{value=LG.AreaSpreadDistribution.ELLIPSE,          label="ellip",   tooltip="Ellipse"},
