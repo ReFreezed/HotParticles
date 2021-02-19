@@ -78,7 +78,7 @@ F               Fast-forward particles (hold)
 G               Slow down particles (hold)
 
 H               Show/hide current particle system
-P               Show/hide particle movement path
+P               Show/hide particle path preview
 F1              Show/hide stats (and toggle Vsync)
 F2              Show/hide panel numbers
 
@@ -321,9 +321,9 @@ Values:
         particle systems can have their own custom data too.)
 
     emitterPosition
-        Table with these numeric fields: x, y. Is also an array. (Note that
-        particle systems can specify an offset from this position with the
-        'emitterOffset' field.)
+        Base position for all emitters. It's a table with these numeric
+        fields: x, y. Is also an array. (Note that particle systems can
+        specify an offset from this position with the 'emitterOffset' field.)
 
     particleSystems
         Array of tables with these fields:

@@ -1,6 +1,15 @@
 Changelog
 Hot Particles
 
+v1.8 (2021-02-19)
+- Particle systems can now have individual position offsets.
+- Fixed particle path previews not using the specified area distribution.
+- Templates: Values have been moved to the 'exported' namespace (i.e. particleSystems is now exported.particleSystems). (Values are also available in the old place so existing templates still work.)
+- Templates: Added exported.emitterPosition and exported.particleSystems[n].emitterOffset.
+- Templates: Deprecated exported.particleSystems[n].offset. (Use exported.particleSystems[n].textureOffset instead.) ('offset' is an alias for 'textureOffset' so existing templates still work.)
+- Templates: exported.particleSystems[n].texturePreset is now empty if a custom texture is used.
+- The default templates have been updated.
+
 v1.7 (2021-01-10)
 - Project files can be renamed from the tab context menu.
 - Added menu button for reopening the current project.
