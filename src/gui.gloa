@@ -124,8 +124,8 @@ export State :: struct {
 	currentTooltip = "",
 	tooltipTime    = 0.00,
 	tooltipX       = 0,
-	tooltipY1      = 0, -- Primary.
-	tooltipY2      = 0, -- Fallback.
+	tooltipY1      = 0, -- Primary, from the bottom of the tooltip.
+	tooltipY2      = 0, -- Fallback, from the top of the tooltip.
 
 	layoutNeedsUpdate = true,
 
@@ -265,7 +265,9 @@ local register :: (state:State, el:Element, T:Type) -> Element {
 	state.nextId += 1
 
 	state.elementsById[el.id] = el
-	if el.name  state.elementsByName[el.name] = el
+	if el.name and state.elementsByName[el.name] == NULL {
+		state.elementsByName[el.name] = el
+	}
 
 	if T == Scrollable  insert(state.scrollables, cast(Scrollable)el)
 
@@ -284,7 +286,9 @@ local unregisterTree :: (state:State, el:Element, updateInteractions:bool) {
 	}
 
 	state.elementsById[el.id] = NULL
-	if el.name  state.elementsByName[el.name] = NULL
+	if state.elementsByName[el.name] == el {
+		state.elementsByName[el.name] = NULL
+	}
 
 	if el.type == Scrollable {
 		local found, i = indexOf(state.scrollables, cast(Scrollable) el)
@@ -390,11 +394,12 @@ export Vbox :: struct {
 
 
 export Text :: struct {
-	using Element,
+	using Widget, -- @Cleanup: Make it possible for non-widgets to have tooltips. This is silly!
 
-	text = "",
-	textLines: []string,
-	size = 2, -- 1=small, 2=normal, 3=large
+	text          = "",
+	textLines     = []string.{},
+	size          = 2, -- 1=small, 2=normal, 3=large
+	textIsTooltip = false,
 
 	textHeight = 0,
 }
@@ -863,6 +868,10 @@ export onMousePressed :: (state:State, mx,my:int, mbutton:int, presses:int) -> (
 			} elseif el.type == Slider and mayDoublePress and triggerDoublePressEvent(state, slider, "", 0) {
 				-- void
 
+			-- Text elements do nothing.
+			} elseif el.type == Text {
+				-- void
+
 			-- Press that activates.
 			} else {
 				state.activeId      = state.hoveredId
@@ -1200,6 +1209,29 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int, begin=false, end=fals
 				state.tooltipX  = math.round(buttons.layoutX + (state.hoveredSubid-1) * buttons.buttonWidth)
 				state.tooltipY1 = buttons.layoutY
 				state.tooltipY2 = buttons.layoutY + buttons.layoutHeight
+			}
+
+		} elseif widget.type == Text {
+			local textEl = cast(Text) widget
+
+			if not textEl.textIsTooltip {
+				-- void
+
+			} elseif textEl.textLines {
+				local fontH = getFont(textEl).getHeight!()
+				local i     = math.floor(1 + (my - (textEl.layoutY + getScrollOffset(textEl))) / fontH)
+				i           = math.clamp(i, 1, #textEl.textLines)
+
+				state.currentTooltip = textEl.textLines[i]
+				state.tooltipX       = textEl.layoutX - SPACING
+				state.tooltipY1      = textEl.layoutY + i*fontH + SPACING
+				state.tooltipY2      = state.tooltipY1 - fontH - 2*SPACING
+
+			} else {
+				state.currentTooltip = textEl.text
+				state.tooltipX       = textEl.layoutX - SPACING
+				state.tooltipY1      = textEl.layoutY + textEl.layoutHeight + SPACING
+				state.tooltipY2      = textEl.layoutY - SPACING
 			}
 		}
 
@@ -1656,7 +1688,7 @@ local calculateNaturalSize :: (state:State, el:Element) {
 
 		case Text:
 			local textEl        = cast(Text) el
-			local font          = textEl.size == 3 ? fontLarge : textEl.size == 1 ? fontSmall : fontNormal
+			local font          = getFont(textEl)
 			local fontH         = font.getHeight!()
 			local lineCount     = textEl.textLines ? #textEl.textLines : 1 + countString(textEl.text, "\n")
 			textEl.textHeight   = math.ceil(fontH + (lineCount-1) * fontH * font.getLineHeight!())
@@ -2156,7 +2188,7 @@ local drawElement :: (state:State, el:Element) {
 
 		case Text:
 			local textEl = cast(Text) el
-			local font   = textEl.size == 3 ? fontLarge : textEl.size == 1 ? fontSmall : fontNormal
+			local font   = getFont(textEl)
 			local textY  = textEl.layoutY + (textEl.layoutHeight - textEl.textHeight) // 2
 
 			LG.pushAll()
@@ -2945,6 +2977,7 @@ export getWidgetAt :: (state:State, x,y:int) -> (found:bool, widget:Widget) {
 		case Color:        return true, cast(Widget)widget
 		case ColorPreview: return true, cast(Widget)widget
 		case Direction:    return true, cast(Widget)widget
+		case Text:         return true, cast(Widget)widget -- @Hack for tooltips.
 
 		case Scrollable:
 			if x < widget.layoutX + widget.layoutWidth - SCROLLBAR_WIDTH  return false, NULL
@@ -4041,6 +4074,12 @@ local newName :: (prefix:string) -> string {
 
 export exists :: (state:State, el:Element) -> bool {
 	return state.elementsById[el.id] ~= NULL
+}
+
+
+
+local getFont :: (textEl:Text) -> LG.Font {
+	return textEl.size == 3 ? fontLarge : textEl.size == 1 ? fontSmall : fontNormal
 }
 
 

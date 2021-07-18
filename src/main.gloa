@@ -3223,7 +3223,7 @@ export undo :: (silent=false) {
 
 	if not silent {
 		reverseArray(labels)
-		setActionText("Undo:  "..concatinate(labels, ", "), clearMessage=false)
+		setActionText("Undo:  "..concatenate(labels, ", "), clearMessage=false)
 	}
 
 	markEdited(currentProject)
@@ -3257,7 +3257,7 @@ export redo :: () {
 
 	currentProject.changeIndex += 1
 
-	setActionText("Redo:  "..concatinate(labels, ", "), clearMessage=false)
+	setActionText("Redo:  "..concatenate(labels, ", "), clearMessage=false)
 
 	markEdited(currentProject)
 	guiState.refreshRecursively!("undoRedo")
@@ -3881,16 +3881,11 @@ export tryExportFiles :: (quick=false) {
 		local text = (
 			#filesToConfirmOverwrite == 1
 			? "This file will be overwritten:"
-			: format(
-				"These %d files will be overwritten:",
-				#filesToConfirmOverwrite
-			)
+			: format("These %d files will be overwritten:", #filesToConfirmOverwrite)
 		)
 
-		local buttonList: []gui.Button
-		for filesToConfirmOverwrite  insert(buttonList, gui.Button.{ label=it, tooltip=it })
-
-		local fileListEl = guiState.buttons!({ vertical=true, align=.LEFT, style=.LIST, buttons=buttonList })
+		local fileListEl = guiState.text!({ textIsTooltip=true })
+		for filesToConfirmOverwrite  insert(fileListEl.textLines, it)
 
 		pushTempChoiceDialog("Confirm export", text, BUTTONS, submitIndex=1, extraContent=fileListEl, width=DIALOG_WIDTH_EXPORT, [writeExportFiles,quick] (choice:int) {
 			if choice ~= 1  return
@@ -4156,7 +4151,7 @@ export generateDataToExportFromTemplate :: (templateName:string, templateFullPat
 		return false, ""
 	}
 
-	return true, concatinate(buffer)
+	return true, concatenate(buffer)
 }
 
 

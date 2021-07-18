@@ -422,7 +422,7 @@ export setupGuiFrames :: () {
 			guiState.section!({ name="exportProject_particlesSection", label="Particles", icon16="particles",
 				guiState.hbox!({
 					guiState.checkbox!({ name="exportProject_particles_writeFile", label="export particle systems" }),
-					guiState.checkbox!({ name="exportProject_particles_overwrite", label="overwrite existing", tooltip="Overwrite existing files without confirmation" }),
+					guiState.checkbox!({ name="exportProject_particles_overwrite", label="overwrite existing", tooltip="Overwrite existing file without confirmation" }),
 				}),
 				guiState.hbox!({
 					guiState.inputText!({ name="exportProject_particles_path", labelLeft="output filename", placeholder="?.lua", tooltip="Absolute path, or relative to base folder", weight=1 }),
@@ -430,10 +430,6 @@ export setupGuiFrames :: () {
 						{name="exportProject_particles_path_choose",   image="iconFolder",            tooltip="Browse files"},
 						{name="exportProject_particles_path_relative", image="iconRelativeDirectory", tooltip="Toggle relative path"},
 					}}),
-				}),
-				guiState.hbox!({ labelLeft="resulting path",
-					guiState.text!({ name="exportProject_particles_pathResult", weight=1 }),
-					guiState.buttons!({ name="exportProject_particles_pathResultInfo", buttons={{image="iconEye"}} }),
 				}),
 				guiState.hbox!({
 					guiState.buttons!({ name="exportProject_particles_template", labelLeft="template", align=.LEFT, buttonMinHeight=MEDIUM_BUTTON_HEIGHT, weight=1,
@@ -459,12 +455,6 @@ export setupGuiFrames :: () {
 						{name="exportProject_textures_directory_relative", image="iconRelativeDirectory", tooltip="Toggle relative path"},
 					}}),
 				}),
-				guiState.hbox!({ labelLeft="resulting paths",
-					guiState.scrollable!({ height=fontNormal.getHeight!()+2*(gui.SCROLLABLE_PADDING+gui.SPACING), weight=1,
-						guiState.text!({ name="exportProject_textures_pathResults" }),
-					}),
-					guiState.buttons!({ name="exportProject_textures_pathResultsInfo", buttons={{image="iconEye"}} }),
-				}),
 			}),
 
 			guiState.separator!({ thick=true }),
@@ -482,6 +472,13 @@ export setupGuiFrames :: () {
 			}),
 
 			guiState.separator!({ thick=true }),
+			guiState.section!({
+				guiState.hbox!({ labelLeft="files to be exported",
+					guiState.scrollable!({ height=6*fontNormal.getHeight!()+2*(gui.SCROLLABLE_PADDING+gui.SPACING), weight=1,
+						guiState.text!({ name="exportProject_pathResults", textIsTooltip=true }),
+					}),
+				}),
+			}),
 			guiState.buttons!({ height=BIG_BUTTON_HEIGHT,
 				buttons = {{name="exportProject_exportFiles",label="Export files"},{name="util_popPanel",label="Close"}},
 			}),
@@ -900,7 +897,7 @@ export setupGuiCallbacks :: () {
 			}
 		}
 
-		textEl.text = format("%d/%d  %s", bundleIndex, bundleCount, concatinate(labels, ", "))
+		textEl.text = format("%d/%d  %s", bundleIndex, bundleCount, concatenate(labels, ", "))
 	}
 
 	-- Project settings.
@@ -2998,7 +2995,7 @@ export setupGuiCallbacks :: () {
 				input.value = (
 					#itemNames == 0 ? ""           :
 					#itemNames == 1 ? itemNames[1] :
-					concatinate(itemNames, '"', '" "', '"')
+					concatenate(itemNames, '"', '" "', '"')
 				)
 			}
 
@@ -3245,11 +3242,8 @@ export setupGuiCallbacks :: () {
 			guiState.refreshRecursively!("exportProject_baseDirectoryResult")
 			guiState.refreshRecursively!("exportProject_baseDirectoryResultInfo")
 			guiState.refreshRecursively!("exportProject_particles_path")
-			guiState.refreshRecursively!("exportProject_particles_pathResult")
-			guiState.refreshRecursively!("exportProject_particles_pathResultInfo")
 			guiState.refreshRecursively!("exportProject_textures_directory")
-			guiState.refreshRecursively!("exportProject_textures_pathResults")
-			guiState.refreshRecursively!("exportProject_textures_pathResultsInfo")
+			guiState.refreshRecursively!("exportProject_pathResults")
 		}
 		guiState.onRefresh.exportProject_baseDirectoryResult = (textEl:gui.Text) {
 			local project  = app.projects[app.currentProjectIndex]
@@ -3293,11 +3287,8 @@ export setupGuiCallbacks :: () {
 					guiState.refreshRecursively!("exportProject_baseDirectoryResult")
 					guiState.refreshRecursively!("exportProject_baseDirectoryResultInfo")
 					guiState.refreshRecursively!("exportProject_particles_path")
-					guiState.refreshRecursively!("exportProject_particles_pathResult")
-					guiState.refreshRecursively!("exportProject_particles_pathResultInfo")
 					guiState.refreshRecursively!("exportProject_textures_directory")
-					guiState.refreshRecursively!("exportProject_textures_pathResults")
-					guiState.refreshRecursively!("exportProject_textures_pathResultsInfo")
+					guiState.refreshRecursively!("exportProject_pathResults")
 
 					popPanel()
 				}
@@ -3323,11 +3314,8 @@ export setupGuiCallbacks :: () {
 			guiState.refreshRecursively!("exportProject_baseDirectoryResult")
 			guiState.refreshRecursively!("exportProject_baseDirectoryResultInfo")
 			guiState.refreshRecursively!("exportProject_particles_path")
-			guiState.refreshRecursively!("exportProject_particles_pathResult")
-			guiState.refreshRecursively!("exportProject_particles_pathResultInfo")
 			guiState.refreshRecursively!("exportProject_textures_directory")
-			guiState.refreshRecursively!("exportProject_textures_pathResults")
-			guiState.refreshRecursively!("exportProject_textures_pathResultsInfo")
+			guiState.refreshRecursively!("exportProject_pathResults")
 		}
 	}
 
@@ -3342,8 +3330,7 @@ export setupGuiCallbacks :: () {
 			local project           = app.projects[app.currentProjectIndex]
 			project.exportParticles = checkbox.checked
 			markEdited(project)
-			guiState.refreshRecursively!("exportProject_particles_pathResult")
-			guiState.refreshRecursively!("exportProject_particles_pathResultInfo")
+			guiState.refreshRecursively!("exportProject_pathResults")
 		}
 
 		guiState.onRefresh.exportProject_particles_overwrite = (checkbox:gui.Checkbox) {
@@ -3368,28 +3355,7 @@ export setupGuiCallbacks :: () {
 			input.value                 = Path(trim(input.value)).toString!()
 			project.exportParticlesPath = input.value
 			markEdited(project)
-			guiState.refreshRecursively!("exportProject_particles_pathResult")
-			guiState.refreshRecursively!("exportProject_particles_pathResultInfo")
-		}
-		guiState.onRefresh.exportProject_particles_pathResult = (textEl:gui.Text) {
-			local project = app.projects[app.currentProjectIndex]
-
-			if not project.exportParticles {
-				textEl.text = ""
-				return
-			}
-
-			local ok, path = resolveParticlesOuputPath(project)
-
-			if not ok {
-				textEl.text = "Missing/invalid path!"
-				return
-			}
-
-			textEl.text = path
-		}
-		guiState.onRefresh.exportProject_particles_pathResultInfo = (buttons:gui.Buttons) {
-			buttons.tooltip = guiState.getElement!("exportProject_particles_pathResult", gui.Text).text
+			guiState.refreshRecursively!("exportProject_pathResults")
 		}
 
 		guiState.onAction.exportProject_particles_path_choose = (buttons:gui.Buttons, buttonIndex:int, source:gui.ActionSource) {
@@ -3417,8 +3383,7 @@ export setupGuiCallbacks :: () {
 					markEdited(project)
 
 					guiState.refreshRecursively!("exportProject_particles_path")
-					guiState.refreshRecursively!("exportProject_particles_pathResult")
-					guiState.refreshRecursively!("exportProject_particles_pathResultInfo")
+					guiState.refreshRecursively!("exportProject_pathResults")
 
 					popPanel()
 				}
@@ -3442,8 +3407,7 @@ export setupGuiCallbacks :: () {
 
 			guiState.refreshRecursively!("exportProject_particles_path")
 			-- Shouldn't be needed, but just to be safe:
-			guiState.refreshRecursively!("exportProject_particles_pathResult")
-			guiState.refreshRecursively!("exportProject_particles_pathResultInfo")
+			guiState.refreshRecursively!("exportProject_pathResults")
 		}
 	}
 
@@ -3573,8 +3537,7 @@ export setupGuiCallbacks :: () {
 			local project          = app.projects[app.currentProjectIndex]
 			project.exportTextures = checkbox.checked
 			markEdited(project)
-			guiState.refreshRecursively!("exportProject_textures_pathResults")
-			guiState.refreshRecursively!("exportProject_textures_pathResultsInfo")
+			guiState.refreshRecursively!("exportProject_pathResults")
 		}
 
 		guiState.onRefresh.exportProject_textures_overwrite = (checkbox:gui.Checkbox) {
@@ -3598,38 +3561,7 @@ export setupGuiCallbacks :: () {
 			input.value                     = Path(trim(input.value)).toString!()
 			project.exportTexturesDirectory = input.value
 			markEdited(project)
-			guiState.refreshRecursively!("exportProject_textures_pathResults")
-			guiState.refreshRecursively!("exportProject_textures_pathResultsInfo")
-		}
-		guiState.onRefresh.exportProject_textures_pathResults = (textEl:gui.Text) {
-			local project = app.projects[app.currentProjectIndex]
-
-			if not project.exportTextures {
-				textEl.text = ""
-				return
-			}
-
-			local paths: []string
-			local pathSet: struct { !key:string, !value:bool }
-
-			for project.systems {
-				local ok, path = resolveTextureOutputPath(project, it)
-
-				if not ok {
-					textEl.text = "Missing/invalid paths!"
-					return
-				}
-
-				if not pathSet[path] {
-					pathSet[path] = true
-					insert(paths, path)
-				}
-			}
-
-			textEl.text = concatinate(paths, "\n")
-		}
-		guiState.onRefresh.exportProject_textures_pathResultsInfo = (buttons:gui.Buttons) {
-			buttons.tooltip = guiState.getElement!("exportProject_textures_pathResults", gui.Text).text
+			guiState.refreshRecursively!("exportProject_pathResults")
 		}
 
 		guiState.onAction.exportProject_textures_directory_choose = (buttons:gui.Buttons, buttonIndex:int, source:gui.ActionSource) {
@@ -3657,8 +3589,7 @@ export setupGuiCallbacks :: () {
 					markEdited(project)
 
 					guiState.refreshRecursively!("exportProject_textures_directory")
-					guiState.refreshRecursively!("exportProject_textures_pathResults")
-					guiState.refreshRecursively!("exportProject_textures_pathResultsInfo")
+					guiState.refreshRecursively!("exportProject_pathResults")
 
 					popPanel()
 				}
@@ -3682,9 +3613,48 @@ export setupGuiCallbacks :: () {
 
 			guiState.refreshRecursively!("exportProject_textures_directory")
 			-- Shouldn't be needed, but just to be safe:
-			guiState.refreshRecursively!("exportProject_textures_pathResults")
-			guiState.refreshRecursively!("exportProject_textures_pathResultsInfo")
+			guiState.refreshRecursively!("exportProject_pathResults")
 		}
+	}
+
+	guiState.onRefresh.exportProject_pathResults = (textEl:gui.Text) {
+		local doesFileExist :: (path:string) -> bool {
+			local _, dir, filename = Path.getDirectoryAndFilename(path)
+			if not connectToRemoteDirectory(dir)  return false
+
+			local exists = getFileInfo(filename)
+			disconnectFromRemoteDirectory()
+
+			return exists
+		}
+
+		local project    = app.projects[app.currentProjectIndex]
+		textEl.textLines = {}
+
+		if project.exportParticles {
+			local ok, path = resolveParticlesOuputPath(project)
+			if not ok {
+				insert(textEl.textLines, "Missing/invalid particles path!")
+			} else {
+				insert(textEl.textLines, (doesFileExist(path) ? "[OVERWRITE] " : "")..path)
+			}
+		}
+
+		if project.exportTextures {
+			local pathSet: struct { !key:string, !value:bool }
+
+			for project.systems {
+				local ok, path = resolveTextureOutputPath(project, it)
+				if not ok {
+					insert(textEl.textLines, "Missing/invalid texture path!")
+				} elseif not pathSet[path] {
+					pathSet[path] = true
+					insert(textEl.textLines, (doesFileExist(path) ? "[OVERWRITE] " : "")..path)
+				}
+			}
+		}
+
+		if not textEl.textLines  insert(textEl.textLines, "(nothing)")
 	}
 
 	guiState.onAction.exportProject_exportFiles = (buttons:gui.Buttons, buttonIndex:int, source:gui.ActionSource) {
@@ -4316,7 +4286,7 @@ export setupGuiCallbacks :: () {
 	}
 
 	guiState.onRefresh.log_text = (textEl:gui.Text) {
-		local s          = concatinate(logStrings, "\n")
+		local s          = concatenate(logStrings, "\n")
 		local _, lines   = fontNormal.getWrap!(s, DIALOG_WIDTH_LOG-20) -- @Ugly?
 		textEl.textLines = lines
 	}
