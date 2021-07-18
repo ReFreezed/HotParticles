@@ -18,7 +18,7 @@
 	getFileInfo
 	getModifierKey
 	isInside
-	limitArray
+	limitArray, areArraysEqual
 	log
 	newMonochromeImage, newImageUsingPalette
 	pcall_newImage, pcall_newShader
@@ -265,6 +265,16 @@ export compareFilenames :: (a,b:string) -> bool {
 
 export limitArray :: (array:[]any, maxLength:int) {
 	for maxLength+1, #array  array[it] = nil
+}
+
+export areArraysEqual :: (arr1,arr2:[]any) -> bool {
+	if #arr1 ~= #arr2  return false
+
+	for arr1 {
+		if it ~= arr2[itIndex]  return false
+	}
+
+	return true
 }
 
 

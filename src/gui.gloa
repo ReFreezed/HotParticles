@@ -176,6 +176,7 @@ export State :: struct {
 	cancelMouseActions :: _cancelMouseActions,
 	delete :: _delete,
 	draw :: _draw,
+	exists :: _exists,
 	findParent :: _findParent,
 	getButtonLayout :: _getButtonLayout,
 	getElement :: _getElement,
@@ -207,6 +208,7 @@ export State :: struct {
 	showContextMenu :: _showContextMenu,
 	showContextMenuWithInput :: _showContextMenuWithInput,
 	showMenu :: _showMenu,
+	showTextPrompt :: _showTextPrompt,
 	update :: _update,
 	updateLayout :: _updateLayout,
 }
@@ -215,6 +217,7 @@ local _blurFocus :: blurFocus
 local _cancelMouseActions :: cancelMouseActions
 local _delete :: delete
 local _draw :: draw
+local _exists :: exists
 local _findParent :: findParent
 local _getButtonLayout :: getButtonLayout
 local _getElement :: getElement
@@ -246,6 +249,7 @@ local _setFocus :: setFocus
 local _showContextMenu :: showContextMenu
 local _showContextMenuWithInput :: showContextMenuWithInput
 local _showMenu :: showMenu
+local _showTextPrompt :: showTextPrompt
 local _update :: update
 local _updateLayout :: updateLayout
 
@@ -2921,14 +2925,15 @@ export getWidgetAt :: (state:State, x,y:int) -> (found:bool, widget:Widget) {
 	if not found  return false, NULL
 
 	if widget.type == {
-		case Buttons:   return true, cast(Widget)widget
-		case InputText: return true, cast(Widget)widget
-		case Radio:     return true, cast(Widget)widget
-		case Tabs:      return true, cast(Widget)widget
-		case Checkbox:  return true, cast(Widget)widget
-		case Slider:    return true, cast(Widget)widget
-		case Color:     return true, cast(Widget)widget
-		case Direction: return true, cast(Widget)widget
+		case Buttons:      return true, cast(Widget)widget
+		case InputText:    return true, cast(Widget)widget
+		case Radio:        return true, cast(Widget)widget
+		case Tabs:         return true, cast(Widget)widget
+		case Checkbox:     return true, cast(Widget)widget
+		case Slider:       return true, cast(Widget)widget
+		case Color:        return true, cast(Widget)widget
+		case ColorPreview: return true, cast(Widget)widget
+		case Direction:    return true, cast(Widget)widget
 
 		case Scrollable:
 			if x < widget.layoutX + widget.layoutWidth - SCROLLBAR_WIDTH  return false, NULL
@@ -3437,12 +3442,13 @@ local limitMenuPosition :: (state:State, contextMenu:Frame) {
 	if y+h > LG.getHeight()   state.layoutNeedsUpdate, contextMenu.y = true, y - h
 }
 
-export showMenu :: (state:State, x,y:int, items:[]MenuItem, cb:(choice:string, data:any)) {
+-- Note that the callback type is different from showContextMenu*().
+export showMenu :: (state:State, x,y:int, items:[]MenuItem, cb:(choice:string,data:any), cbButtonOption:(choice:string,data:any)=NULL) {
 	state.hideContextMenu!()
 
 	local makeContextMenu :: (state:State, items:[]MenuItem, parentMenu:Frame, active=false) -> Frame {
 		local buttons     = state.buttons!({ name="__contextMenuButtons", vertical=true, align=.LEFT, style=.CONTEXT_MENU, buttonMinHeight=16 })
-		local contextMenu = state.frame!({ parentFrame=parentMenu, minWidth=CONTEXT_MENU_MIN_WIDTH, layout=.FLOATING, style=.CONTEXT_MENU, active=active, buttons })
+		local contextMenu = state.frame!({ parentFrame=parentMenu, minWidth=CONTEXT_MENU_MIN_WIDTH, layout=.FLOATING, style=.CONTEXT_MENU, temp=true, active=active, buttons })
 		insert(state.contextMenus, contextMenu)
 
 		for items {
@@ -3463,7 +3469,7 @@ export showMenu :: (state:State, x,y:int, items:[]MenuItem, cb:(choice:string, d
 	}
 
 	local contextMenu = makeContextMenu(state, items, NULL, true)
-	contextMenu.data  = cb
+	contextMenu.data  = [cb] (choice:int) { cb("", nil) }
 	contextMenu.x     = x
 	contextMenu.y     = y
 
@@ -3471,6 +3477,17 @@ export showMenu :: (state:State, x,y:int, items:[]MenuItem, cb:(choice:string, d
 
 	state.layoutNeedsUpdate = true
 	limitMenuPosition(state, contextMenu)
+
+	if cbButtonOption ~= NULL {
+		state.onOption.__contextMenuButtons = [cbButtonOption] (buttons:Buttons, buttonIndex:int) {
+			local button = buttons.buttons[buttonIndex]
+			local item   = cast(MenuItem) button.value
+
+			if item.submenu  return
+
+			cbButtonOption(item.name, item.data)
+		}
+	}
 
 	state.onMouseEnter.__contextMenuButtons = [state,cb] (buttons:Buttons, buttonIndex:int) {
 		local button = buttons.buttons[buttonIndex]
@@ -3520,7 +3537,7 @@ export showContextMenu :: (state:State, x,y:int, items:[]string, cb:(choice:int)
 	state.hideContextMenu!()
 
 	local buttons     = state.buttons!({ name="__contextMenuButtons", vertical=true, align=.LEFT, style=.CONTEXT_MENU, buttonMinHeight=16 })
-	local contextMenu = state.frame  !({ data=cb, x=x, y=y, minWidth=CONTEXT_MENU_MIN_WIDTH, layout=.FLOATING, style=.CONTEXT_MENU, buttons })
+	local contextMenu = state.frame  !({ data=cb, x=x, y=y, minWidth=CONTEXT_MENU_MIN_WIDTH, layout=.FLOATING, style=.CONTEXT_MENU, temp=true, buttons })
 	local choice      = 0
 
 	for items {
@@ -3561,7 +3578,7 @@ export showContextMenuWithInput :: (state:State, x,y:int, value:string, items:[]
 
 	local input       = state.inputText!({ name="__contextMenuInput", value=value, style=.CONTEXT_MENU, tooltip=inputTooltip })
 	local buttons     = state.buttons  !({ name="__contextMenuButtons", vertical=true, align=.LEFT, style=.CONTEXT_MENU, buttonMinHeight=16 })
-	local contextMenu = state.frame    !({ data=cb, x=x, y=y, minWidth=CONTEXT_MENU_MIN_WIDTH, layout=.FLOATING, style=.CONTEXT_MENU, input, buttons })
+	local contextMenu = state.frame    !({ data=cb, x=x, y=y, minWidth=CONTEXT_MENU_MIN_WIDTH, layout=.FLOATING, style=.CONTEXT_MENU, temp=true, input, buttons })
 	local choice      = 0
 
 	for items {
@@ -3592,7 +3609,7 @@ export showContextMenuWithInput :: (state:State, x,y:int, value:string, items:[]
 		}
 	}
 	-- if cbOption ~= NULL {
-	-- 	state.onOption.__contextMenuInput = [cbOption] (input:InputText) {
+	-- 	state.onOption.__contextMenuInput = [cbOption] (input:InputText, _:int) {
 	-- 		cbOption()
 	-- 	}
 	-- }
@@ -3640,13 +3657,48 @@ export hideContextMenu :: (state:State, mayDeactivateSubmenu=false) -> (success:
 
 	state.onAction    .__contextMenuButtons = nil
 	state.onMouseEnter.__contextMenuButtons = nil
+	state.onOption    .__contextMenuButtons = nil
 	state.onAction    .__contextMenuInput   = nil
 	state.onSubmit    .__contextMenuInput   = nil
+	-- state.onOption    .__contextMenuInput   = nil
 
 	local cb = cast((choice:int)) contextMenus[1].data
 	if cb ~= NULL  cb(0)
 
 	return true
+}
+
+
+
+export showTextPrompt :: (state:State, label:string, value:string, cbInput:(text:string), inputTooltip="", minWidth=0) -> Frame {
+	state.hideContextMenu!() -- Because why not?
+
+	local input = state.inputText!({ name="__textPromptInput", value=value, style=.CONTEXT_MENU, tooltip=inputTooltip })
+
+	local prompt = state.frame!({ name=newName"__textPrompt", layout=.FLOATING, modal=true, temp=true, minWidth=CONTEXT_MENU_MIN_WIDTH,
+		state.text!({ text=label }),
+		input,
+	})
+
+	insert(state.frames, prompt)
+	state.layoutNeedsUpdate = true
+
+	state.onSubmit.__textPromptInput = [state,prompt,cbInput] (input:InputText) {
+		-- state.delete!(prompt) -- No, allow user code to keep the prompt open!
+
+		cbInput(input.value)
+		scheduleSaveWorkspace()
+
+		if state.exists!(prompt) and state.focusId ~= input.id {
+			state.setFocus!(input)
+			input.field.selectAll!()
+		}
+	}
+
+	state.setFocus!(input)
+	input.field.selectAll!()
+
+	return prompt
 }
 
 
@@ -3911,6 +3963,20 @@ export getButtonLayout :: (state:State, buttons:Buttons, i:int) -> (x,y,w,h:int)
 		local w  = math.round(buttons.buttonWidth*(i  )) - x1
 		return buttons.layoutX+x1, buttons.layoutY, w, buttons.layoutHeight
 	}
+}
+
+
+
+local newName :: (prefix:string) -> string {
+	static n  = 0
+	n        += 1
+	return format("%s%d", prefix, n)
+}
+
+
+
+export exists :: (state:State, el:Element) -> bool {
+	return state.elementsById[el.id] ~= NULL
 }
 
 

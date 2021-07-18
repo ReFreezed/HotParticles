@@ -215,6 +215,13 @@ export App :: struct {
 
 	preferRelativePaths           = false, -- For file browser.
 	initializeSystemInNewProjects = true,
+
+	userGradients: []ColorGradient = {},
+}
+
+export ColorGradient :: struct {
+	name = "",
+	!value: float, -- h1,s1,v1,a1,...
 }
 
 

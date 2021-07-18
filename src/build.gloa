@@ -73,7 +73,7 @@ local doRelease :: () {
 			appIdentifier   = "com.refreezed.hotparticles",
 
 			companyName     = "",
-			copyright       = os.getDate"Copyright %Y Marcus 'ReFreezed' Thunström",
+			copyright       = os.getDate"Copyright 2020-%Y Marcus 'ReFreezed' Thunström",
 
 			lovePath        = "temp/app.love",
 			loveExeDir      = params.dirLoveWin64,

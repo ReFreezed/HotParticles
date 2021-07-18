@@ -227,15 +227,16 @@ export saveWorkspace :: () {
 	insert(buffer, "showProjectSettings") ; writeValue(buffer, eol=true, app.showProjectSettings)
 	insert(buffer, "showPanelNumbers")    ; writeValue(buffer, eol=true, app.showPanelNumbers)
 	insert(buffer, "project")             ; writeValue(buffer, eol=true, projectIndexToSave)
-	insert(buffer, "recentFiles")         ; writeValue(buffer, eol=true, app.recentProjects)
-	insert(buffer, "recentFolders")       ; writeValue(buffer, eol=true, app.recentFolders)
-	insert(buffer, "recentTextures")      ; writeValue(buffer, eol=true, app.recentTextures)
-	insert(buffer, "recentShaders")       ; writeValue(buffer, eol=true, app.recentShaders)
-	insert(buffer, "recentTemplates")     ; writeValue(buffer, eol=true, app.recentTemplates)
 	insert(buffer, "bookmarkedFolders")   ; writeValue(buffer, eol=true, app.bookmarkedFolders)
 	insert(buffer, "preferRelativePaths") ; writeValue(buffer, eol=true, app.preferRelativePaths)
 
 	insert(buffer, "initializeSystemInNewProjects") ; writeValue(buffer, eol=true, app.initializeSystemInNewProjects)
+
+	insert(buffer, "recentFiles")     ; writeValue(buffer, eol=true, app.recentProjects)
+	insert(buffer, "recentFolders")   ; writeValue(buffer, eol=true, app.recentFolders)
+	insert(buffer, "recentTextures")  ; writeValue(buffer, eol=true, app.recentTextures)
+	insert(buffer, "recentShaders")   ; writeValue(buffer, eol=true, app.recentShaders)
+	insert(buffer, "recentTemplates") ; writeValue(buffer, eol=true, app.recentTemplates)
 
 	insert(buffer, "maxBufferSize")    ; writeValue(buffer, eol=true, app.maxBufferSize)
 	insert(buffer, "maxRecentFiles")   ; writeValue(buffer, eol=true, app.maxRecentFiles)
@@ -247,6 +248,12 @@ export saveWorkspace :: () {
 		writeValue(buffer, cast(string) itIndex)
 	}
 	insert(buffer, "\n")
+
+	for app.userGradients {
+		insert(buffer, "gradient")
+		writeValue(buffer, eol=false, it.name)
+		writeValue(buffer, eol=true,  it)
+	}
 
 	do {
 		local w, h, flags = LW.getMode()
@@ -560,6 +567,17 @@ export loadWorkspace :: (path:string) -> (success:bool, gotError:bool, app:App) 
 						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
 						app.hiddenSections = {}
 						for names  app.hiddenSections[it] = true
+
+					case "gradient":
+						local ^ok, ^ptr, name   = readString(version, line, cast(int)ptr)
+						if not ok                 return parsingError(path, ln, "Bad value format: %s", line)
+						local ^ok, ^ptr, colors = readFloatArray(version, line, cast(int)ptr)
+						if not ok                 return parsingError(path, ln, "Bad value format: %s", line)
+						if #colors % 4   ~= 0     return parsingError(path, ln, "Bad color array format: %s", line)
+						if colors[1]     == NULL  return parsingError(path, ln, "No colors.")
+						if colors[8*4+1] ~= NULL  return parsingError(path, ln, "Too many colors. (Max is 8, got %d)", #colors // 4)
+						if cast(int)ptr <= #line  return parsingError(path, ln, "Garbage after values: %s", line)
+						insert(app.userGradients, ColorGradient.{name=name, unpack(colors)})
 
 					case "window":
 						local ^ok, ^ptr, x         = readInt (version, line, cast(int)ptr) ; if not ok  return parsingError(path, ln, "Bad value format: %s", line)

@@ -633,12 +633,14 @@ export pushTempChoiceDialog :: (title:string, text:string, buttonList:[]gui.Butt
 export popPanel :: (nameForAssert="") -> (success:bool) {
 	local ok, name = remove(panelStack)
 	if nameForAssert  assert(name == nameForAssert)
-	if not ok  return false
+	if not ok         return false
 
 	local frame = guiState.getElement!(name, gui.Frame)
-	guiState.setActive!(frame, false)
+	if frame ~= NULL {
+		guiState.setActive!(frame, false)
+		if frame.temp  guiState.delete!(frame)
+	}
 
-	if frame.temp  guiState.delete!(frame)
 	return true
 }
 
@@ -2497,6 +2499,83 @@ export setupGuiCallbacks :: () {
 	guiState.onRefresh.colorPreview = (preview:gui.ColorPreview) {
 		local project, system = getCurrentProjectAndSystem()
 		preview.blendMode     = system.blendMode
+	}
+	guiState.onOption.colorPreview = (preview:gui.ColorPreview, _:int) {
+		local items = []gui.MenuItem.{
+			{name="save", label="Save gradient"},
+		}
+
+		if app.userGradients {
+			insert(items, gui.MenuItem.{label="-"})
+
+			for app.userGradients {
+				local label = (it.name == "-" ? "- " : it.name)
+				local item  = gui.MenuItem.{name="gradient", label=label, data=itIndex}
+				insert(items, item)
+			}
+		}
+
+		local mx, my = LM.getPosition()
+
+		guiState.showMenu!(mx, my, items,
+			cb = (choice:string, data:any) {
+				if choice == {
+					case "gradient":
+						local userGradient    = app.userGradients[cast(int)data]
+						local project, system = getCurrentProjectAndSystem()
+						local colorsOld       = system.colors
+
+						if areArraysEqual(colorsOld, userGradient)  return
+
+						local colorsNew = {unpack(userGradient)}
+
+						recordChange("", "Color", nil,
+							[system, colorsNew] (project:Project) {  system.colors = colorsNew  },
+							[system, colorsOld] (project:Project) {  system.colors = colorsOld  },
+							[system           ] (project:Project) {
+								if isSystemCurrent(system)  guiState.refreshRecursively!("colors")
+								updateParticleColors(system)
+							}
+						)
+
+					case "save":
+						local prompt = guiState.showTextPrompt!("Gradient name:", "", minWidth=300, (text:string) {
+							text = trim(text)
+							if not text  return -- @UX: Show error message.
+
+							local project, system = getCurrentProjectAndSystem()
+							local userGradient    = ColorGradient.{name=text, unpack(system.colors)}
+							insert(app.userGradients, userGradient)
+
+							popPanel()
+						})
+						pushPanel(prompt.name)
+				}
+			},
+			cbButtonOption = [mx] (choice:string, data:any) {
+				if choice == "gradient" {
+					local i            = cast(int) data
+					local userGradient = app.userGradients[i]
+					local my           = LM.getY()
+
+					guiState.showContextMenuWithInput!(mx, my, userGradient.name, inputTooltip="Name (Change to rename)", {"Delete gradient"},
+						cb = [i] (choice:int) {
+							if choice == 1 {
+								remove(app.userGradients, i)
+								scheduleSaveWorkspace()
+							}
+						},
+						cbInput = [userGradient] (nameNew:string) {
+							nameNew = trim(nameNew)
+							if not nameNew  return
+
+							userGradient.name = nameNew
+							scheduleSaveWorkspace()
+						}
+					)
+				}
+			}
+		)
 	}
 
 	guiState.onRefresh.blendMode = (radio:gui.Radio) {
