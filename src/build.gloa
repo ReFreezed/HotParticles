@@ -261,7 +261,7 @@ local doRelease :: () {
 		infoPlist = replacePattern(infoPlist, "%s+<",          "<") -- Remove useless whitespace.
 
 		infoPlist = templateToString(infoPlist, values, (s:string) -> string {
-			return (replacePattern(s, '[&<>"]', cast(table) {
+			return (replacePattern(s, '[&<>"]', table.{
 				["&"] = "&amp;",
 				["<"] = "&lt;",
 				[">"] = "&gt;",

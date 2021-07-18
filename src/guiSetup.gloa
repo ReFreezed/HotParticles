@@ -710,9 +710,9 @@ export setupGuiCallbacks :: () {
 
 		for app.projects {
 			local label = (it.edited ? format("%s •", it.displayedName) : it.displayedName)
-			insert(tabs.buttons, cast(gui.Button){ label=label, tooltip=it.path, draggable=true })
+			insert(tabs.buttons, gui.Button.{ label=label, tooltip=it.path, draggable=true })
 		}
-		insert(tabs.buttons, cast(gui.Button){ image="iconAdd", tooltip="New project  ("..ctrlText.."+N)" })
+		insert(tabs.buttons, gui.Button.{ image="iconAdd", tooltip="New project  ("..ctrlText.."+N)" })
 
 		tabs.index = app.currentProjectIndex
 	}
@@ -724,7 +724,7 @@ export setupGuiCallbacks :: () {
 
 		local project = addNewProject()
 
-		insert(tabs.buttons, #tabs.buttons, cast(gui.Button){ label=project.displayedName, draggable=true })
+		insert(tabs.buttons, #tabs.buttons, gui.Button.{ label=project.displayedName, draggable=true })
 		guiState.layoutNeedsUpdate = true
 
 		setCurrentProject(#app.projects)
@@ -1422,9 +1422,9 @@ export setupGuiCallbacks :: () {
 		tabs.buttons  = {}
 
 		for project.systems {
-			insert(tabs.buttons, cast(gui.Button){ system=it, draggable=true, tooltip=format("Particle system #%d (%s+click to toggle)", itIndex, ctrlText) })
+			insert(tabs.buttons, gui.Button.{ system=it, draggable=true, tooltip=format("Particle system #%d (%s+click to toggle)", itIndex, ctrlText) })
 		}
-		insert(tabs.buttons, cast(gui.Button){ image="iconAdd", tooltip="New particle system" })
+		insert(tabs.buttons, gui.Button.{ image="iconAdd", tooltip="New particle system" })
 
 		tabs.index = project.systemIndex
 	}
@@ -1580,7 +1580,7 @@ export setupGuiCallbacks :: () {
 		radio.buttons         = {}
 
 		for particleImageNames {
-			insert(radio.buttons, cast(gui.Button){ value=it, tooltip=it, image=it })
+			insert(radio.buttons, gui.Button.{ value=it, tooltip=it, image=it })
 		}
 
 		local found, i = indexOf(particleImageNames, system.textureName)
@@ -2774,7 +2774,7 @@ export setupGuiCallbacks :: () {
 		guiState.onRefresh.fileDialog_bookmarks = (buttons:gui.Buttons) {
 			buttons.buttons = {}
 			for app.bookmarkedFolders {
-				insert(buttons.buttons, cast(gui.Button){ value=it, label=it, image="iconFolder" })
+				insert(buttons.buttons, gui.Button.{ value=it, label=it, image="iconFolder" })
 			}
 		}
 
@@ -2912,11 +2912,11 @@ export setupGuiCallbacks :: () {
 			buttons.buttons = {}
 
 			if Path(dir).path {
-				insert(buttons.buttons, cast(gui.Button){ value=cast(Item){isDir=true,name=".."}, label="..", image="iconFolder" })
+				insert(buttons.buttons, gui.Button.{ value=Item.{isDir=true,name=".."}, label="..", image="iconFolder" })
 			}
 
 			for dirs {
-				insert(buttons.buttons, cast(gui.Button){
+				insert(buttons.buttons, gui.Button.{
 					value = cast(Item) {isDir=true, name=it},
 					label = it,
 					image = "iconFolder",
@@ -2947,7 +2947,7 @@ export setupGuiCallbacks :: () {
 
 				local basename, ext = splitBasenameAndExtension(it, keepDot=true)
 
-				insert(buttons.buttons, cast(gui.Button){
+				insert(buttons.buttons, gui.Button.{
 					value  = cast(Item) {isDir=false, name=it},
 					label  = basename,
 					suffix = ext,

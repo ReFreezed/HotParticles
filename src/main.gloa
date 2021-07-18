@@ -3888,7 +3888,7 @@ export tryExportFiles :: (quick=false) {
 		)
 
 		local buttonList: []gui.Button
-		for filesToConfirmOverwrite  insert(buttonList, cast(gui.Button){ label=it, tooltip=it })
+		for filesToConfirmOverwrite  insert(buttonList, gui.Button.{ label=it, tooltip=it })
 
 		local fileListEl = guiState.buttons!({ vertical=true, align=.LEFT, style=.LIST, buttons=buttonList })
 

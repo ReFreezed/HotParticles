@@ -1,9 +1,9 @@
 Hot Particles - a particle editor for LÖVE
 Developed by Marcus 'ReFreezed' Thunström
 
-Website: https://love2d.org/forums/viewtopic.php?f=5&t=88860
-Code repository: https://github.com/ReFreezed/HotParticles
+Website:  https://love2d.org/forums/viewtopic.php?f=5&t=88860
 Examples: https://github.com/ReFreezed/HotParticlesExamples
+Source:   https://github.com/ReFreezed/HotParticles
 
 1. Disclaimer
 2. Intro
@@ -19,13 +19,13 @@ Examples: https://github.com/ReFreezed/HotParticlesExamples
 1. Disclaimer
 ==============================================================================
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+The software is provided "as is", without warranty of any kind, express or
+implied, including but not limited to the warranties of merchantability,
+fitness for a particular purpose and noninfringement. In no event shall the
+authors or copyright holders be liable for any claim, damages or other
+liability, whether in an action of contract, tort or otherwise, arising from,
+out of or in connection with the software or the use or other dealings in the
+software.
 
 
 
@@ -219,7 +219,8 @@ Size: The size of particles. You can specify up to 8 sizes to animate the
 
 Color: The color of particles. You can specify up to 8 colors to animate the
     color over each particle's lifetime. You can see a preview of the color
-    over time on the right hand side.
+    over time on the right hand side. You can right-click the preview to save
+    and load gradients.
 - Blend mode: The blend mode for the particle system.
 
 Shader: Path to a shader file to be used when rendering the particles.

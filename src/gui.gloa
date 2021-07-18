@@ -3505,7 +3505,7 @@ export showMenu :: (state:State, x,y:int, items:[]MenuItem, cbChoice:(choice:str
 				insert(contextMenu, buttons)
 
 			} else {
-				insert(buttons.buttons, cast(Button){ value=it, label=it.label, shortcut=it.shortcut, submenuIcon=cast(bool)it.submenu })
+				insert(buttons.buttons, Button.{ value=it, label=it.label, shortcut=it.shortcut, submenuIcon=cast(bool)it.submenu })
 
 				if it.submenu  it.submenuFrame = makeContextMenu(state, it.submenu, contextMenu, buttonPaddingRight, false)
 			}
@@ -3611,10 +3611,10 @@ export showContextMenu :: (state:State, x,y:int, items:[]string, cbChoice:(choic
 			insert(contextMenu, buttons)
 		} elseif ok {
 			choice += 1
-			insert(buttons.buttons, cast(Button){ value=choice, label=cast(string)label, shortcut=cast(string)shortcut })
+			insert(buttons.buttons, Button.{ value=choice, label=cast(string)label, shortcut=cast(string)shortcut })
 		} else {
 			choice += 1
-			insert(buttons.buttons, cast(Button){ value=choice, label=it })
+			insert(buttons.buttons, Button.{ value=choice, label=it })
 		}
 	}
 
@@ -3652,10 +3652,10 @@ export showContextMenuWithInput :: (state:State, x,y:int, value:string, items:[]
 			insert(contextMenu, buttons)
 		} elseif ok {
 			choice += 1
-			insert(buttons.buttons, cast(Button){ value=choice, label=cast(string)label, shortcut=cast(string)shortcut })
+			insert(buttons.buttons, Button.{ value=choice, label=cast(string)label, shortcut=cast(string)shortcut })
 		} else {
 			choice += 1
-			insert(buttons.buttons, cast(Button){ value=choice, label=it })
+			insert(buttons.buttons, Button.{ value=choice, label=it })
 		}
 	}
 
