@@ -27,7 +27,9 @@
 	cancelMouseActions
 	delete
 	draw
+	drawBoxGradient
 	drawChecker, drawCheckerBox
+	drawColorGradient
 	getElement, getElementAt, getWidgetAt, findParent
 	getTopmostActiveModal
 	getVisibleAreaInLocalSpace
@@ -60,9 +62,9 @@ export SCROLLBAR_MIN_LENGTH :: 16
 
 local SECTION_DEFAULT_LABEL_WIDTH :: 104
 
-local SLIDER_MIN_WIDTH    :: 12
-local SLIDER_MIN_LENGTH   :: 70
-local COLOR_PREVIEW_WIDTH :: 24
+local SLIDER_MIN_THICKNESS :: 12
+local SLIDER_MIN_LENGTH    :: 70
+local COLOR_PREVIEW_WIDTH  :: 24
 
 local INPUT_MIN_WIDTH :: 40
 
@@ -91,7 +93,7 @@ local COLOR_FOCUS: love.Color : {1,.5,0,.6}
 
 export clipboardScalar = 0.0
 export clipboardAngle  = 0.0
-export clipboardColor: []float = {0,0,0,0}
+export clipboardColor: []float = {0,0,0,0} -- {h,s,v,a}
 export hasClipboardScalar = false
 export hasClipboardAngle  = false
 export hasClipboardColor  = false
@@ -137,6 +139,9 @@ export State :: struct {
 	onActive:           struct { !key:string, !value:any--[[ (el:Element) ]] },
 	onInactive:         struct { !key:string, !value:any--[[ (el:Element) ]] },
 	onSubmit:           struct { !key:string, !value:any--[[ (el:Element) ]] },
+	onDrawBackground:   struct { !key:string, !value:any--[[ (el:Element, w,h:int) ]] },
+	onDraw:             struct { !key:string, !value:any--[[ (el:Element, w,h:int) ]] }, -- Usually used for canvases.
+	onDrawForeground:   struct { !key:string, !value:any--[[ (el:Element, w,h:int) ]] },
 	onBeforeAction:     struct { !key:string, !value:any--[[ (widget:Widget, subid:int) -> (ignore:bool) ]] }, -- Only used for Radio and Tabs.
 	onBegin:            struct { !key:string, !value:any--[[ (widget:Widget, subid:int) ]] },
 	onAction:           struct { !key:string, !value:any--[[ (widget:Widget, subid:int, source:ActionSource) ]] },
@@ -149,7 +154,6 @@ export State :: struct {
 	onDragEnd:          struct { !key:string, !value:any--[[ (widget:Widget, subid:int) ]] },
 	onMouseEnter:       struct { !key:string, !value:any--[[ (widget:Widget, subid:int) ]] },
 	onToggle:           struct { !key:string, !value:any--[[ (widget:Widget, subid:int) ]] }, -- For disable/enable. (Not for checkboxes!)
-	onDraw:             struct { !key:string, !value:any--[[ (canvas:Canvas, cw,ch:int) ]] },
 	onBeforeKeyPressed: struct { !key:string, !value:(input:InputText, key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool) -> (ignore:bool) },
 	onBeforeTextInput:  struct { !key:string, !value:(input:InputText, text:string) -> (ignore:bool) },
 
@@ -171,7 +175,7 @@ export State :: struct {
 	text         :: (state:State, el:Text)         -> type_of(el) { return cast(type_of(el)) register(state, el, type_of(el)) },
 	vbox         :: (state:State, el:Vbox)         -> type_of(el) { return cast(type_of(el)) register(state, el, type_of(el)) },
 
-	-- @Cleanup: Use !self here istead of _*, maybe.  (@Compiler: We get redeclaration error becase !self.getElement etc. isn't a simple identifier.)
+	-- @Cleanup: Use !self here instead of _*, maybe.  (@Compiler: We get redeclaration error because !self.getElement etc. isn't a simple identifier.)
 	blurFocus :: _blurFocus,
 	cancelMouseActions :: _cancelMouseActions,
 	delete :: _delete,
@@ -431,11 +435,12 @@ export Buttons :: struct {
 	using Widget,
 
 	buttons: []Button,
-	align           = Alignment.CENTER,
-	vertical        = false,
-	allowFocus      = false,
-	selectMultiple  = false, -- Used if Buttons.allowFocus is set.
-	buttonMinHeight = 0,
+	align              = Alignment.CENTER,
+	vertical           = false,
+	allowFocus         = false,
+	selectMultiple     = false, -- Used if Buttons.allowFocus is set.
+	buttonMinHeight    = 0,
+	buttonPaddingRight = 0,
 
 	buttonWidth:  float, -- Round when necessary!
 	buttonHeight: float, -- Round when necessary!
@@ -493,7 +498,7 @@ export Color :: struct {
 	using Widget,
 
 	alpha = true,
-	color: []float = {0,0,1,1}, -- {r,g,b,a}
+	color: []float = {0,0,1,1}, -- {h,s,v,a}
 	linkMultiDrag: []string,
 
 	sliderWidth = 0.0, -- Round when necessary!
@@ -539,13 +544,14 @@ export Canvas :: struct {
 
 
 export MenuItem :: struct {
-	name:     string,
-	data:     any,
-	label:    string,
-	shortcut: string,
-	submenu:  []MenuItem,
+	name     = "",
+	label    = "",
+	shortcut = "",
+	height   = 16,
+	data:    any,
+	submenu: []MenuItem,
 
-	submenuFrame: Frame = NULL,
+	submenuFrame = Frame.NULL,
 }
 
 
@@ -970,7 +976,7 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int, begin=false, end=fals
 
 				case Color:
 					local colorEl = cast(Color) widget
-					local iFloat  = 1 + (my - (colorEl.layoutY + getScrollOffset(colorEl))) / SLIDER_MIN_WIDTH
+					local iFloat  = 1 + (my - (colorEl.layoutY + getScrollOffset(colorEl))) / SLIDER_MIN_THICKNESS
 					hoveredSubid  = math.clamp(math.floor(iFloat), 1, (colorEl.alpha ? 4 : 3))
 			}
 
@@ -1012,8 +1018,8 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int, begin=false, end=fals
 				}
 
 			} else {
-				local x1      = slider.layoutX +                      SLIDER_MIN_WIDTH // 2
-				local x2      = slider.layoutX + slider.layoutWidth - SLIDER_MIN_WIDTH // 2
+				local x1      = slider.layoutX +                      SLIDER_MIN_THICKNESS // 2 + 2
+				local x2      = slider.layoutX + slider.layoutWidth - SLIDER_MIN_THICKNESS // 2 - 2
 				local value01 = (mx-x1) / (x2-x1)
 				value01       = applyExponential(slider, value01, 2)
 
@@ -1073,7 +1079,7 @@ export onMouseMoved :: (state:State, mx,my:int, dx,dy:int, begin=false, end=fals
 		case Color:
 			local colorEl   = cast(Color) widget
 			local component = state.activeSubid
-			local value     = (mx-colorEl.layoutX) / colorEl.layoutWidth
+			local value     = (mx-(colorEl.layoutX+2)) / (colorEl.layoutWidth-2*2)
 
 			if mod == .C or mod == .CS {
 				local steps = component == 1 ? 24 : 16
@@ -1350,7 +1356,7 @@ export onMouseReleased :: (state:State, mx,my:int, mbutton:int, presses:int, can
 					if direction.canDisable  insert(items, "-")
 					local ^choiceCount, choiceToggle = maybeInsertContextMenuItem(items, choiceCount, (direction.enabled ? "Disable" : "Enable"), direction.canDisable)
 
-					state.showContextMenuWithInput!(toString(direction.angle*360/math.TAU), items,
+					state.showContextMenuWithInput!(toString(direction.angle*360/math.TAU), inputTooltip="Degrees", items,
 						[*] (choice:int) {
 							if choice == choiceReset {
 								triggerBeginEvent(state, direction, "", 0, alsoEnsureEnabled=true)
@@ -1702,7 +1708,8 @@ local calculateNaturalSize :: (state:State, el:Element) {
 					h             = fontNormal.getHeight!()
 				}
 
-				it.contentWidth = w
+				w               += buttons.buttonPaddingRight
+				it.contentWidth  = w
 
 				buttonMaxW = math.max(buttonMaxW, w)
 				buttonMaxH = math.max(buttonMaxH, h)
@@ -1729,12 +1736,12 @@ local calculateNaturalSize :: (state:State, el:Element) {
 		case Slider:
 			local slider        = cast(Slider) el
 			slider.layoutWidth  = SLIDER_MIN_LENGTH
-			slider.layoutHeight = SLIDER_MIN_WIDTH
+			slider.layoutHeight = SLIDER_MIN_THICKNESS
 
 		case Color:
 			local colorEl        = cast(Color) el
 			colorEl.layoutWidth  = SLIDER_MIN_LENGTH
-			colorEl.layoutHeight = (colorEl.alpha ? 4 : 3) * SLIDER_MIN_WIDTH
+			colorEl.layoutHeight = (colorEl.alpha ? 4 : 3) * SLIDER_MIN_THICKNESS
 
 		case ColorPreview:
 			local preview        = cast(ColorPreview) el
@@ -1988,6 +1995,10 @@ local drawElement :: (state:State, el:Element) {
 		for el {
 			if it.active  drawElement(state, it)
 		}
+	}
+
+	if state.onDrawBackground[el.name] ~= NULL {
+		triggerDrawBackgroundEvent(state, el, el.layoutX, el.layoutY, getScrollOffset(el), el.layoutWidth, el.layoutHeight)
 	}
 
 	if el.labelLeft {
@@ -2363,6 +2374,11 @@ local drawElement :: (state:State, el:Element) {
 				LG.draw(guiImages.iconSubmenu, bx2[itIndex]-iw-1, by1[itIndex]+(bh[itIndex]-ih)//2)
 			}
 
+			-- Custom.
+			if state.onDraw[el.name] ~= NULL {
+				triggerDrawEvent(state, el, el.layoutX, el.layoutY, getScrollOffset(el), el.layoutWidth, el.layoutHeight)
+			}
+
 			-- Labels.
 			for buttons.buttons  if it.label or it.suffix or it.shortcut {
 				local scissorX1 = bx1[itIndex] + (paddingX-1)
@@ -2499,8 +2515,8 @@ local drawElement :: (state:State, el:Element) {
 
 		case Slider:
 			local slider  = cast(Slider) el
-			local x1      = slider.layoutX +                      SLIDER_MIN_WIDTH // 2
-			local x2      = slider.layoutX + slider.layoutWidth - SLIDER_MIN_WIDTH // 2
+			local x1      = slider.layoutX +                      SLIDER_MIN_THICKNESS // 2
+			local x2      = slider.layoutX + slider.layoutWidth - SLIDER_MIN_THICKNESS // 2
 			local w       = x2 - x1
 			local value01 = math.clamp01((slider.value - applyLimitMultiplier(slider, slider.min)) / (applyLimitMultiplier(slider, slider.max) - applyLimitMultiplier(slider, slider.min)))
 			value01       = applyExponential(slider, value01, .5)
@@ -2539,7 +2555,7 @@ local drawElement :: (state:State, el:Element) {
 			-- Handle.
 			local grey = (highlight ? .8 : .65)
 			LG.setColor(grey, grey, grey, opacity)
-			LG.rectangle(LG.DrawMode.FILL, handleX-1, y-SLIDER_MIN_WIDTH/2, 2, SLIDER_MIN_WIDTH)
+			LG.rectangle(LG.DrawMode.FILL, handleX-1, y-SLIDER_MIN_THICKNESS/2, 2, SLIDER_MIN_THICKNESS)
 
 			-- Readout.
 			local COLOR_TEXT:   love.Color: {1,1,1,.8*TEXT_OPACITY}
@@ -2562,7 +2578,7 @@ local drawElement :: (state:State, el:Element) {
 				LG.setFont(fontNormal)
 
 			} elseif app.showPanelNumbers {
-				drawSliderReadout(x2, y-SLIDER_MIN_WIDTH//2, SLIDER_MIN_WIDTH, handleX, slider.value, slider.readoutMulti, slider.readout, slider.readoutZero, COLOR_TEXT, COLOR_SHADOW, opacity)
+				drawSliderReadout(x2, y-SLIDER_MIN_THICKNESS//2, SLIDER_MIN_THICKNESS, handleX, slider.value, slider.readoutMulti, slider.readout, slider.readoutZero, COLOR_TEXT, COLOR_SHADOW, opacity)
 			}
 
 		case Color:
@@ -2598,8 +2614,9 @@ local drawElement :: (state:State, el:Element) {
 			local value      = colorEl.color[3]
 			local a          = colorEl.color[4]
 
-			local opacity    = colorEl.enabled ? 1 : DISABLED_OPACITY
-			local highlight  = shouldHighlight(state, colorEl) ? math.max(state.activeSubid, state.hoveredSubid) : 0
+			local opacity        = colorEl.enabled ? 1 : DISABLED_OPACITY
+			local highlightWhole = shouldHighlight(state, colorEl)
+			local highlight      = highlightWhole ? math.max(state.activeSubid, state.hoveredSubid) : 0
 
 			local iw, ih     = imageRainbow.getDimensions!()
 			local rainbowSx  = w / iw
@@ -2643,16 +2660,23 @@ local drawElement :: (state:State, el:Element) {
 				LG.rectangle(LG.DrawMode.LINE, x-.5, hlY1-.5, w+1, hlY2-hlY1+1)
 			}
 
+			if highlightWhole {
+				local mod = state.activeId ? state.activeMod : getModifierKey()
+
+				if not (mod == .S or mod == .CS) {
+					local hlY1 = y1 - 1
+					local hlY2 = y1 + math.round((colorEl.alpha?4:3) * colorEl.sliderWidth) + 1
+					LG.setColor(1, 1, 1, HOVER_OUTLINE_OPACITY_STRONG)
+					LG.rectangle(LG.DrawMode.LINE, x-1.5, hlY1-.5, w+3, hlY2-hlY1+1)
+				}
+			}
+
 		case ColorPreview:
 			local preview = cast(ColorPreview) el
 
-			static shader: LG.Shader = NULL
-			if shader == NULL  shader = LG.newShader("src/particleColorPreview.glsl")
-
 			-- The shader only supports 8 colors, but we can change that if necessary.
-			static colorsForShader: [][]float = { {1,1,1,1}, {1,1,1,1}, {1,1,1,1}, {1,1,1,1}, {1,1,1,1}, {1,1,1,1}, {1,1,1,1}, {1,1,1,1} }
-
-			local colorCount = 0
+			static colorsForShader = []love.Color.{ {1,1,1,1}, {1,1,1,1}, {1,1,1,1}, {1,1,1,1}, {1,1,1,1}, {1,1,1,1}, {1,1,1,1}, {1,1,1,1} }
+			local  colorCount      = 0
 
 			for preview.linkColors {
 				local colorEl = cast(Color) state.elementsByName[it]
@@ -2666,16 +2690,11 @@ local drawElement :: (state:State, el:Element) {
 				}
 			}
 
-			shader.send!("colors",     colorsForShader[1], unpack(colorsForShader, 2))
-			shader.send!("colorCount", colorCount)
-
 			drawCheckerBox(preview.layoutX, preview.layoutY, preview.layoutWidth, preview.layoutHeight)
 
-			LG.setShader(shader)
 			LG.setBlendMode(preview.blendMode)
-			LG.draw(imagePixel, preview.layoutX, preview.layoutY, 0, preview.layoutWidth, preview.layoutHeight)
+			drawColorGradient(preview.layoutX, preview.layoutY, preview.layoutWidth, preview.layoutHeight, colorsForShader, colorCount)
 			LG.setBlendMode(.ALPHA)
-			LG.setShader()
 
 		case Direction:
 			local direction = cast(Direction) el
@@ -2742,21 +2761,13 @@ local drawElement :: (state:State, el:Element) {
 			}
 
 		case Canvas:
-			local canvasEl = cast(Canvas) el
-
-			local x = canvasEl.layoutX
-			local y = canvasEl.layoutY
-			local w = canvasEl.layoutWidth
-			local h = canvasEl.layoutHeight
-
-			LG.pushAll()
-			LG.translate(x, y)
-			LG.setColor(1, 1, 1)
-			intersectScissor(x, y+getScrollOffset(canvasEl), w, h)
-			triggerDrawEvent(state, canvasEl, w, h)
-			LG.pop()
+			triggerDrawEvent(state, el, el.layoutX, el.layoutY, getScrollOffset(el), el.layoutWidth, el.layoutHeight)
 
 		case: errorf("%d", el.type)
+	}
+
+	if state.onDrawForeground[el.name] ~= NULL {
+		triggerDrawForegroundEvent(state, el, el.layoutX, el.layoutY, getScrollOffset(el), el.layoutWidth, el.layoutHeight)
 	}
 
 	!if DEV  if LK.isScancodeDown"`" {
@@ -2862,7 +2873,7 @@ export isInsideElement :: (state:State, x,y:int, el:Element) -> bool {
 			return math.distance(x,y, el.layoutX+r,el.layoutY+r) <= r
 
 		case Slider:
-			return x >= el.layoutX and x < el.layoutX+el.layoutWidth and math.abs(y-(el.layoutY+el.layoutHeight/2)) <= SLIDER_MIN_WIDTH/2
+			return x >= el.layoutX and x < el.layoutX+el.layoutWidth and math.abs(y-(el.layoutY+el.layoutHeight/2)) <= SLIDER_MIN_THICKNESS/2
 
 		case Checkbox:
 			return x >= el.layoutX and x < el.layoutX+el.layoutWidth and math.abs(y-(el.layoutY+el.layoutHeight/2)) <= CHECKBOX_SIZE/2
@@ -3125,10 +3136,26 @@ export drawBoxGradient :: (x,y,w,h:int, bw=10, drawCenter=true) {
 
 
 
+export drawColorGradient :: (x,y,w,h:int, colors:[]love.Color, colorCount=-1) {
+	if colorCount < 0  colorCount = #colors
+
+	static shader: LG.Shader = NULL
+	if shader == NULL  shader = LG.newShader("src/particleColorPreview.glsl")
+
+	shader.send!("colors",     colors[1], unpack(colors, 2))
+	shader.send!("colorCount", colorCount)
+
+	local oldShader = LG.getShader()
+	LG.setShader(shader)
+	LG.draw(imagePixel, x, y, 0, w, h)
+	LG.setShader(oldShader)
+}
+
+
+
 local triggerRefreshEvent :: (state:State, el:Element) {
 	local cb = cast((el:Element)) state.onRefresh[el.name]
 	if cb == NULL  return
-
 	cb(el)
 	state.layoutNeedsUpdate = true
 }
@@ -3136,27 +3163,51 @@ local triggerRefreshEvent :: (state:State, el:Element) {
 local triggerActiveEvent :: (state:State, el:Element) {
 	local cb = cast((el:Element)) state.onActive[el.name]
 	if cb == NULL  return
-
 	cb(el)
 }
 local triggerInactiveEvent :: (state:State, el:Element) {
 	local cb = cast((el:Element)) state.onInactive[el.name]
 	if cb == NULL  return
-
 	cb(el)
 }
 
-local triggerDrawEvent :: (state:State, canvasEl:Canvas, cw,ch:int) {
-	local cb = cast((canvasEl:Canvas, cw,ch:int)) state.onDraw[canvasEl.name]
+local triggerDrawBackgroundEvent :: (state:State, el:Element, x,y,scrollOffset,w,h:int) {
+	local cb = cast((el:Element, w,h:int)) state.onDrawBackground[el.name]
 	if cb == NULL  return
 
-	cb(canvasEl, cw, ch)
+	LG.pushAll()
+	LG.translate(x, y)
+	LG.setColor(1, 1, 1)
+	intersectScissor(x, y+scrollOffset, w, h)
+	cb(el, w, h)
+	LG.pop()
+}
+local triggerDrawEvent :: (state:State, el:Element, x,y,scrollOffset,w,h:int) {
+	local cb = cast((el:Element, w,h:int)) state.onDraw[el.name]
+	if cb == NULL  return
+
+	LG.pushAll()
+	LG.translate(x, y)
+	LG.setColor(1, 1, 1)
+	intersectScissor(x, y+scrollOffset, w, h)
+	cb(el, w, h)
+	LG.pop()
+}
+local triggerDrawForegroundEvent :: (state:State, el:Element, x,y,scrollOffset,w,h:int) {
+	local cb = cast((el:Element, w,h:int)) state.onDrawForeground[el.name]
+	if cb == NULL  return
+
+	LG.pushAll()
+	LG.translate(x, y)
+	LG.setColor(1, 1, 1)
+	intersectScissor(x, y+scrollOffset, w, h)
+	cb(el, w, h)
+	LG.pop()
 }
 
 local triggerSubmitEvent :: (state:State, el:Element) {
 	local cb = cast((el:Element)) state.onSubmit[el.name]
 	if cb == NULL  return
-
 	cb(el)
 }
 
@@ -3165,7 +3216,6 @@ export ActionSource :: enum string { UNKNOWN, MOUSE, KEYBOARD }
 local triggerBeforeActionEvent :: (state:State, widget:Widget, name:string, subid:int) -> (ignore:bool) {
 	local cb = cast((widget:Widget, subid:int) -> (ignore:bool)) state.onBeforeAction[name ?: widget.name]
 	if cb == NULL  return false
-
 	return cb(widget, subid)
 }
 local triggerBeginEvent :: (state:State, widget:Widget, name:string, subid:int, alsoEnsureEnabled=false) {
@@ -3228,39 +3278,33 @@ local triggerCloseEvent :: (state:State, widget:Widget, name:string, subid:int) 
 local triggerDragBeginEvent :: (state:State, widget:Widget, name:string, subid:int) {
 	local cb = cast((widget:Widget, subid:int)) state.onDragBegin[name ?: widget.name]
 	if cb == NULL  return
-
 	cb(widget, subid)
 }
 local triggerDragEvent :: (state:State, widget:Widget, name:string, subid:int, mx,my:int) {
 	local cb = cast((widget:Widget, subid:int, mx,my:int)) state.onDrag[name ?: widget.name]
 	if cb == NULL  return
-
 	cb(widget, subid, mx, my)
 }
 local triggerDragEndEvent :: (state:State, widget:Widget, name:string, subid:int) {
 	local cb = cast((widget:Widget, subid:int)) state.onDragEnd[name ?: widget.name]
 	if cb == NULL  return
-
 	cb(widget, subid)
 }
 
 local triggerMouseEnterEvent :: (state:State, widget:Widget, name:string, subid:int) {
 	local cb = cast((widget:Widget, subid:int)) state.onMouseEnter[name ?: widget.name]
 	if cb == NULL  return
-
 	cb(widget, subid)
 }
 
 local triggerBeforeKeyPressedEvent :: (state:State, input:InputText, name:string, key:LK.KeyConstant, scancode:LK.Scancode, isRepeat:bool) -> (ignore:bool) {
 	local cb = state.onBeforeKeyPressed[name ?: input.name]
 	if cb == NULL  return false
-
 	return cb(input, key, scancode, isRepeat)
 }
 local triggerBeforeTextInputEvent :: (state:State, input:InputText, name:string, text:string) -> (ignore:bool) {
 	local cb = state.onBeforeTextInput[name ?: input.name]
 	if cb == NULL  return false
-
 	return cb(input, text)
 }
 
@@ -3442,12 +3486,13 @@ local limitMenuPosition :: (state:State, contextMenu:Frame) {
 	if y+h > LG.getHeight()   state.layoutNeedsUpdate, contextMenu.y = true, y - h
 }
 
--- Note that the callback type is different from showContextMenu*().
-export showMenu :: (state:State, x,y:int, items:[]MenuItem, cb:(choice:string,data:any), cbButtonOption:(choice:string,data:any)=NULL) {
+-- Note that the cbChoice() type is different from showContextMenu*().
+export showMenu :: (state:State, x,y:int, items:[]MenuItem, cbChoice:(choice:string,data:any), cbButtonOption:(choice:string,data:any)=NULL, cbDrawButton:(choice:string,data:any,w,h:int)=NULL, buttonPaddingRight=0) {
 	state.hideContextMenu!()
 
-	local makeContextMenu :: (state:State, items:[]MenuItem, parentMenu:Frame, active=false) -> Frame {
-		local buttons     = state.buttons!({ name="__contextMenuButtons", vertical=true, align=.LEFT, style=.CONTEXT_MENU, buttonMinHeight=16 })
+	local makeContextMenu :: (state:State, items:[]MenuItem, parentMenu:Frame, buttonPaddingRight:int, active:bool) -> Frame {
+		local buttonH     = items[1] ~= NULL ? items[1].height : 16--MenuItem.height -- @Compiler: Access to default member values.
+		local buttons     = state.buttons!({ name="__contextMenuButtons", vertical=true, align=.LEFT, style=.CONTEXT_MENU, buttonMinHeight=buttonH, buttonPaddingRight=buttonPaddingRight })
 		local contextMenu = state.frame!({ parentFrame=parentMenu, minWidth=CONTEXT_MENU_MIN_WIDTH, layout=.FLOATING, style=.CONTEXT_MENU, temp=true, active=active, buttons })
 		insert(state.contextMenus, contextMenu)
 
@@ -3455,21 +3500,22 @@ export showMenu :: (state:State, x,y:int, items:[]MenuItem, cb:(choice:string,da
 			if it.label == "-" {
 				insert(contextMenu, state.separator!({ thick=false }))
 
-				buttons = state.buttons!({ name="__contextMenuButtons", vertical=true, align=.LEFT, style=.CONTEXT_MENU, buttonMinHeight=16 })
+				buttonH = items[itIndex+1] ~= NULL ? items[itIndex+1].height : 16--MenuItem.height -- @Compiler: Access to default member values.
+				buttons = state.buttons!({ name="__contextMenuButtons", vertical=true, align=.LEFT, style=.CONTEXT_MENU, buttonMinHeight=buttonH, buttonPaddingRight=buttonPaddingRight })
 				insert(contextMenu, buttons)
 
 			} else {
 				insert(buttons.buttons, cast(Button){ value=it, label=it.label, shortcut=it.shortcut, submenuIcon=cast(bool)it.submenu })
 
-				if it.submenu  it.submenuFrame = makeContextMenu(state, it.submenu, contextMenu)
+				if it.submenu  it.submenuFrame = makeContextMenu(state, it.submenu, contextMenu, buttonPaddingRight, false)
 			}
 		}
 
 		return contextMenu
 	}
 
-	local contextMenu = makeContextMenu(state, items, NULL, true)
-	contextMenu.data  = [cb] (choice:int) { cb("", nil) }
+	local contextMenu = makeContextMenu(state, items, NULL, buttonPaddingRight, true)
+	contextMenu.data  = [cbChoice] (choice:int) { cbChoice("", nil) }
 	contextMenu.x     = x
 	contextMenu.y     = y
 
@@ -3489,7 +3535,7 @@ export showMenu :: (state:State, x,y:int, items:[]MenuItem, cb:(choice:string,da
 		}
 	}
 
-	state.onMouseEnter.__contextMenuButtons = [state,cb] (buttons:Buttons, buttonIndex:int) {
+	state.onMouseEnter.__contextMenuButtons = [state] (buttons:Buttons, buttonIndex:int) {
 		local button = buttons.buttons[buttonIndex]
 		local item   = cast(MenuItem) button.value
 
@@ -3516,7 +3562,7 @@ export showMenu :: (state:State, x,y:int, items:[]MenuItem, cb:(choice:string,da
 		limitMenuPosition(state, item.submenuFrame)
 	}
 
-	state.onAction.__contextMenuButtons = [state,cb] (buttons:Buttons, buttonIndex:int, source:ActionSource) {
+	state.onAction.__contextMenuButtons = [state,cbChoice] (buttons:Buttons, buttonIndex:int, source:ActionSource) {
 		local button = buttons.buttons[buttonIndex]
 		local item   = cast(MenuItem) button.value
 
@@ -3524,20 +3570,37 @@ export showMenu :: (state:State, x,y:int, items:[]MenuItem, cb:(choice:string,da
 
 		state.contextMenus[1].data = NULL -- So hideContextMenu() doesn't call the callback too!
 		state.hideContextMenu!()
-		cb(item.name, item.data)
+		cbChoice(item.name, item.data)
 		scheduleSaveWorkspace()
+	}
+
+	if cbDrawButton ~= NULL {
+		state.onDraw.__contextMenuButtons = [state,cbDrawButton] (buttons:Buttons, w,h:int) {
+			local buttonH = math.round(buttons.buttonHeight)
+
+			for buttons.buttons {
+				local item    = cast(MenuItem) it.value
+				local offsetY = ((itIndex-1) * buttonH)
+
+				LG.pushAll()
+				LG.translate(0, offsetY)
+				intersectScissor(buttons.layoutX, buttons.layoutY+offsetY, w, buttonH)
+				cbDrawButton(item.name, item.data, w, buttonH)
+				LG.pop()
+			}
+		}
 	}
 }
 
-export showContextMenu :: (state:State, items:[]string, cb:(choice:int)) {
+export showContextMenu :: (state:State, items:[]string, cbChoice:(choice:int)) {
 	local mx, my = LM.getPosition()
-	state.showContextMenu!(mx, my, items, cb)
+	state.showContextMenu!(mx, my, items, cbChoice)
 }
-export showContextMenu :: (state:State, x,y:int, items:[]string, cb:(choice:int)) {
+export showContextMenu :: (state:State, x,y:int, items:[]string, cbChoice:(choice:int)) {
 	state.hideContextMenu!()
 
 	local buttons     = state.buttons!({ name="__contextMenuButtons", vertical=true, align=.LEFT, style=.CONTEXT_MENU, buttonMinHeight=16 })
-	local contextMenu = state.frame  !({ data=cb, x=x, y=y, minWidth=CONTEXT_MENU_MIN_WIDTH, layout=.FLOATING, style=.CONTEXT_MENU, temp=true, buttons })
+	local contextMenu = state.frame  !({ data=cbChoice, x=x, y=y, minWidth=CONTEXT_MENU_MIN_WIDTH, layout=.FLOATING, style=.CONTEXT_MENU, temp=true, buttons })
 	local choice      = 0
 
 	for items {
@@ -3561,24 +3624,24 @@ export showContextMenu :: (state:State, x,y:int, items:[]string, cb:(choice:int)
 	state.layoutNeedsUpdate = true
 	limitMenuPosition(state, contextMenu)
 
-	state.onAction.__contextMenuButtons = [state,cb] (buttons:Buttons, buttonIndex:int, source:ActionSource) {
+	state.onAction.__contextMenuButtons = [state,cbChoice] (buttons:Buttons, buttonIndex:int, source:ActionSource) {
 		state.contextMenus[1].data = NULL -- So hideContextMenu() doesn't call the callback too!
 		state.hideContextMenu!()
-		cb(cast(int) buttons.buttons[buttonIndex].value)
+		cbChoice(cast(int) buttons.buttons[buttonIndex].value)
 		scheduleSaveWorkspace()
 	}
 }
 
-export showContextMenuWithInput :: (state:State, value:string, items:[]string, cb:(choice:int), cbInput:(text:string)=NULL, cbSubmit:(text:string)=NULL, cbOption:()=NULL, inputTooltip="", minWidth=0) {
+export showContextMenuWithInput :: (state:State, value:string, items:[]string, cbChoice:(choice:int), cbInput:(text:string)=NULL, cbSubmit:(text:string)=NULL, cbOption:()=NULL, inputTooltip="", minWidth=0) {
 	local mx, my = LM.getPosition()
-	state.showContextMenuWithInput!(mx, my, value, items, cb, cbInput, cbSubmit, cbOption, inputTooltip, minWidth)
+	state.showContextMenuWithInput!(mx, my, value, items, cbChoice, cbInput, cbSubmit, cbOption, inputTooltip, minWidth)
 }
-export showContextMenuWithInput :: (state:State, x,y:int, value:string, items:[]string, cb:(choice:int), cbInput:(text:string)=NULL, cbSubmit:(text:string)=NULL, cbOption:()=NULL, inputTooltip="", minWidth=0) {
+export showContextMenuWithInput :: (state:State, x,y:int, value:string, items:[]string, cbChoice:(choice:int), cbInput:(text:string)=NULL, cbSubmit:(text:string)=NULL, cbOption:()=NULL, inputTooltip="", minWidth=0) {
 	state.hideContextMenu!()
 
 	local input       = state.inputText!({ name="__contextMenuInput", value=value, style=.CONTEXT_MENU, tooltip=inputTooltip })
 	local buttons     = state.buttons  !({ name="__contextMenuButtons", vertical=true, align=.LEFT, style=.CONTEXT_MENU, buttonMinHeight=16 })
-	local contextMenu = state.frame    !({ data=cb, x=x, y=y, minWidth=CONTEXT_MENU_MIN_WIDTH, layout=.FLOATING, style=.CONTEXT_MENU, temp=true, input, buttons })
+	local contextMenu = state.frame    !({ data=cbChoice, x=x, y=y, minWidth=CONTEXT_MENU_MIN_WIDTH, layout=.FLOATING, style=.CONTEXT_MENU, temp=true, input, buttons })
 	local choice      = 0
 
 	for items {
@@ -3614,18 +3677,18 @@ export showContextMenuWithInput :: (state:State, x,y:int, value:string, items:[]
 	-- 	}
 	-- }
 
-	state.onSubmit.__contextMenuInput = [state,cb,cbSubmit] (input:InputText) {
+	state.onSubmit.__contextMenuInput = [state,cbChoice,cbSubmit] (input:InputText) {
 		state.contextMenus[1].data = NULL -- So hideContextMenu() doesn't call the callback too!
 		state.hideContextMenu!()
 		if cbSubmit ~= NULL  cbSubmit(input.value)
-		cb(0)
+		cbChoice(0)
 		scheduleSaveWorkspace()
 	}
 
-	state.onAction.__contextMenuButtons = [state,cb] (buttons:Buttons, buttonIndex:int, source:ActionSource) {
+	state.onAction.__contextMenuButtons = [state,cbChoice] (buttons:Buttons, buttonIndex:int, source:ActionSource) {
 		state.contextMenus[1].data = NULL -- So hideContextMenu() doesn't call the callback too!
 		state.hideContextMenu!()
-		cb(cast(int) buttons.buttons[buttonIndex].value)
+		cbChoice(cast(int) buttons.buttons[buttonIndex].value)
 		scheduleSaveWorkspace()
 	}
 
@@ -3658,12 +3721,13 @@ export hideContextMenu :: (state:State, mayDeactivateSubmenu=false) -> (success:
 	state.onAction    .__contextMenuButtons = nil
 	state.onMouseEnter.__contextMenuButtons = nil
 	state.onOption    .__contextMenuButtons = nil
+	state.onDraw      .__contextMenuButtons = nil
 	state.onAction    .__contextMenuInput   = nil
 	state.onSubmit    .__contextMenuInput   = nil
 	-- state.onOption    .__contextMenuInput   = nil
 
-	local cb = cast((choice:int)) contextMenus[1].data
-	if cb ~= NULL  cb(0)
+	local cbChoice = cast((choice:int)) contextMenus[1].data
+	if cbChoice ~= NULL  cbChoice(0)
 
 	return true
 }

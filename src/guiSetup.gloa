@@ -581,7 +581,7 @@ export pushPanel :: (name:string) {
 	insert(panelStack, name)
 }
 
-export pushTempChoiceDialog :: (title:string, text:string, buttonList:[]gui.Button, cb:(choice:int), submitIndex=0, extraContent:gui.Element=NULL, width=DIALOG_WIDTH) {
+export pushTempChoiceDialog :: (title:string, text:string, buttonList:[]gui.Button, cbChoice:(choice:int), submitIndex=0, extraContent:gui.Element=NULL, width=DIALOG_WIDTH) {
 	static tempN = 0 ; tempN += 1
 
 	local name        = format("temp%d", tempN)
@@ -611,20 +611,20 @@ export pushTempChoiceDialog :: (title:string, text:string, buttonList:[]gui.Butt
 	}
 
 	if submitIndex {
-		guiState.onSubmit[name] = [cb,cleanUp,submitIndex] (frame:gui.Frame) {
+		guiState.onSubmit[name] = [cbChoice,cleanUp,submitIndex] (frame:gui.Frame) {
 			cleanUp()
 			popPanel()
-			cb(submitIndex)
+			cbChoice(submitIndex)
 		}
 	}
-	guiState.onAction[nameButtons] = [cb,cleanUp] (buttons:gui.Buttons, choice:int, source:gui.ActionSource) {
+	guiState.onAction[nameButtons] = [cbChoice,cleanUp] (buttons:gui.Buttons, choice:int, source:gui.ActionSource) {
 		cleanUp()
 		popPanel()
-		cb(choice)
+		cbChoice(choice)
 	}
-	guiState.onInactive[name] = [cb,cleanUp] (frame:gui.Frame) {
+	guiState.onInactive[name] = [cbChoice,cleanUp] (frame:gui.Frame) {
 		cleanUp()
-		cb(0)
+		cbChoice(0)
 	}
 
 	pushPanel(name)
@@ -737,7 +737,7 @@ export setupGuiCallbacks :: () {
 		if not ok  filename = ""
 
 		guiState.showContextMenuWithInput!(filename, inputTooltip="Filename (Change to rename)", {"Close\t"..ctrlText.."+W","Duplicate"},
-			cb = [projectIndex] (choice:int) {
+			cbChoice = [projectIndex] (choice:int) {
 				if choice == {
 					case 1:
 						confirmCloseProject(projectIndex)
@@ -1472,7 +1472,7 @@ export setupGuiCallbacks :: () {
 		static hasClipboardSystem      = false
 
 		guiState.showContextMenuWithInput!(system.title, inputTooltip="Particle system title", items,
-			cb = [system, systemIndex] (choice:int) {
+			cbChoice = [system, systemIndex] (choice:int) {
 				if choice == {
 					case 1:
 						confirmDeleteSystem(systemIndex)
@@ -2510,15 +2510,15 @@ export setupGuiCallbacks :: () {
 
 			for app.userGradients {
 				local label = (it.name == "-" ? "- " : it.name)
-				local item  = gui.MenuItem.{name="gradient", label=label, data=itIndex}
+				local item  = gui.MenuItem.{name="gradient", label=label, data=itIndex, height=30}
 				insert(items, item)
 			}
 		}
 
 		local mx, my = LM.getPosition()
 
-		guiState.showMenu!(mx, my, items,
-			cb = (choice:string, data:any) {
+		guiState.showMenu!(mx, my, items, buttonPaddingRight=15,
+			cbChoice = (choice:string, data:any) {
 				if choice == {
 					case "gradient":
 						local userGradient    = app.userGradients[cast(int)data]
@@ -2559,7 +2559,7 @@ export setupGuiCallbacks :: () {
 					local my           = LM.getY()
 
 					guiState.showContextMenuWithInput!(mx, my, userGradient.name, inputTooltip="Name (Change to rename)", {"Delete gradient"},
-						cb = [i] (choice:int) {
+						cbChoice = [i] (choice:int) {
 							if choice == 1 {
 								remove(app.userGradients, i)
 								scheduleSaveWorkspace()
@@ -2574,6 +2574,31 @@ export setupGuiCallbacks :: () {
 						}
 					)
 				}
+			},
+			cbDrawButton = (name:string, data:any, buttonW,buttonH:int) {
+				if name ~= "gradient"  return
+
+				local userGradient = app.userGradients[cast(int)data]
+
+				-- The shader only supports 8 colors, but we can change that if necessary.
+				static colorsForShader = [][]float.{ {1,1,1,1}, {1,1,1,1}, {1,1,1,1}, {1,1,1,1}, {1,1,1,1}, {1,1,1,1}, {1,1,1,1}, {1,1,1,1} }
+				local  colorCount      = 0
+
+				for i = 1, #userGradient, 4 {
+					colorCount  += 1
+					local color  = colorsForShader[colorCount]
+
+					color[1], color[2], color[3] = hsvToRgb(userGradient[i], userGradient[i+1], userGradient[i+2])
+					color[4]                     = userGradient[i+3]
+				}
+
+				local w :: 15
+				local h := buttonH - 2
+				local y := 1
+				local x := buttonW - 1 - w
+
+				gui.drawCheckerBox(x, y, w, h)
+				gui.drawColorGradient(x, y, w, h, colorsForShader, colorCount)
 			}
 		)
 	}
@@ -3422,7 +3447,7 @@ export setupGuiCallbacks :: () {
 		}
 	}
 
-	local showTemplateDropdownMenu :: (buttons:gui.Buttons, customPath:string, cb:(templateName:string, templatePath:string)) {
+	local showTemplateDropdownMenu :: (buttons:gui.Buttons, customPath:string, cbChoice:(templateName:string, templatePath:string)) {
 		local templateNames: []string
 
 		for LF.getDirectoryItems(EXPORT_TEMPLATES_DIRECTORY) {
@@ -3438,15 +3463,15 @@ export setupGuiCallbacks :: () {
 		local y = buttons.layoutY + buttons.layoutHeight + guiState.getScrollOffset!(buttons)
 
 		guiState.showContextMenuWithInput!(x, y, minWidth=buttons.layoutWidth, customPath, inputTooltip="Path to a template in a custom location", templateNames,
-			cb = [templateNames,cb] (choice:int) {
-				if choice > 0  cb(templateNames[choice], "")
+			cbChoice = [templateNames,cbChoice] (choice:int) {
+				if choice > 0  cbChoice(templateNames[choice], "")
 			},
-			cbSubmit = [cb] (value:string) {
-				cb("", value)
+			cbSubmit = [cbChoice] (value:string) {
+				cbChoice("", value)
 			}--[[,
-			cbOption = [cb] () {
-				showRecentFilesContextMenu("Recent templates", app.recentTemplates, keepExistingMenus=true, [cb] (path:string) {
-					cb("", path)
+			cbOption = [cbChoice] () {
+				showRecentFilesContextMenu("Recent templates", app.recentTemplates, keepExistingMenus=true, [cbChoice] (path:string) {
+					cbChoice("", path)
 				})
 			}]]
 		)
