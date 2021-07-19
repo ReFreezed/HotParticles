@@ -19,7 +19,7 @@
 	getModifierKey
 	isInside
 	limitArray, areArraysEqual
-	log
+	log, logNoTimestamp
 	newMonochromeImage, newImageUsingPalette
 	pcall_newImage, pcall_newShader
 	prepareSandbox
@@ -313,14 +313,20 @@ export trim :: (s:string) -> string {
 export prepareSandbox :: (globals:table) -> (env:table) {
 	local setMetatable :: (t:table, metatable:table) -> table !foreign lua "setmetatable"
 
-	local indexTable: table = {
+	local sandboxPrint :: (...:any) {
+		local values :: []string.{}
+		for ...  values[itIndex] = toString(it)
+		logNoTimestamp(concatenate(values, "\t", 1, #...))
+	}
+
+	local indexTable = table.{
 		_VERSION = cast(any) !foreign lua "_VERSION",
 		assert   = cast(any) !foreign lua "assert",
 		error    = cast(any) !foreign lua "error",
 		ipairs   = cast(any) !foreign lua "ipairs",
 		next     = cast(any) !foreign lua "next",
 		pairs    = cast(any) !foreign lua "pairs",
-		print    = cast(any) !foreign lua "print",
+		print    = sandboxPrint,
 		select   = cast(any) !foreign lua "select",
 		tonumber = cast(any) !foreign lua "tonumber",
 		tostring = cast(any) !foreign lua "tostring",
@@ -401,7 +407,7 @@ export prepareSandbox :: (globals:table) -> (env:table) {
 	for globals  indexTable[itIndex] = it
 
 	setMetatable(env, {
-		__newindex = (templateEnv:table, k:any, v:any) {
+		__newindex = (templateEnv:table, k,v:any) {
 			errorf(2, "cannot add global '%s' (globals are disabled)", toString(k))
 		},
 		__index = indexTable,
@@ -455,9 +461,17 @@ export log :: (s:string) {
 	insert(logStrings, os.getDate"[%H:%M:%S]  "..s)
 	print(s)
 }
+export logNoTimestamp :: (s:string) {
+	if logStrings[LOG_MAX_ENTRIES] ~= NULL  remove(logStrings, 1)
+	insert(logStrings, s)
+	print(s)
+}
 
 export log :: (s:string, v,...:int|float|string|Type) {
 	log(format(s, v, ...))
+}
+export logNoTimestamp :: (s:string, v,...:int|float|string|Type) {
+	logNoTimestamp(format(s, v, ...))
 }
 
 

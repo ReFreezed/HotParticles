@@ -5,6 +5,7 @@ v1.9 (2021-07-19)
 - Particle color gradients can be saved and loaded. (Right-click on the preview.)
 - Fixed slider handle position being slightly off while dragging.
 - Exporter: Updated dialog to show all files that will be exported, and if they overwrite anything, at the bottom.
+- Templates: print() now prints to the log.
 - File browser: Click in the file list and type to search.
 - File browser: Enable name filter for the file list by entering a filename with an asterisk (e.g. "*.lua").
 

@@ -3657,12 +3657,12 @@ export setupGuiCallbacks :: () {
 			local pathSet: struct { !key:string, !value:bool }
 
 			for project.systems {
-				local ok, path = resolveTextureOutputPath(project, it)
+				local ok, path, sameAsInput = resolveTextureOutputPath(project, it)
 				if not ok {
 					insert(textEl.textLines, "Missing/invalid texture path!")
 				} elseif not pathSet[path] {
 					pathSet[path] = true
-					insert(textEl.textLines, (doesFileExist(path) ? "[OVERWRITE] " : "")..path)
+					insert(textEl.textLines, (sameAsInput ? "[IN BASE] " : doesFileExist(path) ? "[OVERWRITE] " : "")..path)
 				}
 			}
 		}
