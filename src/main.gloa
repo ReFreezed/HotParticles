@@ -2462,6 +2462,7 @@ local onDraw :: () {
 				local stats = statsAll
 				if app.showStats == STATS_ALL and stats ~= NULL {
 					y += 5
+					drawStatsLine("memory: ",                 "%.2f MiB", !import"gc".getMemoryUsage()/1024)
 					drawStatsLine("drawcalls (batched): ",    "%d (%d)",  stats.drawcalls, stats.drawcallsbatched)
 					drawStatsLine("switches canvas/shader: ", "%d/%d",    stats.canvasswitches, stats.shaderswitches)
 					drawStatsLine("texture memory: ",         "%.2f MiB", stats.texturememory/1024^2)

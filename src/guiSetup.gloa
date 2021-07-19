@@ -413,8 +413,7 @@ export setupGuiFrames :: () {
 					}}),
 				}),
 				guiState.hbox!({ labelLeft="resulting path",
-					guiState.text!({ name="exportProject_baseDirectoryResult", weight=1 }),
-					guiState.buttons!({ name="exportProject_baseDirectoryResultInfo", buttons={{image="iconEye"}} }),
+					guiState.text!({ name="exportProject_baseDirectoryResult", textIsTooltip=true }),
 				}),
 			}),
 
@@ -3260,7 +3259,6 @@ export setupGuiCallbacks :: () {
 			markEdited(project)
 
 			guiState.refreshRecursively!("exportProject_baseDirectoryResult")
-			guiState.refreshRecursively!("exportProject_baseDirectoryResultInfo")
 			guiState.refreshRecursively!("exportProject_particles_path")
 			guiState.refreshRecursively!("exportProject_textures_directory")
 			guiState.refreshRecursively!("exportProject_pathResults")
@@ -3275,9 +3273,6 @@ export setupGuiCallbacks :: () {
 			}
 
 			textEl.text = path
-		}
-		guiState.onRefresh.exportProject_baseDirectoryResultInfo = (buttons:gui.Buttons) {
-			buttons.tooltip = guiState.getElement!("exportProject_baseDirectoryResult", gui.Text).text
 		}
 
 		guiState.onAction.exportProject_baseDirectory_choose = (buttons:gui.Buttons, buttonIndex:int, source:gui.ActionSource) {
@@ -3305,7 +3300,6 @@ export setupGuiCallbacks :: () {
 
 					guiState.refreshRecursively!("exportProject_baseDirectory")
 					guiState.refreshRecursively!("exportProject_baseDirectoryResult")
-					guiState.refreshRecursively!("exportProject_baseDirectoryResultInfo")
 					guiState.refreshRecursively!("exportProject_particles_path")
 					guiState.refreshRecursively!("exportProject_textures_directory")
 					guiState.refreshRecursively!("exportProject_pathResults")
@@ -3332,7 +3326,6 @@ export setupGuiCallbacks :: () {
 			guiState.refreshRecursively!("exportProject_baseDirectory")
 			-- Shouldn't be needed, but just to be safe:
 			guiState.refreshRecursively!("exportProject_baseDirectoryResult")
-			guiState.refreshRecursively!("exportProject_baseDirectoryResultInfo")
 			guiState.refreshRecursively!("exportProject_particles_path")
 			guiState.refreshRecursively!("exportProject_textures_directory")
 			guiState.refreshRecursively!("exportProject_pathResults")

@@ -219,8 +219,8 @@ Size: The size of particles. You can specify up to 8 sizes to animate the
 
 Color: The color of particles. You can specify up to 8 colors to animate the
     color over each particle's lifetime. You can see a preview of the color
-    over time on the right hand side. You can right-click the preview to save
-    and load gradients.
+    over time on the right hand side. Right-click the preview to save and load
+    gradients. Right-click gradients in the menu to edit them.
 - Blend mode: The blend mode for the particle system.
 
 Shader: Path to a shader file to be used when rendering the particles.
