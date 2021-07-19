@@ -2543,6 +2543,7 @@ export setupGuiCallbacks :: () {
 							local project, system = getCurrentProjectAndSystem()
 							local userGradient    = ColorGradient.{name=text, unpack(system.colors)}
 							insert(app.userGradients, userGradient)
+							sortByField(app.userGradients, "name")
 
 							popPanel()
 						})
@@ -2567,6 +2568,8 @@ export setupGuiCallbacks :: () {
 							if not nameNew  return
 
 							userGradient.name = nameNew
+							sortByField(app.userGradients, "name")
+
 							scheduleSaveWorkspace()
 						}
 					)
