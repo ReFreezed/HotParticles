@@ -645,25 +645,25 @@ export popPanel :: (nameForAssert="") -> (success:bool) {
 
 export FileDialogType :: enum string { OPEN, SAVE, CHOOSE }
 
-local fileDialog_type                : FileDialogType = NULL
-local fileDialog_dir                 : string         = NULL
-local fileDialog_filename            : string         = NULL
-local fileDialog_filenamePattern     : string         = NULL
-local fileDialog_filenameHidePattern : string         = NULL
-local fileDialog_chooseFolder        : bool           = NULL
-local fileDialog_relativeTo          : string         = NULL
+local fileDialog_type                = FileDialogType.NULL
+local fileDialog_dir                 = string.NULL
+local fileDialog_filename            = string.NULL
+local fileDialog_filenamePattern     = string.NULL
+local fileDialog_filenameHidePattern = string.NULL
+local fileDialog_chooseFolder        = bool.NULL
+local fileDialog_relativeTo          = string.NULL
 
 export fileDialog_lastDirectory = ""
 
-local fileDialog_onHighlight: (pathObj:Path, pathAbsoluteObj:Path) = NULL
-local fileDialog_onChoose:    (pathObj:Path, pathAbsoluteObj:Path) = NULL
-local fileDialog_onClose:     ()                                   = NULL
+local fileDialog_onHighlight = (pathObj:Path, pathAbsoluteObj:Path).NULL
+local fileDialog_onChoose    = (pathObj:Path, pathAbsoluteObj:Path).NULL
+local fileDialog_onClose     = ().NULL
 
 export showFileDialog :: (type:FileDialogType,
 	title:string, dir,filename:string,
-	onHighlight: type_of(fileDialog_onHighlight) = NULL,
-	onChoose:    type_of(fileDialog_onChoose)    = NULL,
-	onClose:     type_of(fileDialog_onClose)     = NULL,
+	onHighlight = type_of(fileDialog_onHighlight).NULL,
+	onChoose    = type_of(fileDialog_onChoose).NULL,
+	onClose     = type_of(fileDialog_onClose).NULL,
 	filenamePattern="", filenameHidePattern="", floating=false, chooseFolder=false, relativeTo="", multiple=false
 ) {
 	fileDialog_type                = type
@@ -2895,7 +2895,7 @@ export setupGuiCallbacks :: () {
 				} elseif info.type == .FILE {
 					if (
 						not fileDialog_chooseFolder
-						and (not fileDialog_filenamePattern or findPattern(it, fileDialog_filenamePattern))
+						and (not fileDialog_filenamePattern or findPattern(toLower(it), fileDialog_filenamePattern))
 						and not (fileDialog_filenameHidePattern and findPattern(it, fileDialog_filenameHidePattern))
 					) {
 						insert(filenames, it)
@@ -3100,6 +3100,23 @@ export setupGuiCallbacks :: () {
 		local choosePath :: () {
 			local input = guiState.getElement!("fileDialog_filename", gui.InputText)
 			input.value = trim(input.value)
+
+			if find(input.value, "*") {
+				-- The value is a file filter - not a path.
+				local pat = replace(escapePattern(toLower(input.value)), "%*", ".*")
+
+				if getByte(input.value, 1           ) ~= !char "*"  pat = "^" .. pat
+				if getByte(input.value, #input.value) ~= !char "*"  pat = pat .. "$"
+
+				fileDialog_filenamePattern     = pat
+				fileDialog_filenameHidePattern = ""
+
+				guiState.refreshRecursively!("fileDialog_items")
+
+				guiState.setFocus!(input)
+				input.field.selectAll!()
+				return
+			}
 
 			local paths: []string
 
