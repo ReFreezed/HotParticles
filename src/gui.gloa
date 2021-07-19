@@ -449,6 +449,16 @@ export Buttons :: struct {
 
 	buttonWidth:  float, -- Round when necessary!
 	buttonHeight: float, -- Round when necessary!
+
+	-- Focused buttons enable searching by typing:
+	searchTerm       = "",
+	searchStartIndex = 1,
+	searchInputTime  = -99.0,
+}
+local resetSearch :: (buttons:Buttons) {
+	buttons.searchTerm       = ""
+	buttons.searchStartIndex = 1
+	buttons.searchInputTime  = -99
 }
 
 export Radio :: struct {
@@ -606,10 +616,13 @@ export onKeyPressed :: (state:State, key:LK.KeyConstant, scancode:LK.Scancode, i
 			local buttons = cast(Buttons) widget
 
 			if key == "return" or key == "kpenter" {
+				resetSearch(buttons)
+
 				local found, i = indexWith(buttons.buttons, "selected", true)
 				if found  triggerDoublePressEvent(state, buttons, buttons.buttons[i].name, i) -- @Cleanup: Rename double-press events to something better, or use the submit event.
 
 			} elseif key == "down" or key == "up" {
+				resetSearch(buttons)
 				if not buttons.buttons  return true
 
 				local dir      = (key == "down") ? 1 : -1
@@ -637,6 +650,7 @@ export onKeyPressed :: (state:State, key:LK.KeyConstant, scancode:LK.Scancode, i
 				triggerActionEvent(state, buttons, buttons.buttons[i].name, i, .KEYBOARD, alsoEnd=true)
 
 			} elseif key == "pageup" or key == "pagedown" {
+				resetSearch(buttons)
 				if not buttons.buttons  return true
 
 				local dir          = (key == "pagedown") ? 1 : -1
@@ -667,6 +681,7 @@ export onKeyPressed :: (state:State, key:LK.KeyConstant, scancode:LK.Scancode, i
 				triggerActionEvent(state, buttons, buttons.buttons[i].name, i, .KEYBOARD, alsoEnd=true)
 
 			} elseif key == "end" or key == "home" {
+				resetSearch(buttons)
 				if not buttons.buttons  return true
 
 				local iTarget  = (key == "end") ? #buttons.buttons : 1
@@ -679,6 +694,9 @@ export onKeyPressed :: (state:State, key:LK.KeyConstant, scancode:LK.Scancode, i
 
 				triggerBeginEvent (state, buttons, buttons.buttons[iTarget].name, iTarget)
 				triggerActionEvent(state, buttons, buttons.buttons[iTarget].name, iTarget, .KEYBOARD, alsoEnd=true)
+
+			} elseif key == "left" or key == "right" {
+				resetSearch(buttons)
 			}
 		}
 
@@ -792,6 +810,89 @@ export onTextInput :: (state:State, text:string) -> (handled:bool) {
 				input.field.textinput!(text)
 			}
 			return true
+
+		} elseif widget.type == Buttons {
+			local buttons = cast(Buttons) widget
+
+			-- Append to old or start a new term.
+			local SEARCH_ABORT_TIME :: 1.00
+			local time = LT.getTime()
+
+			if time - buttons.searchInputTime > SEARCH_ABORT_TIME {
+				buttons.searchTerm       = toLower(text)
+				local found, i           = indexWith(buttons.buttons, "selected", true)
+				buttons.searchStartIndex = found ? i : 1
+			} else {
+				buttons.searchTerm = buttons.searchTerm .. toLower(text)
+			}
+			buttons.searchInputTime = time
+
+			local buttonIndexToSelect = 0
+
+			-- Pressing the same letter over and over should just cycle through all items starting with that letter.
+			if #buttons.searchTerm > 4 or utf8.getLength(buttons.searchTerm) > 1 {
+				local _, _firstChar = matchPattern(buttons.searchTerm, utf8.CHARACTER_PATTERN)
+				local firstChar     = cast(string) _firstChar
+				local reps          = #buttons.searchTerm / #firstChar
+
+				if reps == math.floor(reps) and buttons.searchTerm == firstChar*cast(int)reps {
+					local i        = buttons.searchStartIndex
+					local foundAny = false
+
+					while true {
+						i               = i % #buttons.buttons + 1
+						local button    = buttons.buttons[i]
+						local found, i1 = find(toLower(button.label), firstChar) -- @Speed: Don't use toLower() on the whole label.
+
+						if found and i1 == 1 {
+							reps     = reps - 1
+							foundAny = true
+
+							if reps <= 0 {
+								buttonIndexToSelect = i
+								break
+							}
+
+						} elseif i == buttons.searchStartIndex and not foundAny {
+							return true
+						}
+					}
+				}
+			}
+
+			-- Otherwise search for the whole term.
+			if not buttonIndexToSelect  for i = 1, #buttons.buttons {
+				i               = (buttons.searchStartIndex + i - 1) % #buttons.buttons + 1
+				local button    = buttons.buttons[i]
+				local found, i1 = find(toLower(button.label), buttons.searchTerm) -- @Speed: Don't use toLower() on the whole label.
+
+				if found and i1 == 1 {
+					buttonIndexToSelect = i
+					break
+				}
+			}
+
+			if buttonIndexToSelect {
+				local i         = buttonIndexToSelect
+				local anyChange = false
+
+				for buttons.buttons {
+					local isSelected = (itIndex == i)
+
+					if it.selected ~= isSelected {
+						it.selected = isSelected
+						anyChange   = true
+					}
+				}
+				state.scrollIntoView!(buttons, i)
+
+				if anyChange {
+					triggerBeginEvent (state, buttons, buttons.buttons[i].name, i)
+					triggerActionEvent(state, buttons, buttons.buttons[i].name, i, .KEYBOARD, alsoEnd=true)
+				}
+			}
+
+			return true
 		}
 	}
 
@@ -851,6 +952,7 @@ export onMousePressed :: (state:State, mx,my:int, mbutton:int, presses:int) -> (
 						it.selected = (itIndex == state.hoveredSubid)
 					}
 				}
+				resetSearch(buttons)
 			}
 
 			-- Buttons which allow double press.
