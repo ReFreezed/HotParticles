@@ -426,7 +426,8 @@ export Button :: struct {
 	selected    = false, -- Used if Buttons.allowFocus is set.
 	system: System = NULL,
 
-	imageScale = 1.0,
+	imageScaleX = 1.0,
+	imageScaleY = 1.0,
 
 	labelWidth    = 0,
 	suffixWidth   = 0,
@@ -1817,6 +1818,8 @@ local calculateNaturalSize :: (state:State, el:Element) {
 			local buttonMaxH = buttons.buttonMinHeight
 
 			for buttons.buttons {
+				local IMAGE_MIN_SHRUNK_SIZE :: 2
+
 				local w: int = NULL
 				local h: int = NULL
 
@@ -1825,21 +1828,25 @@ local calculateNaturalSize :: (state:State, el:Element) {
 				it.shortcutWidth = it.shortcut ? fontNormal.getWidth!(it.shortcut) + SPACING_LARGE : 0
 
 				if it.system ~= NULL {
-					w             = PARTICLE_PREVIEW_SIZE
-					h             = PARTICLE_PREVIEW_SIZE
+					w              = PARTICLE_PREVIEW_SIZE
+					h              = PARTICLE_PREVIEW_SIZE
 				} elseif (it.label or it.suffix or it.shortcut) and it.image {
-					w, h          = guiImages[it.image].getDimensions!()
-					it.imageScale = math.min(BUTTON_IMAGE_MAX_SIZE/w, BUTTON_IMAGE_MAX_SIZE/h, 1)
-					w             = math.round(w*it.imageScale) + SPACING + it.labelWidth+it.suffixWidth+it.shortcutWidth
-					h             = math.max(math.round(h*it.imageScale), fontNormal.getHeight!())
+					w, h           = guiImages[it.image].getDimensions!()
+					local scale    = math.min(BUTTON_IMAGE_MAX_SIZE/w, BUTTON_IMAGE_MAX_SIZE/h, 1)
+					it.imageScaleX = math.max(scale, IMAGE_MIN_SHRUNK_SIZE/math.max(w, IMAGE_MIN_SHRUNK_SIZE))
+					it.imageScaleY = math.max(scale, IMAGE_MIN_SHRUNK_SIZE/math.max(h, IMAGE_MIN_SHRUNK_SIZE))
+					w              = math.round(w*it.imageScaleX) + SPACING + it.labelWidth+it.suffixWidth+it.shortcutWidth
+					h              = math.max(math.round(h*it.imageScaleY), fontNormal.getHeight!())
 				} elseif it.image {
-					w, h          = guiImages[it.image].getDimensions!()
-					it.imageScale = math.min(BUTTON_IMAGE_MAX_SIZE/w, BUTTON_IMAGE_MAX_SIZE/h, 1)
-					w             = math.round(w*it.imageScale)
-					h             = math.round(h*it.imageScale)
+					w, h           = guiImages[it.image].getDimensions!()
+					local scale    = math.min(BUTTON_IMAGE_MAX_SIZE/w, BUTTON_IMAGE_MAX_SIZE/h, 1)
+					it.imageScaleX = math.max(scale, IMAGE_MIN_SHRUNK_SIZE/math.max(w, IMAGE_MIN_SHRUNK_SIZE))
+					it.imageScaleY = math.max(scale, IMAGE_MIN_SHRUNK_SIZE/math.max(h, IMAGE_MIN_SHRUNK_SIZE))
+					w              = math.round(w*it.imageScaleX)
+					h              = math.round(h*it.imageScaleY)
 				} else {
-					w             = it.labelWidth + it.suffixWidth + it.shortcutWidth
-					h             = fontNormal.getHeight!()
+					w              = it.labelWidth + it.suffixWidth + it.shortcutWidth
+					h              = fontNormal.getHeight!()
 				}
 
 				w               += buttons.buttonPaddingRight
@@ -1909,13 +1916,13 @@ local calculateNaturalSize :: (state:State, el:Element) {
 }
 
 local positionAndFit :: (state:State, el:Element, x,y,w,h:int) {
-	local positionAndFitChildrenV :: (state:State, el:Element, x,y,w,h:int) {
+	local positionAndFitChildrenV :: (state:State, el:Element, x,y,w:int) {
 		for el  if it.active {
 			positionAndFit(state, it, x+it.inset, y, w-it.inset, it.layoutHeight)
 			y += it.layoutHeight + SPACING
 		}
 	}
-	local positionAndFitChildrenH :: (state:State, el:Element, x,y,w,h:int) {
+	local positionAndFitChildrenH :: (state:State, el:Element, x,y,h:int) {
 		for el  if it.active {
 			x += it.inset
 			positionAndFit(state, it, x, y, it.layoutWidth, h)
@@ -1952,7 +1959,7 @@ local positionAndFit :: (state:State, el:Element, x,y,w,h:int) {
 			y += SPACING
 			w -= 2*SPACING
 
-			positionAndFitChildrenV(state, frame, x, y, w, h)
+			positionAndFitChildrenV(state, frame, x, y, w)
 
 		case Scrollable:
 			local scrollable = cast(Scrollable) el
@@ -1960,7 +1967,7 @@ local positionAndFit :: (state:State, el:Element, x,y,w,h:int) {
 			y += SPACING + SCROLLABLE_PADDING
 			w -= SCROLLBAR_WIDTH + SPACING
 
-			positionAndFitChildrenV(state, scrollable, x, y, w, h)
+			positionAndFitChildrenV(state, scrollable, x, y, w)
 
 		case Section:
 			local section = cast(Section) el
@@ -1968,7 +1975,7 @@ local positionAndFit :: (state:State, el:Element, x,y,w,h:int) {
 			x += section.labelWidth
 			w -= section.labelWidth
 
-			if not app.hiddenSections[section.name]  positionAndFitChildrenV(state, section, x, y, w, h)
+			if not app.hiddenSections[section.name]  positionAndFitChildrenV(state, section, x, y, w)
 
 		case Hbox:
 			local hbox         = cast(Hbox) el
@@ -1997,7 +2004,7 @@ local positionAndFit :: (state:State, el:Element, x,y,w,h:int) {
 				}
 			}
 
-			positionAndFitChildrenH(state, hbox, x, y, w, h)
+			positionAndFitChildrenH(state, hbox, x, y, h)
 
 		case Vbox:
 			local vbox         = cast(Vbox) el
@@ -2023,7 +2030,7 @@ local positionAndFit :: (state:State, el:Element, x,y,w,h:int) {
 				}
 			}
 
-			positionAndFitChildrenV(state, vbox, x, y, w, h)
+			positionAndFitChildrenV(state, vbox, x, y, w)
 
 		case Radio: !through
 		case Buttons:
@@ -2434,7 +2441,7 @@ local drawElement :: (state:State, el:Element) {
 				LG.draw(image,
 					imageX,
 					by1[itIndex] + bh[itIndex] // 2,
-					0, it.imageScale, it.imageScale, 0, ih/2
+					0, it.imageScaleX, it.imageScaleY, 0, ih/2
 				)
 			}
 
@@ -2530,7 +2537,7 @@ local drawElement :: (state:State, el:Element) {
 
 					if it.image {
 						local iw  = guiImages[it.image].getWidth!()
-						textX    += math.round(iw*it.imageScale + SPACING)
+						textX    += math.round(iw*it.imageScaleX + SPACING)
 					}
 
 					local grey, a: float

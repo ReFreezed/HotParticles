@@ -131,7 +131,8 @@ Custom data: A custom data string attached to the project that can be used by
     an export script.
 
 Pixelate:
-- World: Enable pixel art mode. Zoom in on the particles to see the effect.
+- World/camera: Enable pixel art mode. Zoom in on the particles to see the
+    effect.
 - Textures: Enable nearest neighbor filtering on textures. Linear filtering is
     used by default.
 

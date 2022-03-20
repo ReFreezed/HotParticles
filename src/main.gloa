@@ -34,10 +34,10 @@ export DEV :: !run (indexOf(!import"utils".getProgramArguments(), "dev"))
 
 
 
-export !import "basic"
-export !import "color"
-export !import "io/path"
-export !import "string"
+global !import "basic"
+global !import "color"
+global !import "io/path"
+global !import "string"
 
 export io     :: !import "io"
 export math   :: !import "math"
@@ -56,10 +56,10 @@ export LT :: love.timer
 export LW :: love.window
 local  LE :: love.event
 
-export !self
-export !load "src/guiSetup"
-export !load "src/misc"
-export !load "src/workspace"
+global !self
+global !load "src/guiSetup"
+global !load "src/misc"
+global !load "src/workspace"
 
 export gui       :: !load "src/gui"
 export hotLoader :: !load "src/hotLoader"

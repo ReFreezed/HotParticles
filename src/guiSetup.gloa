@@ -41,8 +41,8 @@ export setupGuiFrames :: () {
 
 				guiState.section!({ label="Pixelate",
 					guiState.hbox!({
-						guiState.checkbox!({ name="pixelateWorld",    label="world"    }),
-						guiState.checkbox!({ name="pixelateTextures", label="textures" }),
+						guiState.checkbox!({ name="pixelateWorld",    label="world/camera" }),
+						guiState.checkbox!({ name="pixelateTextures", label="textures"     }),
 					}),
 				}),
 
@@ -1111,7 +1111,7 @@ export setupGuiCallbacks :: () {
 		local project    = app.projects[app.currentProjectIndex]
 		checkbox.checked = project.pixelateWorld
 	}
-	addEventHandlersForCheckbox("pixelateWorld", "Pixelate world",
+	addEventHandlersForCheckbox("pixelateWorld", "Pixelate world/camera",
 		(project:Project, __:System, value:bool) {  project.pixelateWorld = value ; limitZoomLevel(project) ; scheduleRecreateCanvases = true  }
 	)
 	guiState.onRefresh.pixelateTextures = (checkbox:gui.Checkbox) {

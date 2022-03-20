@@ -13,8 +13,8 @@
 --=
 --============================================================]]
 
-export !import "basic"
-export !import "string"
+global !import "basic"
+global !import "string"
 !import "compiler"
 !import "unicode"
 !import "utils"
@@ -23,7 +23,7 @@ export io  :: !import "io"
 local  lfs :: !import "lfs"
 local  os  :: !import "os"
 
-export !self
+global !self
 !load "src/shared"
 
 !run {
